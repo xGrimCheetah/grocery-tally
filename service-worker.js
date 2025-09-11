@@ -1,6 +1,6 @@
 // Service Worker for Grocery Tally on GitHub Pages
 // Use a version string you can bump to force updates.
-const CACHE = "grocery-tally-v1.13.1";
+const CACHE = "grocery-tally-v1.13.2";
 
 const ASSETS = [
   // All paths RELATIVE (no leading /) for project-site hosting
@@ -38,4 +38,5 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((hit) => hit || fetch(event.request))
   );
 });
+
 
