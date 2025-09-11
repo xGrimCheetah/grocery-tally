@@ -151,6 +151,7 @@
     const a=document.getElementById('verPill'); if(a) a.textContent=`v${APP_VERSION}`;
     const b=document.getElementById('verPillFooter'); if(b) b.textContent=`v${APP_VERSION}`;
   }
+  window.setVersionPills = setVersionPills;
   function renderTitle(){
     const wrap = document.getElementById('appTitleContainer');
     if(!wrap) return;
