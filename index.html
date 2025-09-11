@@ -1,34 +1,526 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0f766e">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Grocery Tally">
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Grocery Tally</title>
-  <link rel="stylesheet" href="styles.css">
+  <style>
+    :root{--bg:#0f172a;--card:#111827;--muted:#1f2937;--text:#e5e7eb;--accent:#22c55e;--accent2:#3b82f6;--danger:#ef4444}
+    *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    .wrap{max-width:920px;margin:0 auto;padding:16px}
+    header{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
+    .tabs{display:flex;gap:6px;background:var(--card);padding:6px;border-radius:14px}
+    .tab{padding:8px 12px;border-radius:10px;background:transparent;border:1px solid transparent;color:#cbd5e1}
+    .tab.active{background:var(--muted);border-color:#334155;color:var(--text);font-weight:600}
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:12px}
+    .controls{display:flex;gap:8px;flex-wrap:wrap}
+    button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:white;cursor:pointer}
+    .btn{background:#334155}
+    .btn:hover{filter:brightness(1.05)}
+    .btn-accent{background:var(--accent)}
+    .btn-accent2{background:var(--accent2)}
+    .btn-danger{background:var(--danger)}
+    .iconbtn{background:transparent;border:1px solid #334155;color:#cbd5e1;padding:6px 8px;border-radius:8px;line-height:1}
+    .iconbtn:hover{filter:brightness(1.1)}
+    .titlewrap{display:flex;gap:8px;align-items:center}
+    .iconbtn.pencil{background:transparent;border:1px solid #334155;color:#94a3b8;padding:4px 6px;border-radius:8px;line-height:1;font-size:12px;opacity:0;transition:opacity .15s ease-in-out}
+    .titlewrap:hover .iconbtn.pencil, .titlewrap:focus-within .iconbtn.pencil{opacity:1}
+    /* brief hint on load */
+    .pencil.hint{opacity:1 !important}
+    input,select{background:#0b1220;color:var(--text);border:1px solid #243042;border-radius:10px;padding:10px}
+    .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
+    .col-12{grid-column:span 12}
+    .col-6{grid-column:span 12}
+    @media(min-width:680px){.col-6{grid-column:span 6}}
+    .item{display:flex;align-items:center;gap:8px;justify-content:flex-start;background:#0b1220;border:1px solid #243042;border-radius:12px;padding:10px}
+    .item .left{display:flex;align-items:center;gap:10px;min-width:0}
+    .item .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
+    .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cat{font-size:12px;opacity:.7}
+    .row{display:flex;gap:8px;align-items:center}
+    .list{display:flex;flex-direction:column;gap:8px}
+    details{background:#0b1220;border:1px solid #243042;border-radius:14px;padding:8px}
+    summary{cursor:pointer;font-weight:700;color:#cbd5e1}
+    .spacer{height:10px}
+    .muted{opacity:.8}
+    .footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .pill{background:#0b1220;border:1px solid #243042;border-radius:999px;padding:6px 10px;font-size:12px}
+    .link{color:#93c5fd;text-decoration:underline;cursor:pointer}
+  </style>
+
+  <!-- IMPORTANT: use RELATIVE paths for GitHub Pages -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
 </head>
 <body>
-  <header class="app-header">
-    <h1>Grocery Tally</h1>
-  </header>
+  <div class="wrap">
+    <header>
+      <h1>🛒 <span id="appTitleContainer"></span> <span class="pill" id="verPill"></span></h1>
+      <div class="tabs">
+        <button class="tab active" id="tabBuild">Build List</button>
+        <button class="tab" id="tabShop">Shopping Mode</button>
+        <button class="tab" id="tabManage">Manage Items</button>
+        <button class="tab" id="tabCats">Manage Categories</button>
+      </div>
+    </header>
 
-  <main id="app">
-    <!-- Replace this placeholder markup with your existing v1.13.0 UI -->
-    <p>Grocery Tally PWA shell is live. Drop in your existing HTML/JS here.</p>
-    <button id="test-btn">Test localStorage</button>
-    <pre id="out"></pre>
-  </main>
+    <div class="spacer"></div>
 
-  <script src="main.js"></script>
+    <!-- BUILD LIST -->
+    <section id="viewBuild" class="card"></section>
+
+    <!-- SHOPPING MODE -->
+    <section id="viewShop" class="card" style="display:none"></section>
+
+    <!-- MANAGE -->
+    <section id="viewManage" class="card" style="display:none"></section>
+
+    <!-- MANAGE CATEGORIES -->
+    <section id="viewCats" class="card" style="display:none">
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <input id="newCatName" placeholder="Category name" style="flex:2" />
+        <button class="btn-accent" id="btnAddCat">Add Category</button>
+      </div>
+      <div class="spacer"></div>
+      <div id="catList"></div>
+    </section>
+
+    <div class="spacer"></div>
+    <div class="card footer">
+      <span class="muted">Tap <span class="pill">+1</span> to add, <span class="pill">–</span> to reduce. “Finished” hides zeroes. Categories/items follow your custom order.</span>
+      <span class="pill" id="verPillFooter"></span>
+      <div class="muted" id="fileNameHint"></div>
+    </div>
+  </div>
+
   <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js');
+(function(){
+  'use strict';
+
+  // ===== Version =====
+  const APP_VERSION = "1.13.0"; // PWA support added
+
+  // ===== Storage & State =====
+  const STORE_KEY = 'grocery_tally_v2';
+  const CLOSED_CATS_KEY = 'manage_closed_cats';       // Manage Items collapsed
+  const BUILD_CLOSED_CATS_KEY = 'build_closed_cats';   // Build List collapsed
+  const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
+  const SELECTED_CAT_KEY = 'manage_selected_cat';
+  const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
+
+  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
+  // Safety: ensure structure
+  if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
+  if(!Array.isArray(state.items)) state.items = [];
+  if(!state.title) state.title = "Grocery Tally";
+
+  let closedCats = getClosedCats();
+  let buildClosedCats = getBuildClosedCats();
+  let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
+
+  function id(){ return Math.random().toString(36).slice(2,10) }
+  function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null } }
+
+  function getClosedCats(){
+    try{
+      const existing = localStorage.getItem(CLOSED_CATS_KEY);
+      if(existing){ const arr = JSON.parse(existing); return new Set(Array.isArray(arr)?arr:[]) }
+      // migrate legacy OPEN list to CLOSED list
+      const legacy = JSON.parse(localStorage.getItem(LEGACY_OPEN_KEY)||'[]');
+      if(Array.isArray(legacy) && legacy.length){
+        const closed = state.categories.filter(c=> !legacy.includes(c));
+        localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify(closed));
+        localStorage.removeItem(LEGACY_OPEN_KEY);
+        return new Set(closed);
+      }
+    }catch(e){}
+    return new Set();
+  }
+  function setClosedCats(set){ try{ localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
+  function getBuildClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(BUILD_CLOSED_CATS_KEY)||'[]'); return new Set(Array.isArray(arr)?arr:[]);}catch(e){ return new Set() } }
+  function setBuildClosedCats(set){ try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
+
+  // ===== Helpers =====
+  function setVersionPills(){
+    const a=document.getElementById('verPill'); if(a) a.textContent=`v${APP_VERSION}`;
+    const b=document.getElementById('verPillFooter'); if(b) b.textContent=`v${APP_VERSION}`;
+  }
+  function renderTitle(){
+    const wrap = document.getElementById('appTitleContainer');
+    if(!wrap) return;
+    wrap.innerHTML = '';
+
+    const titleText = state.title || 'Grocery Tally';
+
+    const titleWrap = document.createElement('span');
+    titleWrap.className = 'titlewrap';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.id = 'appTitle';
+    nameSpan.textContent = titleText;
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'iconbtn pencil';
+    editBtn.title = 'Rename list';
+    editBtn.setAttribute('aria-label','Rename list');
+    editBtn.textContent = '✏️';
+
+    const input = document.createElement('input');
+    input.value = titleText;
+    input.style.display = 'none';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'btn-accent';
+    saveBtn.textContent = 'Save';
+    saveBtn.style.display = 'none';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.display = 'none';
+
+    function enterEdit(){
+      nameSpan.style.display = 'none';
+      editBtn.style.display = 'none';
+      input.style.display = 'inline-block';
+      saveBtn.style.display = 'inline-block';
+      cancelBtn.style.display = 'inline-block';
+      input.focus(); input.select();
+    }
+    function exitEdit(){
+      nameSpan.style.display = 'inline';
+      editBtn.style.display = 'inline-block';
+      input.style.display = 'none';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+      input.value = state.title || 'Grocery Tally';
+    }
+
+    // Access: pencil click OR title click both enter edit
+    editBtn.onclick = enterEdit;
+    nameSpan.onclick = enterEdit;
+    cancelBtn.onclick = exitEdit;
+    input.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); }
+      else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); }
+    });
+
+    saveBtn.onclick = ()=>{
+      const newName = input.value.trim();
+      if(!newName){ alert('List name cannot be empty.'); return }
+      state.title = newName;
+      save();
+      nameSpan.textContent = state.title;
+      document.title = `${state.title} v${APP_VERSION}`;
+      setVersionPills();
+      exitEdit();
+    };
+
+    titleWrap.appendChild(nameSpan);
+    titleWrap.appendChild(editBtn);
+    titleWrap.appendChild(input);
+    titleWrap.appendChild(saveBtn);
+    titleWrap.appendChild(cancelBtn);
+
+    wrap.appendChild(titleWrap);
+
+    // Briefly reveal pencil as a hint
+    editBtn.classList.add('hint');
+    setTimeout(()=>{ editBtn.classList.remove('hint'); }, 1500);
+
+    document.title = `${titleText} v${APP_VERSION}`;
+    setVersionPills();
+  }
+  function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
+  function nonZero(){ return state.items.filter(i=>i.qty>0) }
+  function zeroAll(){ state.items.forEach(i=>i.qty=0); save(); try{ renderBuild() }catch(e){} }
+  function catIndex(c){ const i = state.categories.indexOf(c); return i === -1 ? 9999 : i }
+  function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name) }
+  function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name)}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
+  function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
+  function moveItemWithinCategory(cat, fromIndex, toIndex){ const items=state.items.filter(i=>i.cat===cat).sort((a,b)=>a.pos-b.pos); if(fromIndex<0||toIndex<0||fromIndex>=items.length||toIndex>=items.length) return; const moved=items.splice(fromIndex,1)[0]; items.splice(toIndex,0,moved); items.forEach((it,i)=> it.pos=i) }
+
+  // ===== Tabs & Views =====
+  const tabBuild=document.getElementById('tabBuild');
+  const tabShop=document.getElementById('tabShop');
+  const tabManage=document.getElementById('tabManage');
+  const tabCats=document.getElementById('tabCats');
+  const viewBuild=document.getElementById('viewBuild');
+  const viewShop=document.getElementById('viewShop');
+  const viewManage=document.getElementById('viewManage');
+  const viewCats=document.getElementById('viewCats');
+
+  function setTab(which){
+    [tabBuild,tabShop,tabManage,tabCats].forEach(b=> b.classList.remove('active'));
+    [viewBuild,viewShop,viewManage,viewCats].forEach(v=> v.style.display='none');
+
+    if(which==='build'){ tabBuild.classList.add('active'); viewBuild.style.display='block' }
+    if(which==='shop'){  tabShop.classList.add('active');  viewShop.style.display='block'  }
+    if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
+    if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
+
+    // Build/Shop act like a single switching tab
+    if(which==='build'){
+      tabBuild.style.display='inline-block';
+      tabShop.style.display='none';
+    } else if(which==='shop'){
+      tabBuild.style.display='none';
+      tabShop.style.display='inline-block';
+    } else {
+      // On Manage/Cats, show both
+      tabBuild.style.display='inline-block';
+      tabShop.style.display='inline-block';
+    }
+  }
+  tabBuild.onclick=()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
+  tabShop.onclick=()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
+  tabManage.onclick=()=>{ try{ renderManage(); }catch(e){ console.error(e) } setTab('manage') };
+  tabCats.onclick=()=>{ try{ renderCats(); }catch(e){ console.error(e) } setTab('cats') };
+
+  // ----- Build List -----
+  function renderBuild(){
+    ensurePositions();
+    viewBuild.innerHTML = '<button class="btn-accent" id="btnFinish">Finished →</button> <button class="btn" id="btnZeroAll">Reset all to 0</button><div id="buildList"></div>';
+    const buildList = document.getElementById('buildList');
+    const byCat = groupBy(state.items,'cat');
+    const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
+    orderedCats.forEach(cat=>{
+      const sec=document.createElement('details');
+      sec.open = !buildClosedCats.has(cat);
+      const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      sec.addEventListener('toggle', ()=>{ if(sec.open){ buildClosedCats.delete(cat) } else { buildClosedCats.add(cat) } setBuildClosedCats(buildClosedCats); });
+
+      byCat[cat].sort(sortItems).forEach(it=>{
+        const row=document.createElement('div'); row.className='item';
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name; left.appendChild(name);
+        const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
+        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
+        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+1'; plus.onclick=()=>{ it.qty++; save(); renderBuild() };
+        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
+        row.appendChild(left); row.appendChild(right); sec.appendChild(row);
+      });
+      buildList.appendChild(sec);
+    });
+    document.getElementById('btnZeroAll').onclick = zeroAll;
+    document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
+  }
+
+  // ----- Shopping Mode -----
+  function renderShop(){
+    ensurePositions();
+    viewShop.innerHTML = '<button class="btn" id="btnBack">← Back</button><div id="shopList"></div>';
+    document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
+    const shopList = document.getElementById('shopList');
+    const items = nonZero().sort(sortItems);
+    const byCat = groupBy(items,'cat');
+    const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
+    if(!orderedCats.length){ shopList.innerHTML = '<p class="muted">No items yet.</p>'; return }
+    orderedCats.forEach(cat=>{
+      const sec=document.createElement('details'); sec.open=true;
+      const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      byCat[cat].forEach(it=>{
+        const row=document.createElement('div'); row.className='item';
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent = `${it.name} — ${it.qty}`;
+        left.appendChild(name); row.appendChild(left); row.appendChild(right); sec.appendChild(row);
+      });
+      shopList.appendChild(sec);
+    });
+  }
+
+  // ----- Manage Items -----
+  function renderManage(){
+    ensurePositions();
+    viewManage.innerHTML = `
+      <div class='row' style='gap:6px;flex-wrap:wrap'>
+        <input id='newItemName' placeholder='Item name' style='flex:2' />
+        <select id='newItemCat' style='flex:1'></select>
+        <button class='btn-accent' id='btnAddItem'>Add Item</button>
+      </div>
+      <div class='spacer'></div>
+      <div class='controls'>
+        <button class='btn' id='btnExport'>Export JSON</button>
+        <button class='btn' id='btnImport'>Import JSON</button>
+        <input type='file' id='fileImport' accept='application/json' style='display:none' />
+        <button class='btn-danger' id='btnWipe'>Wipe all data</button>
+      </div>
+      <div class='spacer'></div>
+      <div id='manageList'></div>`;
+
+    // Sticky category selection for quick entry
+    const sel=document.getElementById('newItemCat');
+    state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt) });
+    if(manageSelectedCat && state.categories.includes(manageSelectedCat)){
+      sel.value = manageSelectedCat;
+    } else if(state.categories.length){
+      manageSelectedCat = state.categories[0];
+      sel.value = manageSelectedCat;
+    }
+    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat) };
+
+    document.getElementById('btnAddItem').onclick = ()=>{
+      const name=document.getElementById('newItemName').value.trim();
+      const cat=sel.value; if(!name) return;
+      manageSelectedCat = cat; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
+      state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat) });
+      save(); try{ renderManage(); renderBuild(); }catch(e){ console.error(e) }
+      const nameInput = document.getElementById('newItemName'); if(nameInput){ nameInput.focus(); nameInput.select(); }
+    };
+
+    // Enter key adds item
+    const nameInput = document.getElementById('newItemName');
+    if(nameInput){
+      nameInput.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          document.getElementById('btnAddItem').click();
+        }
+      });
+    }
+
+    // Export with version stamp
+    document.getElementById('btnExport').onclick = ()=>{
+      const dataOut = { appVersion: APP_VERSION, title: state.title, categories: state.categories, items: state.items };
+      const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grocery_tally_backup_v${APP_VERSION}.json`; a.click();
+    };
+    // Import with version check
+    const fileInput = document.getElementById('fileImport');
+    document.getElementById('btnImport').onclick = ()=> fileInput.click();
+    fileInput.onchange = async (e)=>{
+      const file=e.target.files[0]; if(!file) return; const text=await file.text();
+      try{
+        const data = JSON.parse(text);
+        if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
+        if(data.appVersion && data.appVersion!==APP_VERSION){
+          if(!confirm(`Backup is from version ${data.appVersion}, current app is ${APP_VERSION}. Import anyway?`)){
+            fileInput.value=''; return;
+          }
+        }
+        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items };
+        ensurePositions(); save(); renderAll(); alert('Import complete!');
+      }catch(err){ alert('Import failed: '+err.message) }
+      fileInput.value='';
+    };
+
+    document.getElementById('btnWipe').onclick = ()=>{
+      if(confirm('This clears all items/categories on this device. Continue?')){ state = { categories: DEFAULT_CATS.slice(), items: [] }; save(); renderAll(); }
+    };
+
+    // Items by category (drag & drop) with persistent *collapsed* state
+    const ml = document.getElementById('manageList');
+    state.categories.forEach(cat=>{
+      const items = state.items.filter(i=>i.cat===cat).sort((a,b)=> a.pos-b.pos);
+      if(!items.length) return;
+      const sec=document.createElement('details');
+      sec.open = !closedCats.has(cat);
+      const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      sec.addEventListener('toggle', ()=>{ if(sec.open){ closedCats.delete(cat) } else { closedCats.add(cat) } setClosedCats(closedCats); });
+
+      const list=document.createElement('div'); list.className='list';
+      let dragFrom = null;
+      items.forEach((it,idx)=>{
+        const row=document.createElement('div'); row.className='item'; row.draggable=true; row.dataset.index=idx; row.dataset.itemId=it.id;
+        const left=document.createElement('div'); left.className='left'; const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+        const input=document.createElement('input'); input.value=it.name; input.style.display='none';
+        const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
+        const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
+        const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
+        const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
+        del.onclick=()=>{ state.items = state.items.filter(x=>x.id!==it.id); save(); renderManage(); renderBuild(); renderShop(); };
+        row.appendChild(left); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+        function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
+        function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
+        edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
+        input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
+        saveBtn.onclick = ()=>{ const nv = input.value.trim(); if(!nv){ alert('Item name cannot be empty.'); return } it.name = nv; save(); name.textContent = it.name; exitEdit(); renderBuild(); renderShop(); };
+        row.addEventListener('dragstart', e=>{ dragFrom = parseInt(row.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
+        row.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+        row.addEventListener('drop', e=>{ e.preventDefault(); const to=parseInt(row.dataset.index,10); if(isNaN(dragFrom)||isNaN(to)||dragFrom===to) return; moveItemWithinCategory(cat, dragFrom, to); save(); renderManage(); renderBuild(); renderShop(); });
+        list.appendChild(row);
+      });
+      sec.appendChild(list); ml.appendChild(sec);
+    });
+  }
+
+  // ----- Manage Categories -----
+  function renderCats(){
+    const cl=document.getElementById('catList'); cl.innerHTML='';
+    state.categories.forEach((c,i)=>{
+      const row=document.createElement('div'); row.className='item'; row.draggable=true; row.dataset.index=i;
+      const left=document.createElement('div'); left.className='left';
+      const right=document.createElement('div'); right.className='right';
+      const label=document.createElement('div'); label.textContent=c; label.className='name';
+      const input=document.createElement('input'); input.value=c; input.style.display='none';
+      const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
+      const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
+      const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
+      const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
+
+      function enterEdit(){ label.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
+      function exitEdit(){ label.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = label.textContent; }
+
+      edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
+      // Enter-to-save & Esc-to-cancel while renaming a category
+      input.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){ e.preventDefault(); saveBtn.click(); }
+        else if(e.key === 'Escape'){ e.preventDefault(); cancelBtn.click(); }
+      });
+
+      saveBtn.onclick = ()=>{
+        const newName = input.value.trim(); if(!newName){ alert('Category name cannot be empty.'); return }
+        const dup = state.categories.some((cat,idx)=> idx!==i && cat.toLowerCase()===newName.toLowerCase()); if(dup){ alert('That category already exists.'); return }
+        const oldName = state.categories[i]; state.categories[i] = newName; state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
+        if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
+        if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
+        save(); label.textContent=newName; exitEdit(); renderManage(); renderBuild(); renderShop();
+      };
+      del.onclick = ()=>{ const removed = state.categories.splice(i,1)[0]; if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); } if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); } save(); renderCats(); renderManage(); renderBuild(); renderShop(); };
+
+      row.appendChild(left); left.appendChild(label); left.appendChild(input);
+      row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+      cl.appendChild(row);
+    });
+
+    // Drag & drop reorder
+    let dragIndex=null;
+    cl.querySelectorAll('.item').forEach(el=>{
+      el.addEventListener('dragstart', e=>{ dragIndex=parseInt(e.currentTarget.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
+      el.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+      el.addEventListener('drop', e=>{ e.preventDefault(); const targetIndex=parseInt(e.currentTarget.dataset.index,10); if(isNaN(dragIndex)||isNaN(targetIndex)||dragIndex===targetIndex) return; const moved=state.categories.splice(dragIndex,1)[0]; state.categories.splice(targetIndex,0,moved); save(); renderCats(); renderManage(); renderBuild(); renderShop(); });
+    });
+
+    document.getElementById('btnAddCat').onclick = ()=>{
+      const name=document.getElementById('newCatName').value.trim(); if(!name) return;
+      if(state.categories.some(c=>c.toLowerCase()===name.toLowerCase())){ alert('Category already exists'); return }
+      state.categories.push(name); save(); renderCats(); renderManage(); document.getElementById('newCatName').value='';
+    };
+  }
+
+  function renderAll(){ ensurePositions(); renderTitle(); renderBuild(); renderShop(); renderManage(); renderCats(); setVersionPills(); }
+
+  // Initial render
+  try{ renderTitle(); }catch(e){}
+  try{ ensurePositions(); renderBuild(); renderShop(); renderManage(); renderCats(); setTab('build'); }catch(e){ console.error(e) }
+  try{ setVersionPills(); }catch(e){}
+})();
+  </script>
+
+  <!-- IMPORTANT: service worker registration must be RELATIVE for Pages -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("service-worker.js").catch(console.error);
       });
     }
   </script>
