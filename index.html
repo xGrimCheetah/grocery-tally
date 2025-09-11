@@ -103,7 +103,7 @@
   'use strict';
 
   // ===== Version =====
-  const APP_VERSION = "1.13.0"; // PWA support added
+  let APP_VERSION = "1.13.0"; // PWA support added
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -516,13 +516,52 @@
 })();
   </script>
 
-  <!-- IMPORTANT: service worker registration must be RELATIVE for Pages -->
+  
+  <!-- Version bootstrap + SW registration -->
   <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("service-worker.js").catch(console.error);
-      });
-    }
+    (function(){
+      // Fetch version.json early; update APP_VERSION, pills, and title when it arrives
+      function applyVersion(ver){
+        try {
+          if (typeof ver === 'string' && ver) {
+            APP_VERSION = ver;
+            // Update any version UI
+            if (typeof setVersionPills === 'function') setVersionPills();
+            // Update title if it contains an old version
+            try {
+              const m = document.title.match(/v\d+\.\d+\.\d+$/);
+              if (m) document.title = document.title.replace(/v\d+\.\d+\.\d+$/, 'v' + ver);
+            } catch {}
+          }
+        } catch {}
+      }
+      async function getVersion(){
+        try {
+          const res = await fetch('version.json', { cache: 'no-store' });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.version) applyVersion(data.version);
+            return data?.version;
+          }
+        } catch {}
+        return null;
+      }
+      async function registerSW(ver){
+        if (!('serviceWorker' in navigator)) return;
+        try {
+          const v = ver || APP_VERSION || '';
+          await navigator.serviceWorker.register('service-worker.js' + (v ? ('?v=' + encodeURIComponent(v)) : ''));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      // Kick off
+      (async () => {
+        const v = await getVersion();
+        // Wait for load before registering (mirrors original behavior)
+        window.addEventListener('load', () => registerSW(v));
+      })();
+    })();
   </script>
 </body>
 </html>
