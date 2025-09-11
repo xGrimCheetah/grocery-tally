@@ -1,6 +1,6 @@
 // Service Worker for Grocery Tally on GitHub Pages
 // Use a version string you can bump to force updates.
-const CACHE = "grocery-tally-v1.13.0";
+const CACHE = "grocery-tally-v1.13.1";
 
 const ASSETS = [
   // All paths RELATIVE (no leading /) for project-site hosting
@@ -15,14 +15,19 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE).then((cache) => cache.addAll(ASSETS))
   );
+  // Force new worker to activate immediately
+  self.skipWaiting();
 });
 
 // Activate: clean old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+  (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      // 👇 take control of all pages right away
+      await self.clients.claim();
+    })()
   );
 });
 
@@ -33,3 +38,4 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((hit) => hit || fetch(event.request))
   );
 });
+
