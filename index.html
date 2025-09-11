@@ -520,49 +520,45 @@
   
   <!-- Version bootstrap + SW registration -->
   <script>
-    (function(){
-      // Fetch version.json early; update APP_VERSION, pills, and title when it arrives
-      function applyVersion(ver){
-        try {
-          if (typeof ver === 'string' && ver) {
-            APP_VERSION = ver;
-            // Update any version UI
-            if (typeof setVersionPills === 'function') setVersionPills();
-            // Update title if it contains an old version
-            try {
-              const m = document.title.match(/v\d+\.\d+\.\d+$/);
-              if (m) document.title = document.title.replace(/v\d+\.\d+\.\d+$/, 'v' + ver);
-            } catch {}
-          }
-        } catch {}
-      }
-      async function getVersion(){
-        try {
-          const res = await fetch('version.json', { cache: 'no-store' });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.version) applyVersion(data.version);
-            return data?.version;
-          }
-        } catch {}
-        return null;
-      }
-      async function registerSW(ver){
-        if (!('serviceWorker' in navigator)) return;
-        try {
-          const v = ver || APP_VERSION || '';
-          await navigator.serviceWorker.register('service-worker.js' + (v ? ('?v=' + encodeURIComponent(v)) : ''));
-        } catch (e) {
-          console.error(e);
+  (function(){
+    function setPills(ver){
+      var a = document.getElementById('verPill'); if (a) a.textContent = 'v' + ver;
+      var b = document.getElementById('verPillFooter'); if (b) b.textContent = 'v' + ver;
+    }
+    async function getVersion(){
+      try {
+        const res = await fetch('version.json', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          return data && data.version ? data.version : null;
         }
+      } catch {}
+      return null;
+    }
+    async function registerSW(ver){
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        const v = ver || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '');
+        await navigator.serviceWorker.register('service-worker.js' + (v ? ('?v=' + encodeURIComponent(v)) : ''));
+      } catch (e) {
+        console.error(e);
       }
-      // Kick off
-      (async () => {
-        const v = await getVersion();
-        // Wait for load before registering (mirrors original behavior)
-        window.addEventListener('load', () => registerSW(v));
-      })();
+    }
+    (async () => {
+      const v = await getVersion();
+      if (v) {
+        try { APP_VERSION = v; } catch {}
+        setPills(v);
+        // update title suffix if present
+        try {
+          const m = document.title.match(/v\d+\.\d+\.\d+$/);
+          if (m) document.title = document.title.replace(/v\d+\.\d+\.\d+$/, 'v' + v);
+        } catch {}
+      }
+      // mirror original behavior: register on load
+      window.addEventListener('load', () => registerSW(v));
     })();
-  </script>
+  })();
+</script>
 </body>
 </html>
