@@ -109,6 +109,7 @@
   const STORE_KEY = 'grocery_tally_v2';
   const CLOSED_CATS_KEY = 'manage_closed_cats';       // Manage Items collapsed
   const BUILD_CLOSED_CATS_KEY = 'build_closed_cats';   // Build List collapsed
+  const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';       // Shopping Mode collapsed
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
   const SELECTED_CAT_KEY = 'manage_selected_cat';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
@@ -121,6 +122,7 @@
 
   let closedCats = getClosedCats();
   let buildClosedCats = getBuildClosedCats();
+  let shopClosedCats = getShopClosedCats();
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
@@ -140,11 +142,15 @@
         return new Set(closed);
       }
     }catch(e){}
-    return new Set();
+    // default: all categories start closed
+    try { localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify(state.categories)); } catch(e){}
+    return new Set(state.categories);
   }
   function setClosedCats(set){ try{ localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
-  function getBuildClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(BUILD_CLOSED_CATS_KEY)||'[]'); return new Set(Array.isArray(arr)?arr:[]);}catch(e){ return new Set() } }
+  function getBuildClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(BUILD_CLOSED_CATS_KEY)||'[]'); if(Array.isArray(arr) && arr.length) return new Set(arr); }catch(e){} try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify(state.categories)); }catch(e){} return new Set(state.categories) }
   function setBuildClosedCats(set){ try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
+  function getShopClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(SHOP_CLOSED_CATS_KEY)||'[]'); return new Set(Array.isArray(arr)?arr:[]);}catch(e){ return new Set() } }
+  function setShopClosedCats(set){ try{ localStorage.setItem(SHOP_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
 
   // ===== Helpers =====
   function setVersionPills(){
@@ -295,7 +301,22 @@
       const sec=document.createElement('details');
       sec.open = !buildClosedCats.has(cat);
       const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
-      sec.addEventListener('toggle', ()=>{ if(sec.open){ buildClosedCats.delete(cat) } else { buildClosedCats.add(cat) } setBuildClosedCats(buildClosedCats); });
+      sec.addEventListener('toggle', ()=>{
+        if (sec.open) {
+          // Accordion: close all other sections
+          const container = document.getElementById('buildList');
+          const all = container ? Array.from(container.querySelectorAll('details')) : [];
+          all.forEach(d => {
+            if (d !== sec && d.open) d.open = false;
+          });
+          // mark all others as closed, remove current from closed set
+          buildClosedCats = new Set(state.categories);
+          buildClosedCats.delete(cat);
+        } else {
+          buildClosedCats.add(cat);
+        }
+        setBuildClosedCats(buildClosedCats);
+      });
 
       byCat[cat].sort(sortItems).forEach(it=>{
         const row=document.createElement('div'); row.className='item';
@@ -325,8 +346,9 @@
     const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
     if(!orderedCats.length){ shopList.innerHTML = '<p class="muted">No items yet.</p>'; return }
     orderedCats.forEach(cat=>{
-      const sec=document.createElement('details'); sec.open=true;
+      const sec=document.createElement('details'); sec.open = !shopClosedCats.has(cat);
       const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      sec.addEventListener('toggle', ()=>{ if(sec.open){ shopClosedCats.delete(cat) } else { shopClosedCats.add(cat) } setShopClosedCats(shopClosedCats); });
       byCat[cat].forEach(it=>{
         const row=document.createElement('div'); row.className='item';
         const left=document.createElement('div'); left.className='left';
