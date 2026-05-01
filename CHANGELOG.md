@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.20.0] - 2026-05-01
+### Added
+- Added in-cart checkoff behavior in Shopping Mode.
+- Tapping an item now toggles a checkmark and faded state.
+- Checked items move to the bottom of their category.
+- 
 ## [1.19.0] - 2026-05-01
 ### Changed
 - Existing duplicate items now auto-increment quantity instead of showing a duplicate warning.
