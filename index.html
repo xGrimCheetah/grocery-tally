@@ -103,7 +103,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.17.0"; // Shopping List tab only visible after clicking Finished button in Build List
+  let APP_VERSION = "1.18.0"; // Shopping List tab only visible after clicking Finished button in Build List
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -391,13 +391,38 @@
     sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat) };
 
     document.getElementById('btnAddItem').onclick = ()=>{
-      const name=document.getElementById('newItemName').value.trim();
-      const cat=sel.value; if(!name) return;
-      manageSelectedCat = cat; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
-      state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat) });
-      save(); try{ renderManage(); renderBuild(); }catch(e){ console.error(e) }
-      const nameInput = document.getElementById('newItemName'); if(nameInput){ nameInput.focus(); nameInput.select(); }
-    };
+  const name=document.getElementById('newItemName').value.trim();
+  const cat=sel.value;
+  if(!name) return;
+
+  const normalizedName = name.toLowerCase();
+  const duplicate = state.items.find(i =>
+    i.cat === cat && i.name.trim().toLowerCase() === normalizedName
+  );
+
+  if(duplicate){
+    alert(`"${name}" already exists in ${cat}.`);
+    const nameInput = document.getElementById('newItemName');
+    if(nameInput){ nameInput.focus(); nameInput.select(); }
+    return;
+  }
+
+  manageSelectedCat = cat;
+  localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
+
+  state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat) });
+  save();
+
+  try{
+    renderManage();
+    renderBuild();
+  }catch(e){
+    console.error(e);
+  }
+
+  const nameInput = document.getElementById('newItemName');
+  if(nameInput){ nameInput.focus(); nameInput.select(); }
+};
 
     // Enter key adds item
     const nameInput = document.getElementById('newItemName');

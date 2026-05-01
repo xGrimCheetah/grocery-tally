@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.0] - 2026-05-01
+### Fixed
+- Prevented duplicate item names within the same category.
+- Duplicate checks now ignore capitalization and extra spaces.
+
 ## [1.17.0] - 2026-05-01
 ### Fixed
 - Removed conflicting CSS that permanently hid the Shopping Mode tab.
