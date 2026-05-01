@@ -351,13 +351,38 @@
       const sec=document.createElement('details'); sec.open = !shopClosedCats.has(cat);
       const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
       sec.addEventListener('toggle', ()=>{ if(sec.open){ shopClosedCats.delete(cat) } else { shopClosedCats.add(cat) } setShopClosedCats(shopClosedCats); });
-      byCat[cat].forEach(it=>{
-        const row=document.createElement('div'); row.className='item';
-        const left=document.createElement('div'); left.className='left';
-        const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent = `${it.name} — ${it.qty}`;
-        left.appendChild(name); row.appendChild(left); row.appendChild(right); sec.appendChild(row);
-      });
+    const checkedItems = byCat[cat].filter(i => i.checked);
+    const uncheckedItems = byCat[cat].filter(i => !i.checked);
+
+// Show unchecked first, then checked
+[...uncheckedItems, ...checkedItems].forEach(it=>{
+  const row=document.createElement('div');
+  row.className='item' + (it.checked ? ' checked' : '');
+
+  const left=document.createElement('div'); left.className='left';
+  const right=document.createElement('div'); right.className='right';
+
+  const check=document.createElement('div');
+  check.className='checkmark';
+  check.textContent = it.checked ? '✔' : '';
+
+  const name=document.createElement('div');
+  name.className='name';
+  name.textContent = `${it.name} — ${it.qty}`;
+
+  left.appendChild(check);
+  left.appendChild(name);
+
+  row.onclick = ()=>{
+    it.checked = !it.checked;
+    save();
+    renderShop();
+  };
+
+  row.appendChild(left);
+  row.appendChild(right);
+  sec.appendChild(row);
+});
       shopList.appendChild(sec);
     });
   }
