@@ -36,6 +36,8 @@
     .item{display:flex;align-items:center;gap:8px;justify-content:flex-start;background:#0b1220;border:1px solid #243042;border-radius:12px;padding:10px}
     .item .left{display:flex;align-items:center;gap:10px;min-width:0}
     .item .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .item.checked{opacity:.45}
+    .checkmark{font-weight:700;color:var(--accent);min-width:20px;text-align:center}
     .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
     .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cat{font-size:12px;opacity:.7}
@@ -103,7 +105,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.19.0"; // Shopping List tab only visible after clicking Finished button in Build List
+  let APP_VERSION = "1.20.0"; // Shopping List tab only visible after clicking Finished button in Build List
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -404,8 +406,9 @@ const duplicate = state.items.find(i =>
   i.cat === cat && normalize(i.name) === normalizedName
 );
 
-  if(duplicate){
+ if(duplicate){
   duplicate.qty++;
+  duplicate.checked = false;
   save();
 
   try{
@@ -427,7 +430,7 @@ const duplicate = state.items.find(i =>
   manageSelectedCat = cat;
   localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
 
-  state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat) });
+  state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat), checked:false });
   save();
 
   try{
