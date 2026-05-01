@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.18.1] - 2026-05-01
+### Fixed
+- Normalized internal spacing when checking for duplicate items.
+
 ## [1.18.0] - 2026-05-01
 ### Fixed
 - Prevented duplicate item names within the same category.
