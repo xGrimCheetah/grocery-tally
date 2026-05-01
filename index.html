@@ -395,10 +395,14 @@
   const cat=sel.value;
   if(!name) return;
 
-  const normalizedName = name.toLowerCase();
-  const duplicate = state.items.find(i =>
-    i.cat === cat && i.name.trim().toLowerCase() === normalizedName
-  );
+  const normalize = (str) =>
+  str.trim().toLowerCase().replace(/\s+/g, ' ');
+
+const normalizedName = normalize(name);
+
+const duplicate = state.items.find(i =>
+  i.cat === cat && normalize(i.name) === normalizedName
+);
 
   if(duplicate){
     alert(`"${name}" already exists in ${cat}.`);
