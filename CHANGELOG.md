@@ -3,7 +3,7 @@
 ## [1.18.0] - 2026-05-01
 ### Fixed
 - Prevented duplicate item names within the same category.
-- Duplicate checks now ignore capitalization and extra spaces.
+- Duplicate checks now ignore capitalization, leading/trailing spaces, and repeated internal spaces.
 
 ## [1.17.0] - 2026-05-01
 ### Fixed
