@@ -36,6 +36,8 @@
     .item{display:flex;align-items:center;gap:8px;justify-content:flex-start;background:#0b1220;border:1px solid #243042;border-radius:12px;padding:10px}
     .item .left{display:flex;align-items:center;gap:10px;min-width:0}
     .item .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .item.checked{opacity:.45}
+    .checkmark{font-weight:700;color:var(--accent);min-width:20px;text-align:center}
     .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
     .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cat{font-size:12px;opacity:.7}
@@ -103,7 +105,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.19.0"; // Shopping List tab only visible after clicking Finished button in Build List
+  let APP_VERSION = "1.20.0"; // Shopping List tab only visible after clicking Finished button in Build List
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -349,13 +351,38 @@
       const sec=document.createElement('details'); sec.open = !shopClosedCats.has(cat);
       const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
       sec.addEventListener('toggle', ()=>{ if(sec.open){ shopClosedCats.delete(cat) } else { shopClosedCats.add(cat) } setShopClosedCats(shopClosedCats); });
-      byCat[cat].forEach(it=>{
-        const row=document.createElement('div'); row.className='item';
-        const left=document.createElement('div'); left.className='left';
-        const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent = `${it.name} — ${it.qty}`;
-        left.appendChild(name); row.appendChild(left); row.appendChild(right); sec.appendChild(row);
-      });
+    const checkedItems = byCat[cat].filter(i => i.checked);
+    const uncheckedItems = byCat[cat].filter(i => !i.checked);
+
+// Show unchecked first, then checked
+[...uncheckedItems, ...checkedItems].forEach(it=>{
+  const row=document.createElement('div');
+  row.className='item' + (it.checked ? ' checked' : '');
+
+  const left=document.createElement('div'); left.className='left';
+  const right=document.createElement('div'); right.className='right';
+
+  const check=document.createElement('div');
+  check.className='checkmark';
+  check.textContent = it.checked ? '✔' : '';
+
+  const name=document.createElement('div');
+  name.className='name';
+  name.textContent = `${it.name} — ${it.qty}`;
+
+  left.appendChild(check);
+  left.appendChild(name);
+
+  row.onclick = ()=>{
+    it.checked = !it.checked;
+    save();
+    renderShop();
+  };
+
+  row.appendChild(left);
+  row.appendChild(right);
+  sec.appendChild(row);
+});
       shopList.appendChild(sec);
     });
   }
@@ -404,8 +431,9 @@ const duplicate = state.items.find(i =>
   i.cat === cat && normalize(i.name) === normalizedName
 );
 
-  if(duplicate){
+ if(duplicate){
   duplicate.qty++;
+  duplicate.checked = false;
   save();
 
   try{
@@ -427,7 +455,7 @@ const duplicate = state.items.find(i =>
   manageSelectedCat = cat;
   localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
 
-  state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat) });
+  state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat), checked:false });
   save();
 
   try{
