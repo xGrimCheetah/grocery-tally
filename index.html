@@ -103,7 +103,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.18.1"; // Shopping List tab only visible after clicking Finished button in Build List
+  let APP_VERSION = "1.19.0"; // Shopping List tab only visible after clicking Finished button in Build List
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -405,11 +405,24 @@ const duplicate = state.items.find(i =>
 );
 
   if(duplicate){
-    alert(`"${name}" already exists in ${cat}.`);
-    const nameInput = document.getElementById('newItemName');
-    if(nameInput){ nameInput.focus(); nameInput.select(); }
-    return;
+  duplicate.qty++;
+  save();
+
+  try{
+    renderManage();
+    renderBuild();
+  }catch(e){
+    console.error(e);
   }
+
+  const nameInput = document.getElementById('newItemName');
+  if(nameInput){
+    nameInput.value = '';
+    nameInput.focus();
+  }
+
+  return;
+}
 
   manageSelectedCat = cat;
   localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.19.0] - 2026-05-01
+### Changed
+- Existing duplicate items now auto-increment quantity instead of showing a duplicate warning.
+- Smart Add behavior clears the input and returns focus after incrementing.
+
 ## [1.18.1] - 2026-05-01
 ### Fixed
 - Normalized internal spacing when checking for duplicate items.
