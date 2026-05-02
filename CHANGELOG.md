@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0] - 2026-05-02
+
+### Added
+- Added item drag sorting in Build List and Manage Items, including moving items between categories.
+- Added swipe-left-to-reveal-trash behavior in Build List and Manage Items.
+- Tapping the revealed trash can deletes the item from the master list without an extra popup confirmation or undo.
+
 ## [1.24.0] - 2026-05-02
 
 ### Added
