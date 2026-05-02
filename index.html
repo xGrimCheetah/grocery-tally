@@ -583,7 +583,7 @@
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
-      if(confirm('This clears all items/categories on this device. Continue?')){ state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] }; save(); renderAll(); }
+      if(confirm('This clears all items/categories on this device. Continue?')){ state = { categories: DEFAULT_CATS.slice(), items: [] }; save(); renderAll(); }
     };
 
     // Items by category (drag & drop) with persistent *collapsed* state
@@ -632,95 +632,59 @@
         input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
         saveBtn.onclick = ()=>{ const nv = input.value.trim(); if(!nv){ alert('Item name cannot be empty.'); return } it.name = nv; save(); name.textContent = it.name; exitEdit(); renderBuild(); renderShop(); };
 
-        row.addEventListener('dragstart', (e)=>{
-          dragFrom = Number(row.dataset.index);
-          e.dataTransfer.effectAllowed = 'move';
-          try{ e.dataTransfer.setData('text/plain', it.id); }catch(err){}
-        });
-        row.addEventListener('dragover', (e)=>{
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-        });
-        row.addEventListener('drop', (e)=>{
-          e.preventDefault();
-          const toIndex = Number(row.dataset.index);
-          if(dragFrom === null || dragFrom === toIndex) return;
-          moveItemWithinCategory(cat, dragFrom, toIndex);
-          save();
-          renderManage();
-          renderBuild();
-          renderShop();
-        });
-        row.addEventListener('dragend', ()=>{ dragFrom = null; });
-
+        row.addEventListener('dragstart', e=>{ dragFrom = parseInt(row.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
+        row.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+        row.addEventListener('drop', e=>{ e.preventDefault(); const to=parseInt(row.dataset.index,10); if(isNaN(dragFrom)||isNaN(to)||dragFrom===to) return; moveItemWithinCategory(cat, dragFrom, to); save(); renderManage(); renderBuild(); renderShop(); });
         list.appendChild(row);
       });
-      sec.appendChild(list);
-      ml.appendChild(sec);
+      sec.appendChild(list); ml.appendChild(sec);
     });
   }
 
   // ----- Manage Categories -----
   function renderCats(){
-    const catList = document.getElementById('catList');
-    if(!catList) return;
-    catList.innerHTML = '';
-    if(!state.categories.length){
-      catList.innerHTML = '<p class="muted">No categories yet.</p>';
-    }
-
-    state.categories.forEach((cat,i)=>{
-      const row=document.createElement('div'); row.className='item';
+    const cl=document.getElementById('catList'); cl.innerHTML='';
+    state.categories.forEach((c,i)=>{
+      const row=document.createElement('div'); row.className='item'; row.draggable=true; row.dataset.index=i;
       const left=document.createElement('div'); left.className='left';
       const right=document.createElement('div'); right.className='right';
-
-      const label=document.createElement('div'); label.className='name'; label.textContent=cat;
-      const input=document.createElement('input'); input.value=cat; input.style.display='none';
-
-      const up=document.createElement('button'); up.className='btn'; up.textContent='↑'; up.disabled = i===0;
-      const down=document.createElement('button'); down.className='btn'; down.textContent='↓'; down.disabled = i===state.categories.length-1;
+      const label=document.createElement('div'); label.textContent=c; label.className='name';
+      const input=document.createElement('input'); input.value=c; input.style.display='none';
       const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
       const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
       const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
       const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
 
-      function enterEdit(){ label.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; up.style.display='none'; down.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
-      function exitEdit(){ label.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; up.style.display='inline-block'; down.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = state.categories[i]; }
+      function enterEdit(){ label.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
+      function exitEdit(){ label.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = label.textContent; }
 
-      up.onclick=()=>{
-        if(i<=0) return;
-        const moved = state.categories.splice(i,1)[0];
-        state.categories.splice(i-1,0,moved);
-        save(); renderCats(); renderManage(); renderBuild(); renderShop();
-      };
-      down.onclick=()=>{
-        if(i>=state.categories.length-1) return;
-        const moved = state.categories.splice(i,1)[0];
-        state.categories.splice(i+1,0,moved);
-        save(); renderCats(); renderManage(); renderBuild(); renderShop();
-      };
-      edit.onclick = enterEdit;
-      cancelBtn.onclick = exitEdit;
-      input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
+      edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
+      // Enter-to-save & Esc-to-cancel while renaming a category
+      input.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){ e.preventDefault(); saveBtn.click(); }
+        else if(e.key === 'Escape'){ e.preventDefault(); cancelBtn.click(); }
+      });
       saveBtn.onclick = ()=>{
-        const newName=input.value.trim();
-        if(!newName){ alert('Category name cannot be empty.'); return }
-        if(state.categories.some((c,idx)=> idx!==i && c.toLowerCase()===newName.toLowerCase())){ alert('Category already exists'); return }
+        const newName = input.value.trim(); if(!newName){ alert('Category name cannot be empty.'); return }
+        const dup = state.categories.some((cat,idx)=> idx!==i && cat.toLowerCase()===newName.toLowerCase()); if(dup){ alert('That category already exists.'); return }
         const oldName = state.categories[i]; state.categories[i] = newName; state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
         if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
         if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
         save(); label.textContent=newName; exitEdit(); renderManage(); renderBuild(); renderShop();
       };
-      del.onclick = ()=>{
-        const removed = state.categories.splice(i,1)[0];
-        if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); }
-        if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); }
-        save(); renderCats(); renderManage(); renderBuild(); renderShop();
-      };
+      del.onclick = ()=>{ const removed = state.categories.splice(i,1)[0]; if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); } if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); } save(); renderCats(); renderManage(); renderBuild(); renderShop(); };
 
       row.appendChild(left); left.appendChild(label); left.appendChild(input);
-      row.appendChild(right); right.appendChild(up); right.appendChild(down); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
-      catList.appendChild(row);
+      row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+      cl.appendChild(row);
+    });
+
+    // Drag & drop reorder
+    let dragIndex=null;
+    cl.querySelectorAll('.item').forEach(el=>{
+      el.addEventListener('dragstart', e=>{ dragIndex=parseInt(e.currentTarget.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
+      el.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+      el.addEventListener('drop', e=>{ e.preventDefault(); const targetIndex=parseInt(e.currentTarget.dataset.index,10); if(isNaN(dragIndex)||isNaN(targetIndex)||dragIndex===targetIndex) return; const moved=state.categories.splice(dragIndex,1)[0]; state.categories.splice(targetIndex,0,moved); save(); renderCats(); renderManage(); renderBuild(); renderShop(); });
     });
 
     document.getElementById('btnAddCat').onclick = ()=>{
@@ -735,26 +699,57 @@
     };
   }
 
-  function renderAll(){
-    ensurePositions();
-    renderTitle();
-    renderBuild();
-    renderShop();
-    renderManage();
-    renderCats();
-    setTab('build');
-  }
+  function renderAll(){ ensurePositions(); renderTitle(); renderBuild(); renderShop(); renderManage(); renderCats(); setVersionPills(); }
 
   // Initial render
-  renderAll();
-
-  // Service worker registration
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', ()=>{
-      navigator.serviceWorker.register('./service-worker.js').catch(err=>console.warn('Service worker registration failed', err));
-    });
-  }
+  try{ renderTitle(); }catch(e){}
+  try{ ensurePositions(); renderBuild(); renderShop(); renderManage(); renderCats(); setTab('build'); }catch(e){ console.error(e) }
+  try{ setVersionPills(); }catch(e){}
 })();
-</script>
+  </script>
+
+  
+  <!-- Version bootstrap + SW registration -->
+  <script>
+  (function(){
+    function setPills(ver){
+      var a = document.getElementById('verPill'); if (a) a.textContent = 'v' + ver;
+      var b = document.getElementById('verPillFooter'); if (b) b.textContent = 'v' + ver;
+    }
+    async function getVersion(){
+      try {
+        const res = await fetch('version.json', { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          return data && data.version ? data.version : null;
+        }
+      } catch {}
+      return null;
+    }
+    async function registerSW(ver){
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        const v = ver || (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '');
+        await navigator.serviceWorker.register('service-worker.js' + (v ? ('?v=' + encodeURIComponent(v)) : ''));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    (async () => {
+      const v = await getVersion();
+      if (v) {
+        try { APP_VERSION = v; } catch {}
+        setPills(v);
+        // update title suffix if present
+        try {
+          const m = document.title.match(/v\d+\.\d+\.\d+$/);
+          if (m) document.title = document.title.replace(/v\d+\.\d+\.\d+$/, 'v' + v);
+        } catch {}
+      }
+      // mirror original behavior: register on load
+      window.addEventListener('load', () => registerSW(v));
+    })();
+  })();
+  </script>
 </body>
 </html>
