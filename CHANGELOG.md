@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.22.0] - 2026-05-01
+
+### Changed
+- Updated Shopping Mode item rows to show quantity first, followed by the item name.
+- Added aligned Shopping Mode columns so quantities and item names line up vertically.
+
 ## [1.21.0] - 2026-05-01
 
 ### Added
