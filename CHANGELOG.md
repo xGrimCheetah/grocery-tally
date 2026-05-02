@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.22.1] - 2026-05-01
+
+### Changed
+- Changed the Build List increment button from **+1** to **+** for a cleaner button layout.
+- Moved **Reset all to 0** away from **Finished →** in the Build List controls.
+
+### Added
+- Added a confirmation prompt before resetting all Build List quantities to 0.
+
 ## [1.22.0] - 2026-05-01
 
 ### Changed
