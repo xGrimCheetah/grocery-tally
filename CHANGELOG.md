@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.24.0] - 2026-05-02
+
+### Added
+- Added auto-scroll behavior when opening categories in Build List.
+- Added auto-scroll behavior when opening categories in Manage Items.
+
 ## [1.23.2] - 2026-05-02
 
 ### Changed

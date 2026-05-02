@@ -114,7 +114,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.23.2"; // Manage Items allows only one open category at a time
+  let APP_VERSION = "1.24.0"; // Auto-scroll opened Build List and Manage Items categories
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -167,6 +167,22 @@
     return new Set();
   }
   function setShopClosedCats(set){ try{ localStorage.setItem(SHOP_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
+
+  function scrollOpenedCategoryIntoView(sec){
+    if(!sec || !sec.open) return;
+    const runScroll = ()=>{
+      try{
+        sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }catch(e){
+        sec.scrollIntoView(true);
+      }
+    };
+    try{
+      requestAnimationFrame(()=> setTimeout(runScroll, 0));
+    }catch(e){
+      setTimeout(runScroll, 0);
+    }
+  }
 
   // ===== Helpers =====
   function setVersionPills(){
@@ -369,6 +385,7 @@
           // mark all others as closed, remove current from closed set
           buildClosedCats = new Set(state.categories);
           buildClosedCats.delete(cat);
+          scrollOpenedCategoryIntoView(sec);
         } else {
           buildClosedCats.add(cat);
         }
@@ -606,6 +623,7 @@
           // Mark all categories closed except the one just opened
           closedCats = new Set(state.categories);
           closedCats.delete(cat);
+          scrollOpenedCategoryIntoView(sec);
         } else {
           closedCats.add(cat);
         }
