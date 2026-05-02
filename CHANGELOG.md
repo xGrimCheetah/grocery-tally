@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.2] - 2026-05-02
+
+### Changed
+- Renamed the Shopping Mode **Clear checked** button to **Reset checkmarks**.
+- Moved **Reset checkmarks** to the right side of the Shopping Mode controls row.
+- Updated **Reset checkmarks** so it clears checkmarks only and does not change item quantities.
+
 ## [1.25.1] - 2026-05-02
 
 ### Fixed

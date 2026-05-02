@@ -15,6 +15,7 @@
     .tab.active{background:var(--muted);border-color:#334155;color:var(--text);font-weight:600}
     .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:12px}
     .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .controls .right-controls{margin-left:auto}
     .build-actions{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
     .build-actions .right-controls{margin-left:auto}
     button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:white;cursor:pointer}
@@ -122,7 +123,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.25.1"; // Desktop swipe/drag interaction cleanup
+  let APP_VERSION = "1.25.2"; // Shopping Mode reset checkmarks behavior
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -302,17 +303,13 @@
     save();
     try{ renderBuild(); renderShop(); }catch(e){}
   }
-  function clearCheckedItems(){
-    const checked = state.items.filter(i=>i.qty>0 && i.checked);
+  function resetCheckmarks(){
+    const checked = state.items.filter(i=>i.checked);
     if(!checked.length){
-      alert('No checked items to clear.');
-      return;
-    }
-    if(!confirm(`Clear ${checked.length} checked item${checked.length===1?'':'s'} from the shopping list?`)){
+      alert('No checkmarks to reset.');
       return;
     }
     checked.forEach(i=>{
-      i.qty = 0;
       i.checked = false;
     });
     save();
@@ -575,16 +572,15 @@
   // ----- Shopping Mode -----
   function renderShop(){
     ensurePositions();
-    const checkedCount = state.items.filter(i=>i.qty>0 && i.checked).length;
     viewShop.innerHTML = `
       <div class="controls">
         <button class="btn" id="btnBack">← Back</button>
-        <button class="btn-danger" id="btnClearChecked">Clear checked${checkedCount ? ` (${checkedCount})` : ''}</button>
+        <button class="btn right-controls" id="btnResetCheckmarks">Reset checkmarks</button>
       </div>
       <div class="spacer"></div>
       <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
-    document.getElementById('btnClearChecked').onclick = clearCheckedItems;
+    document.getElementById('btnResetCheckmarks').onclick = resetCheckmarks;
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
     const byCat = groupBy(items,'cat');
