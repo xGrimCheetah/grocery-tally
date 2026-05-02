@@ -59,6 +59,14 @@
     .footer{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
     .pill{background:#0b1220;border:1px solid #243042;border-radius:999px;padding:6px 10px;font-size:12px}
     .link{color:#93c5fd;text-decoration:underline;cursor:pointer}
+    .drag-handle{color:#64748b;font-weight:700;cursor:grab;user-select:none;touch-action:none}
+    .dragging{opacity:.55}
+    .drop-target{outline:2px dashed #3b82f6;outline-offset:2px}
+    .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
+    .list .swipe-wrap{margin-top:0}
+    .swipe-content{position:relative;z-index:1;transition:transform .18s ease;touch-action:pan-y}
+    .swipe-wrap.revealed .swipe-content{transform:translateX(-74px)}
+    .swipe-trash{position:absolute;right:0;top:0;bottom:0;width:70px;border-radius:0 12px 12px 0;background:var(--danger);z-index:0;display:flex;align-items:center;justify-content:center;font-size:20px}
   </style>
 
   <!-- IMPORTANT: use RELATIVE paths for GitHub Pages -->
@@ -114,7 +122,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.24.0"; // Auto-scroll opened Build List and Manage Items categories
+  let APP_VERSION = "1.25.0"; // Item drag sorting and swipe-to-delete cleanup
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -319,7 +327,152 @@
   function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name)}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
-  function moveItemWithinCategory(cat, fromIndex, toIndex){ const items=state.items.filter(i=>i.cat===cat).sort((a,b)=>a.pos-b.pos); if(fromIndex<0||toIndex<0||fromIndex>=items.length||toIndex>=items.length) return; const moved=items.splice(fromIndex,1)[0]; items.splice(toIndex,0,moved); items.forEach((it,i)=> it.pos=i) }
+  function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
+  function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
+  function moveItemToCategory(itemId, targetCat, targetIndex){
+    const it = state.items.find(x=>x.id===itemId);
+    if(!it || !state.categories.includes(targetCat)) return false;
+    const oldCat = it.cat;
+    const targetItems = itemsInCategory(targetCat).filter(x=>x.id!==itemId);
+    let insertAt = Number(targetIndex);
+    if(!Number.isFinite(insertAt)) insertAt = targetItems.length;
+    insertAt = Math.max(0, Math.min(insertAt, targetItems.length));
+    it.cat = targetCat;
+    targetItems.splice(insertAt, 0, it);
+    targetItems.forEach((x,i)=> x.pos=i);
+    if(oldCat !== targetCat) reindexCategory(oldCat);
+    return true;
+  }
+  function deleteItemById(itemId){
+    const it = state.items.find(x=>x.id===itemId);
+    if(!it) return;
+    const oldCat = it.cat;
+    state.items = state.items.filter(x=>x.id!==itemId);
+    reindexCategory(oldCat);
+    save();
+    try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+  }
+  function rerenderItemViews(){
+    try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+  }
+  let draggedItemId = null;
+  function getDragItemId(e){
+    try{ return e.dataTransfer.getData('text/plain') || draggedItemId; }catch(err){ return draggedItemId }
+  }
+  function attachItemDrag(row, itemId){
+    row.draggable = true;
+    row.dataset.itemId = itemId;
+    row.addEventListener('dragstart', e=>{
+      if(e.target && e.target.closest && e.target.closest('button,input,select')){
+        e.preventDefault();
+        return;
+      }
+      draggedItemId = itemId;
+      row.classList.add('dragging');
+      try{
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain', itemId);
+      }catch(err){}
+    });
+    row.addEventListener('dragend', ()=>{
+      draggedItemId = null;
+      row.classList.remove('dragging');
+      document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+    });
+  }
+  function attachDropTarget(el, targetCat, targetIndexFn){
+    if(!el) return;
+    el.addEventListener('dragover', e=>{
+      const itemId = getDragItemId(e);
+      if(!itemId) return;
+      e.preventDefault();
+      el.classList.add('drop-target');
+      try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+    });
+    el.addEventListener('dragleave', ()=> el.classList.remove('drop-target'));
+    el.addEventListener('drop', e=>{
+      const itemId = getDragItemId(e);
+      if(!itemId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drop-target');
+      const idx = typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn;
+      if(moveItemToCategory(itemId, targetCat, idx)){
+        draggedItemId = null;
+        save();
+        rerenderItemViews();
+      }
+    });
+  }
+  function createSwipeShell(itemId){
+    const wrap=document.createElement('div');
+    wrap.className='swipe-wrap';
+    wrap.dataset.itemId=itemId;
+
+    const trash=document.createElement('button');
+    trash.type='button';
+    trash.className='swipe-trash';
+    trash.title='Delete item';
+    trash.setAttribute('aria-label','Delete item');
+    trash.textContent='🗑';
+    trash.onclick=(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      deleteItemById(itemId);
+    };
+
+    const content=document.createElement('div');
+    content.className='item swipe-content';
+
+    wrap.appendChild(trash);
+    wrap.appendChild(content);
+    attachSwipeToReveal(wrap, content);
+    attachItemDrag(wrap, itemId);
+    return { wrap, content };
+  }
+  function attachSwipeToReveal(wrap, content){
+    let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
+    content.addEventListener('pointerdown', e=>{
+      if(e.button !== undefined && e.button !== 0) return;
+      if(e.target && e.target.closest && e.target.closest('button,input,select')) return;
+      tracking=true; swiping=false;
+      startX=e.clientX; startY=e.clientY; currentX=startX;
+    });
+    content.addEventListener('pointermove', e=>{
+      if(!tracking) return;
+      currentX=e.clientX;
+      const dx=currentX-startX;
+      const dy=e.clientY-startY;
+      if(!swiping && Math.abs(dx)>18 && Math.abs(dx)>Math.abs(dy)*1.25){
+        swiping=true;
+        try{ content.setPointerCapture(e.pointerId); }catch(err){}
+      }
+      if(swiping){
+        e.preventDefault();
+        const offset=Math.max(-74, Math.min(0, dx));
+        content.style.transform=`translateX(${offset}px)`;
+      }
+    });
+    function finish(){
+      if(!tracking) return;
+      const dx=currentX-startX;
+      tracking=false;
+      if(swiping){
+        content.style.transform='';
+        if(dx < -36){
+          document.querySelectorAll('.swipe-wrap.revealed').forEach(el=>{ if(el!==wrap) el.classList.remove('revealed'); });
+          wrap.classList.add('revealed');
+        } else if(dx > 24){
+          wrap.classList.remove('revealed');
+        }
+      } else if(wrap.classList.contains('revealed')){
+        wrap.classList.remove('revealed');
+      }
+      swiping=false;
+    }
+    content.addEventListener('pointerup', finish);
+    content.addEventListener('pointercancel', finish);
+  }
 
   // ===== Tabs & Views =====
   const tabBuild=document.getElementById('tabBuild');
@@ -392,16 +545,28 @@
         setBuildClosedCats(buildClosedCats);
       });
 
-      byCat[cat].sort(sortItems).forEach(it=>{
-        const row=document.createElement('div'); row.className='item';
+      const catItems = byCat[cat].sort(sortItems);
+      attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
+      attachDropTarget(sec, cat, () => itemsInCategory(cat).length);
+
+      catItems.forEach((it,idx)=>{
+        const shell = createSwipeShell(it.id);
+        const row=shell.content;
+        row.dataset.index=idx;
+
         const left=document.createElement('div'); left.className='left';
+        const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent=it.name; left.appendChild(name);
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+        left.appendChild(handle); left.appendChild(name);
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
         const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
         right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
-        row.appendChild(left); row.appendChild(right); sec.appendChild(row);
+        row.appendChild(left); row.appendChild(right);
+
+        attachDropTarget(shell.wrap, cat, () => idx);
+        sec.appendChild(shell.wrap);
       });
       buildList.appendChild(sec);
     });
@@ -632,28 +797,32 @@
       });
 
       const list=document.createElement('div'); list.className='list';
-      let dragFrom = null;
+      attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
+      attachDropTarget(list, cat, () => itemsInCategory(cat).length);
+
       items.forEach((it,idx)=>{
-        const row=document.createElement('div'); row.className='item'; row.draggable=true; row.dataset.index=idx; row.dataset.itemId=it.id;
+        const shell = createSwipeShell(it.id);
+        const row=shell.content;
+        row.dataset.index=idx;
+
         const left=document.createElement('div'); left.className='left'; const right=document.createElement('div'); right.className='right';
+        const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.value=it.name; input.style.display='none';
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
         const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
-        del.onclick=()=>{ state.items = state.items.filter(x=>x.id!==it.id); save(); renderManage(); renderBuild(); renderShop(); };
-        row.appendChild(left); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+        del.onclick=()=>{ deleteItemById(it.id); };
+        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
         function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
         function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
         edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
         input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
         saveBtn.onclick = ()=>{ const nv = input.value.trim(); if(!nv){ alert('Item name cannot be empty.'); return } it.name = nv; save(); name.textContent = it.name; exitEdit(); renderBuild(); renderShop(); };
 
-        row.addEventListener('dragstart', e=>{ dragFrom = parseInt(row.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
-        row.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
-        row.addEventListener('drop', e=>{ e.preventDefault(); const to=parseInt(row.dataset.index,10); if(isNaN(dragFrom)||isNaN(to)||dragFrom===to) return; moveItemWithinCategory(cat, dragFrom, to); save(); renderManage(); renderBuild(); renderShop(); });
-        list.appendChild(row);
+        attachDropTarget(shell.wrap, cat, () => idx);
+        list.appendChild(shell.wrap);
       });
       sec.appendChild(list); ml.appendChild(sec);
     });
