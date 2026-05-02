@@ -38,6 +38,11 @@
     .item .right{margin-left:auto;display:flex;gap:8px;align-items:center}
     .item.checked{opacity:.45}
     .checkmark{font-weight:700;color:var(--accent);min-width:20px;text-align:center}
+    .shop-item{cursor:pointer}
+    .shop-item .shop-left{display:grid;grid-template-columns:24px 44px 12px minmax(0,1fr);gap:8px;align-items:center;width:100%}
+    .shop-qty{text-align:right;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
+    .shop-sep{opacity:.65;text-align:center}
+    .shop-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;min-width:0}
     .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
     .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cat{font-size:12px;opacity:.7}
@@ -105,7 +110,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.21.0"; // Clear checked items button in Shopping Mode
+  let APP_VERSION = "1.22.0"; // Shopping Mode quantity-first aligned item layout
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -393,20 +398,30 @@
 // Show unchecked first, then checked
 [...uncheckedItems, ...checkedItems].forEach(it=>{
   const row=document.createElement('div');
-  row.className='item' + (it.checked ? ' checked' : '');
+  row.className='item shop-item' + (it.checked ? ' checked' : '');
 
-  const left=document.createElement('div'); left.className='left';
-  const right=document.createElement('div'); right.className='right';
+  const left=document.createElement('div');
+  left.className='left shop-left';
 
   const check=document.createElement('div');
   check.className='checkmark';
   check.textContent = it.checked ? '✔' : '';
 
+  const qty=document.createElement('div');
+  qty.className='shop-qty';
+  qty.textContent = it.qty;
+
+  const sep=document.createElement('div');
+  sep.className='shop-sep';
+  sep.textContent = '–';
+
   const name=document.createElement('div');
-  name.className='name';
-  name.textContent = `${it.name} — ${it.qty}`;
+  name.className='shop-name';
+  name.textContent = it.name;
 
   left.appendChild(check);
+  left.appendChild(qty);
+  left.appendChild(sep);
   left.appendChild(name);
 
   row.onclick = ()=>{
@@ -416,7 +431,6 @@
   };
 
   row.appendChild(left);
-  row.appendChild(right);
   sec.appendChild(row);
 });
       shopList.appendChild(sec);
