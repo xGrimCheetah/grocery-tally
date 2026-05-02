@@ -112,7 +112,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.22.1"; // Build List controls polish
+  let APP_VERSION = "1.23.0"; // Category lists default closed cleanup
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -138,27 +138,32 @@
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null } }
 
-  function getClosedCats(){
-    try{
-      const existing = localStorage.getItem(CLOSED_CATS_KEY);
-      if(existing){ const arr = JSON.parse(existing); return new Set(Array.isArray(arr)?arr:[]) }
-      // migrate legacy OPEN list to CLOSED list
-      const legacy = JSON.parse(localStorage.getItem(LEGACY_OPEN_KEY)||'[]');
-      if(Array.isArray(legacy) && legacy.length){
-        const closed = state.categories.filter(c=> !legacy.includes(c));
-        localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify(closed));
-        localStorage.removeItem(LEGACY_OPEN_KEY);
-        return new Set(closed);
-      }
-    }catch(e){}
-    // default: all categories start closed
-    try { localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify(state.categories)); } catch(e){}
+  function allCurrentCatsClosedSet(){
     return new Set(state.categories);
   }
+  function getClosedCats(){
+    // v1.23.0: start Manage Items collapsed every time the app first loads.
+    const closed = allCurrentCatsClosedSet();
+    try{
+      localStorage.removeItem(LEGACY_OPEN_KEY);
+      localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify([...closed]));
+    }catch(e){}
+    return closed;
+  }
   function setClosedCats(set){ try{ localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
-  function getBuildClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(BUILD_CLOSED_CATS_KEY)||'[]'); if(Array.isArray(arr) && arr.length) return new Set(arr); }catch(e){} try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify(state.categories)); }catch(e){} return new Set(state.categories) }
+  function getBuildClosedCats(){
+    // v1.23.0: start Build List collapsed every time the app first loads.
+    const closed = allCurrentCatsClosedSet();
+    try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...closed])); }catch(e){}
+    return closed;
+  }
   function setBuildClosedCats(set){ try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
-  function getShopClosedCats(){ try{ const arr = JSON.parse(localStorage.getItem(SHOP_CLOSED_CATS_KEY)||'[]'); return new Set(Array.isArray(arr)?arr:[]);}catch(e){ return new Set() } }
+  function getShopClosedCats(){
+    // v1.23.0: start Shopping Mode collapsed every time the app first loads.
+    const closed = allCurrentCatsClosedSet();
+    try{ localStorage.setItem(SHOP_CLOSED_CATS_KEY, JSON.stringify([...closed])); }catch(e){}
+    return closed;
+  }
   function setShopClosedCats(set){ try{ localStorage.setItem(SHOP_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
 
   // ===== Helpers =====
@@ -641,9 +646,10 @@ const duplicate = state.items.find(i =>
         const oldName = state.categories[i]; state.categories[i] = newName; state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
         if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
         if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
+        if(shopClosedCats.has(oldName)){ shopClosedCats.delete(oldName); shopClosedCats.add(newName); setShopClosedCats(shopClosedCats); }
         save(); label.textContent=newName; exitEdit(); renderManage(); renderBuild(); renderShop();
       };
-      del.onclick = ()=>{ const removed = state.categories.splice(i,1)[0]; if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); } if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); } save(); renderCats(); renderManage(); renderBuild(); renderShop(); };
+      del.onclick = ()=>{ const removed = state.categories.splice(i,1)[0]; if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); } if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); } if(shopClosedCats.has(removed)){ shopClosedCats.delete(removed); setShopClosedCats(shopClosedCats); } save(); renderCats(); renderManage(); renderBuild(); renderShop(); };
 
       row.appendChild(left); left.appendChild(label); left.appendChild(input);
       row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
@@ -661,7 +667,14 @@ const duplicate = state.items.find(i =>
     document.getElementById('btnAddCat').onclick = ()=>{
       const name=document.getElementById('newCatName').value.trim(); if(!name) return;
       if(state.categories.some(c=>c.toLowerCase()===name.toLowerCase())){ alert('Category already exists'); return }
-      state.categories.push(name); save(); renderCats(); renderManage(); document.getElementById('newCatName').value='';
+      state.categories.push(name);
+      closedCats.add(name);
+      buildClosedCats.add(name);
+      shopClosedCats.add(name);
+      setClosedCats(closedCats);
+      setBuildClosedCats(buildClosedCats);
+      setShopClosedCats(shopClosedCats);
+      save(); renderCats(); renderManage(); renderBuild(); renderShop(); document.getElementById('newCatName').value='';
     };
   }
 
