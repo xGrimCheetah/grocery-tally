@@ -15,6 +15,8 @@
     .tab.active{background:var(--muted);border-color:#334155;color:var(--text);font-weight:600}
     .card{background:var(--card);border:1px solid #1f2937;border-radius:16px;padding:12px}
     .controls{display:flex;gap:8px;flex-wrap:wrap}
+    .build-actions{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .build-actions .right-controls{margin-left:auto}
     button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:white;cursor:pointer}
     .btn{background:#334155}
     .btn:hover{filter:brightness(1.05)}
@@ -99,7 +101,7 @@
 
     <div class="spacer"></div>
     <div class="card footer">
-      <span class="muted">Tap <span class="pill">+1</span> to add, <span class="pill">–</span> to reduce. “Finished” hides zeroes. Categories/items follow your custom order.</span>
+      <span class="muted">Tap <span class="pill">+</span> to add, <span class="pill">–</span> to reduce. “Finished” opens Shopping Mode. Categories/items follow your custom order.</span>
       <span class="pill" id="verPillFooter"></span>
       <div class="muted" id="fileNameHint"></div>
     </div>
@@ -110,7 +112,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.22.0"; // Shopping Mode quantity-first aligned item layout
+  let APP_VERSION = "1.22.1"; // Build List controls polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -254,6 +256,14 @@
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
   function nonZero(){ return state.items.filter(i=>i.qty>0) }
   function zeroAll(){
+    const resettable = state.items.filter(i=>i.qty>0 || i.checked);
+    if(!resettable.length){
+      alert('Nothing to reset.');
+      return;
+    }
+    if(!confirm('Reset all quantities to 0 and clear checked status?')){
+      return;
+    }
     state.items.forEach(i=>{
       i.qty = 0;
       i.checked = false;
@@ -328,7 +338,12 @@
   // ----- Build List -----
   function renderBuild(){
     ensurePositions();
-    viewBuild.innerHTML = '<button class="btn-accent" id="btnFinish">Finished →</button> <button class="btn" id="btnZeroAll">Reset all to 0</button><div id="buildList"></div>';
+    viewBuild.innerHTML = `
+      <div class="build-actions">
+        <button class="btn-accent" id="btnFinish">Finished →</button>
+        <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
+      </div>
+      <div id="buildList"></div>`;
     const buildList = document.getElementById('buildList');
     const byCat = groupBy(state.items,'cat');
     const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
@@ -360,7 +375,7 @@
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name; left.appendChild(name);
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
-        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+1'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
+        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
         right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
         row.appendChild(left); row.appendChild(right); sec.appendChild(row);
       });
