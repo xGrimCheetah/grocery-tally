@@ -7,6 +7,22 @@
 - Kept in-session category open/closed behavior intact after the app has loaded.
 - Added category state cleanup so renamed, deleted, and newly added categories stay consistent across Build List, Shopping Mode, and Manage Items.
 
+## [1.22.1] - 2026-05-01
+
+### Changed
+- Changed the Build List quantity increase button from **+1** to **+**.
+- Moved **Reset all to 0** away from **Finished →** in the Build List controls.
+
+### Fixed
+- Added a confirmation prompt before **Reset all to 0** clears quantities.
+
+## [1.22.0] - 2026-05-01
+
+### Changed
+- Updated Shopping Mode item layout so quantities display first in their own aligned column.
+- Updated Shopping Mode item names so they align separately from quantities.
+- Preserved checked-item behavior, including checkmark, fade, and checked items moving below unchecked items.
+
 ## [1.21.0] - 2026-05-01
 
 ### Added
