@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.26.0] - 2026-05-02
+
+### Added
+- Added **Bulk setup tools** in Manage Items for pasting multiple master list items at once.
+- Added category header support using lines ending in a colon, such as **Produce:**.
+- Added automatic creation of missing categories during bulk setup.
+- Bulk setup skips duplicate items using normalized spacing so existing master list items are not duplicated.
+
 ## [1.25.2] - 2026-05-02
 
 ### Changed

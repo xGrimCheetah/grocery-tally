@@ -31,7 +31,10 @@
     .titlewrap:hover .iconbtn.pencil, .titlewrap:focus-within .iconbtn.pencil{opacity:1}
     /* brief hint on load */
     .pencil.hint{opacity:1 !important}
-    input,select{background:#0b1220;color:var(--text);border:1px solid #243042;border-radius:10px;padding:10px}
+    input,select,textarea{background:#0b1220;color:var(--text);border:1px solid #243042;border-radius:10px;padding:10px}
+    textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.4}
+    .bulk-tools{margin-top:10px}
+    .bulk-help{font-size:13px;line-height:1.45}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
     .col-12{grid-column:span 12}
     .col-6{grid-column:span 12}
@@ -123,7 +126,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.25.2"; // Shopping Mode reset checkmarks behavior
+  let APP_VERSION = "1.26.0"; // Bulk setup tools
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -286,6 +289,29 @@
     setVersionPills();
   }
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
+  function cleanText(str){ return (str || '').trim().replace(/\s+/g, ' ') }
+  function normalizeText(str){ return cleanText(str).toLowerCase() }
+  function findCategoryByName(name){
+    const target = normalizeText(name);
+    if(!target) return '';
+    return state.categories.find(c => normalizeText(c) === target) || '';
+  }
+  function ensureCategory(name){
+    const cleaned = cleanText(name);
+    if(!cleaned) return { name:'', created:false };
+    const existing = findCategoryByName(cleaned);
+    if(existing) return { name: existing, created:false };
+    state.categories.push(cleaned);
+    closedCats.add(cleaned);
+    buildClosedCats.add(cleaned);
+    setClosedCats(closedCats);
+    setBuildClosedCats(buildClosedCats);
+    return { name: cleaned, created:true };
+  }
+  function findItemInCategory(name, cat){
+    const target = normalizeText(name);
+    return state.items.find(i => i.cat === cat && normalizeText(i.name) === target) || null;
+  }
   function nonZero(){ return state.items.filter(i=>i.qty>0) }
   function zeroAll(){
     const resettable = state.items.filter(i=>i.qty>0 || i.checked);
@@ -657,6 +683,26 @@
         <button class='btn-danger' id='btnWipe'>Wipe all data</button>
       </div>
       <div class='spacer'></div>
+      <details class='bulk-tools'>
+        <summary>Bulk setup tools</summary>
+        <div class='spacer'></div>
+        <p class='muted bulk-help'>Paste one item per line. Use category headers ending with a colon, like <strong>Produce:</strong>. Lines before the first category go into the selected category above.</p>
+        <textarea id='bulkSetupText' placeholder='Produce:
+Bananas
+Apples
+Lettuce
+
+Dairy:
+Milk
+Greek Yogurt
+Cheese'></textarea>
+        <div class='spacer'></div>
+        <div class='controls'>
+          <button class='btn-accent' id='btnBulkSetup'>Add pasted items/categories</button>
+          <button class='btn' id='btnBulkClear'>Clear paste box</button>
+        </div>
+      </details>
+      <div class='spacer'></div>
       <div id='manageList'></div>`;
 
     // Sticky category selection for quick entry
@@ -675,13 +721,10 @@
       const cat=sel.value;
       if(!name) return;
 
-      const normalize = (str) =>
-        str.trim().toLowerCase().replace(/\s+/g, ' ');
-
-      const normalizedName = normalize(name);
+      const normalizedName = normalizeText(name);
 
       const duplicate = state.items.find(i =>
-        i.cat === cat && normalize(i.name) === normalizedName
+        i.cat === cat && normalizeText(i.name) === normalizedName
       );
 
       if(duplicate){
@@ -756,6 +799,76 @@
         ensurePositions(); save(); renderAll(); alert('Import complete!');
       }catch(err){ alert('Import failed: '+err.message) }
       fileInput.value='';
+    };
+
+    document.getElementById('btnBulkSetup').onclick = ()=>{
+      const box = document.getElementById('bulkSetupText');
+      if(!box) return;
+      const raw = box.value || '';
+      if(!raw.trim()){
+        alert('Paste one or more items first.');
+        return;
+      }
+
+      let currentCat = sel.value || state.categories[0] || 'Other';
+      const startingCat = ensureCategory(currentCat);
+      currentCat = startingCat.name || 'Other';
+
+      let addedCats = startingCat.created ? 1 : 0;
+      let addedItems = 0;
+      let skippedItems = 0;
+      const batchKeys = new Set();
+
+      raw.split(/\r?\n/).forEach(line=>{
+        let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, ''));
+        if(!cleaned) return;
+
+        if(cleaned.endsWith(':')){
+          const catName = cleanText(cleaned.slice(0, -1));
+          const result = ensureCategory(catName);
+          if(result.name){
+            currentCat = result.name;
+            if(result.created) addedCats++;
+          }
+          return;
+        }
+
+        const catResult = ensureCategory(currentCat || 'Other');
+        const cat = catResult.name || 'Other';
+        if(catResult.created) addedCats++;
+
+        const itemName = cleaned;
+        const key = normalizeText(cat) + '|' + normalizeText(itemName);
+
+        if(batchKeys.has(key) || findItemInCategory(itemName, cat)){
+          skippedItems++;
+          return;
+        }
+
+        state.items.push({ id:id(), name:itemName, cat, qty:0, pos: nextPos(cat), checked:false });
+        batchKeys.add(key);
+        addedItems++;
+      });
+
+      if(!addedCats && !addedItems && skippedItems){
+        alert(`No new items added. Skipped ${skippedItems} duplicate item(s).`);
+        return;
+      }
+
+      manageSelectedCat = currentCat;
+      localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
+      ensurePositions();
+      save();
+      renderAll();
+      alert(`Bulk setup complete.\nAdded categories: ${addedCats}\nAdded items: ${addedItems}\nSkipped duplicate items: ${skippedItems}`);
+    };
+
+    document.getElementById('btnBulkClear').onclick = ()=>{
+      const box = document.getElementById('bulkSetupText');
+      if(box){
+        box.value = '';
+        box.focus();
+      }
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
@@ -868,13 +981,9 @@
     });
 
     document.getElementById('btnAddCat').onclick = ()=>{
-      const name=document.getElementById('newCatName').value.trim(); if(!name) return;
-      if(state.categories.some(c=>c.toLowerCase()===name.toLowerCase())){ alert('Category already exists'); return }
-      state.categories.push(name);
-      closedCats.add(name);
-      buildClosedCats.add(name);
-      setClosedCats(closedCats);
-      setBuildClosedCats(buildClosedCats);
+      const name=cleanText(document.getElementById('newCatName').value); if(!name) return;
+      const result = ensureCategory(name);
+      if(!result.created){ alert('Category already exists'); return }
       save(); renderCats(); renderManage(); document.getElementById('newCatName').value='';
     };
   }
