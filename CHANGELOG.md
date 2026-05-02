@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.27.0] - 2026-05-02
+
+### Added
+- Added category drag sorting in Build List and Manage Items.
+- Category drag sorting starts from the category ☰ handle instead of the whole category header.
+- Reordered categories update the shared category order used by Build List, Manage Items, Shopping Mode, and Manage Categories.
+- Items remain assigned to their existing categories when categories are reordered.
+
 ## [1.26.0] - 2026-05-02
 
 ### Added
