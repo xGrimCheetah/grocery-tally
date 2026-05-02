@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.25.1] - 2026-05-02
+
+### Fixed
+- Updated item drag sorting so desktop dragging starts from the drag handle instead of the whole row.
+- Updated desktop row dragging so dragging left can reveal the trash can.
+
+### Removed
+- Removed the old item Delete buttons from Manage Items now that swipe-left trash is available.
 ## [1.25.0] - 2026-05-02
 
 ### Added

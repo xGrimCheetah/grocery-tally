@@ -122,7 +122,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.25.0"; // Item drag sorting and swipe-to-delete cleanup
+  let APP_VERSION = "1.25.1"; // Desktop swipe/drag interaction cleanup
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -359,24 +359,22 @@
   function getDragItemId(e){
     try{ return e.dataTransfer.getData('text/plain') || draggedItemId; }catch(err){ return draggedItemId }
   }
-  function attachItemDrag(row, itemId){
-    row.draggable = true;
-    row.dataset.itemId = itemId;
-    row.addEventListener('dragstart', e=>{
-      if(e.target && e.target.closest && e.target.closest('button,input,select')){
-        e.preventDefault();
-        return;
-      }
+  function attachItemDrag(handleEl, itemId, dragClassEl){
+    if(!handleEl) return;
+    handleEl.draggable = true;
+    handleEl.dataset.itemId = itemId;
+    handleEl.addEventListener('dragstart', e=>{
       draggedItemId = itemId;
-      row.classList.add('dragging');
+      const visual = dragClassEl || handleEl;
+      visual.classList.add('dragging');
       try{
         e.dataTransfer.effectAllowed='move';
         e.dataTransfer.setData('text/plain', itemId);
       }catch(err){}
     });
-    row.addEventListener('dragend', ()=>{
+    handleEl.addEventListener('dragend', ()=>{
       draggedItemId = null;
-      row.classList.remove('dragging');
+      document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
       document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
     });
   }
@@ -427,14 +425,13 @@
     wrap.appendChild(trash);
     wrap.appendChild(content);
     attachSwipeToReveal(wrap, content);
-    attachItemDrag(wrap, itemId);
     return { wrap, content };
   }
   function attachSwipeToReveal(wrap, content){
     let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
     content.addEventListener('pointerdown', e=>{
       if(e.button !== undefined && e.button !== 0) return;
-      if(e.target && e.target.closest && e.target.closest('button,input,select')) return;
+      if(e.target && e.target.closest && e.target.closest('.drag-handle,button,input,select')) return;
       tracking=true; swiping=false;
       startX=e.clientX; startY=e.clientY; currentX=startX;
     });
@@ -559,6 +556,7 @@
         const right=document.createElement('div'); right.className='right';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         left.appendChild(handle); left.appendChild(name);
+        attachItemDrag(handle, it.id, shell.wrap);
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
         const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
@@ -812,11 +810,10 @@
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
-        const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
-        del.onclick=()=>{ deleteItemById(it.id); };
-        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
-        function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
-        function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
+        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn);
+        attachItemDrag(handle, it.id, shell.wrap);
+        function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
+        function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
         edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
         input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
         saveBtn.onclick = ()=>{ const nv = input.value.trim(); if(!nv){ alert('Item name cannot be empty.'); return } it.name = nv; save(); name.textContent = it.name; exitEdit(); renderBuild(); renderShop(); };
