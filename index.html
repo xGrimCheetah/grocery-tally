@@ -105,7 +105,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.20.0"; // Shopping List tab only visible after clicking Finished button in Build List
+  let APP_VERSION = "1.21.0"; // Clear checked items button in Shopping Mode
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -248,7 +248,35 @@
   }
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
   function nonZero(){ return state.items.filter(i=>i.qty>0) }
-  function zeroAll(){ state.items.forEach(i=>i.qty=0); save(); try{ renderBuild() }catch(e){} }
+  function zeroAll(){
+    state.items.forEach(i=>{
+      i.qty = 0;
+      i.checked = false;
+    });
+    save();
+    try{ renderBuild(); renderShop(); }catch(e){}
+  }
+  function clearCheckedItems(){
+    const checked = state.items.filter(i=>i.qty>0 && i.checked);
+    if(!checked.length){
+      alert('No checked items to clear.');
+      return;
+    }
+    if(!confirm(`Clear ${checked.length} checked item${checked.length===1?'':'s'} from the shopping list?`)){
+      return;
+    }
+    checked.forEach(i=>{
+      i.qty = 0;
+      i.checked = false;
+    });
+    save();
+    try{
+      renderBuild();
+      renderShop();
+    }catch(e){
+      console.error(e);
+    }
+  }
   function catIndex(c){ const i = state.categories.indexOf(c); return i === -1 ? 9999 : i }
   function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name)}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
@@ -327,7 +355,7 @@
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name; left.appendChild(name);
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
-        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+1'; plus.onclick=()=>{ it.qty++; save(); renderBuild() };
+        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+1'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
         right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
         row.appendChild(left); row.appendChild(right); sec.appendChild(row);
       });
@@ -340,8 +368,16 @@
   // ----- Shopping Mode -----
   function renderShop(){
     ensurePositions();
-    viewShop.innerHTML = '<button class="btn" id="btnBack">← Back</button><div id="shopList"></div>';
+    const checkedCount = state.items.filter(i=>i.qty>0 && i.checked).length;
+    viewShop.innerHTML = `
+      <div class="controls">
+        <button class="btn" id="btnBack">← Back</button>
+        <button class="btn-danger" id="btnClearChecked">Clear checked${checkedCount ? ` (${checkedCount})` : ''}</button>
+      </div>
+      <div class="spacer"></div>
+      <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
+    document.getElementById('btnClearChecked').onclick = clearCheckedItems;
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
     const byCat = groupBy(items,'cat');
