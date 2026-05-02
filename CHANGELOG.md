@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.23.2] - 2026-05-02
+
+### Changed
+- Updated Manage Items category folders to behave like Build List, allowing only one expanded category at a time.
+- Opening a Manage Items category now automatically collapses the previously open Manage Items category.
+
 ## [1.23.1] - 2026-05-01
 
 ### Fixed
