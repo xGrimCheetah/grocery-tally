@@ -64,6 +64,8 @@
     .pill{background:#0b1220;border:1px solid #243042;border-radius:999px;padding:6px 10px;font-size:12px}
     .link{color:#93c5fd;text-decoration:underline;cursor:pointer}
     .drag-handle{color:#64748b;font-weight:700;cursor:grab;user-select:none;touch-action:none}
+    .category-drag-handle{display:inline-block;margin-right:8px}
+    .category-title{vertical-align:middle}
     .dragging{opacity:.55}
     .drop-target{outline:2px dashed #3b82f6;outline-offset:2px}
     .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
@@ -126,7 +128,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.26.0"; // Bulk setup tools
+  let APP_VERSION = "1.27.0"; // Category drag sorting
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -379,8 +381,99 @@
     try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
   let draggedItemId = null;
+  let draggedCategoryName = null;
+  function isCategoryDrag(e){
+    if(draggedCategoryName) return true;
+    try{
+      return Array.from(e.dataTransfer.types || []).includes('application/x-grocery-category');
+    }catch(err){
+      return false;
+    }
+  }
   function getDragItemId(e){
+    if(isCategoryDrag(e)) return '';
     try{ return e.dataTransfer.getData('text/plain') || draggedItemId; }catch(err){ return draggedItemId }
+  }
+  function getDragCategoryName(e){
+    try{ return e.dataTransfer.getData('application/x-grocery-category') || draggedCategoryName; }catch(err){ return draggedCategoryName }
+  }
+  function moveCategoryNear(sourceCat, targetCat, placeAfter){
+    if(!sourceCat || !targetCat || sourceCat === targetCat) return false;
+    const sourceIndex = state.categories.indexOf(sourceCat);
+    const targetIndex = state.categories.indexOf(targetCat);
+    if(sourceIndex < 0 || targetIndex < 0) return false;
+    const moved = state.categories.splice(sourceIndex, 1)[0];
+    let insertAt = state.categories.indexOf(targetCat);
+    if(placeAfter) insertAt += 1;
+    insertAt = Math.max(0, Math.min(insertAt, state.categories.length));
+    state.categories.splice(insertAt, 0, moved);
+    return true;
+  }
+  function rerenderCategoryOrderViews(){
+    try{ renderCats(); renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+  }
+  function attachCategoryDrag(handleEl, cat, dragClassEl){
+    if(!handleEl) return;
+    handleEl.draggable = true;
+    handleEl.dataset.category = cat;
+    handleEl.addEventListener('click', e=> e.stopPropagation());
+    handleEl.addEventListener('dragstart', e=>{
+      draggedCategoryName = cat;
+      const visual = dragClassEl || handleEl;
+      visual.classList.add('dragging');
+      try{
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('application/x-grocery-category', cat);
+        e.dataTransfer.setData('text/plain', '');
+      }catch(err){}
+    });
+    handleEl.addEventListener('dragend', ()=>{
+      draggedCategoryName = null;
+      document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+      document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+    });
+  }
+  function attachCategoryDropTarget(el, targetCat){
+    if(!el) return;
+    el.addEventListener('dragover', e=>{
+      const sourceCat = getDragCategoryName(e);
+      if(!sourceCat || sourceCat === targetCat) return;
+      e.preventDefault();
+      el.classList.add('drop-target');
+      try{ e.dataTransfer.dropEffect='move'; }catch(err){}
+    });
+    el.addEventListener('dragleave', ()=> el.classList.remove('drop-target'));
+    el.addEventListener('drop', e=>{
+      const sourceCat = getDragCategoryName(e);
+      if(!sourceCat || sourceCat === targetCat) return;
+      e.preventDefault();
+      e.stopPropagation();
+      el.classList.remove('drop-target');
+      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
+      if(moveCategoryNear(sourceCat, targetCat, placeAfter)){
+        draggedCategoryName = null;
+        save();
+        rerenderCategoryOrderViews();
+      }
+    });
+  }
+  function createCategorySummary(cat){
+    const sum=document.createElement('summary');
+    sum.className='category-summary';
+    const handle=document.createElement('span');
+    handle.className='drag-handle category-drag-handle';
+    handle.textContent='☰';
+    handle.title='Drag to reorder category';
+    handle.setAttribute('aria-label','Drag to reorder category');
+    const title=document.createElement('span');
+    title.className='category-title';
+    title.textContent=cat;
+    sum.appendChild(handle);
+    sum.appendChild(title);
+    attachCategoryDrag(handle, cat, sum);
+    attachCategoryDropTarget(sum, cat);
+    return sum;
   }
   function attachItemDrag(handleEl, itemId, dragClassEl){
     if(!handleEl) return;
@@ -546,7 +639,8 @@
     orderedCats.forEach(cat=>{
       const sec=document.createElement('details');
       sec.open = !buildClosedCats.has(cat);
-      const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      const sum=createCategorySummary(cat); sec.appendChild(sum);
+      attachCategoryDropTarget(sec, cat);
       sec.addEventListener('toggle', ()=>{
         if (sec.open) {
           // Accordion: close all other sections
@@ -882,7 +976,8 @@ Cheese'></textarea>
       if(!items.length) return;
       const sec=document.createElement('details');
       sec.open = !closedCats.has(cat);
-      const sum=document.createElement('summary'); sum.textContent=cat; sec.appendChild(sum);
+      const sum=createCategorySummary(cat); sec.appendChild(sum);
+      attachCategoryDropTarget(sec, cat);
       sec.addEventListener('toggle', ()=>{
         if (sec.open) {
           // Accordion: close all other Manage Items sections
