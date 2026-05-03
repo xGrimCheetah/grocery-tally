@@ -35,6 +35,12 @@
     textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.4}
     .bulk-tools{margin-top:10px}
     .bulk-help{font-size:13px;line-height:1.45}
+    .alpha-nav{position:sticky;top:0;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}
+    .alpha-nav button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
+    .alpha-nav button:disabled{opacity:.3;cursor:default}
+    .build-flat-list{display:flex;flex-direction:column;gap:8px}
+    .build-letter-heading{font-weight:800;color:#93c5fd;margin:12px 0 0;padding:4px 2px;border-bottom:1px solid #243042}
+    .build-letter-heading:first-child{margin-top:0}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
     .col-12{grid-column:span 12}
     .col-6{grid-column:span 12}
@@ -133,7 +139,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.28.1"; // Previous column layout polish
+  let APP_VERSION = "1.29.0"; // Alphabetical Build List with sticky quick-jump index
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -326,6 +332,34 @@
   function previousRunText(it){
     const val = previousRunValue(it);
     return val > 0 ? String(val) : '—';
+  }
+  function alphaKeyForItem(it){
+    const first = cleanText(it && it.name).charAt(0).toUpperCase();
+    return /^[A-Z]$/.test(first) ? first : '#';
+  }
+  function buildListSort(a,b){
+    const ak = alphaKeyForItem(a);
+    const bk = alphaKeyForItem(b);
+    const keyOrder = (key) => key === '#' ? '0' : '1' + key;
+    const byKey = keyOrder(ak).localeCompare(keyOrder(bk));
+    if(byKey !== 0) return byKey;
+    const an = normalizeText(a && a.name);
+    const bn = normalizeText(b && b.name);
+    const byName = an.localeCompare(bn);
+    if(byName !== 0) return byName;
+    const byCat = catIndex(a.cat) - catIndex(b.cat);
+    if(byCat !== 0) return byCat;
+    return sortItems(a,b);
+  }
+  function scrollToBuildLetter(letter){
+    const idPart = letter === '#' ? 'num' : letter;
+    const target = document.getElementById('build-letter-' + idPart);
+    if(!target) return;
+    try{
+      target.scrollIntoView({ behavior:'smooth', block:'start' });
+    }catch(e){
+      target.scrollIntoView(true);
+    }
   }
   function nonZero(){ return state.items.filter(i=>i.qty>0) }
   function zeroAll(){
@@ -679,68 +713,61 @@
         <button class="btn-accent" id="btnFinish">Finished →</button>
         <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
       </div>
-      <div id="buildList"></div>`;
+      <div id="buildAlphaNav" class="alpha-nav" aria-label="Alphabet quick jump"></div>
+      <div id="buildList" class="build-flat-list"></div>`;
+
+    const alphaNav = document.getElementById('buildAlphaNav');
     const buildList = document.getElementById('buildList');
-    const byCat = groupBy(state.items,'cat');
-    const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
-    orderedCats.forEach(cat=>{
-      const sec=document.createElement('details');
-      sec.open = !buildClosedCats.has(cat);
-      const sum=createCategorySummary(cat); sec.appendChild(sum);
-      attachCategoryDropTarget(sec, cat);
-      sec.addEventListener('toggle', ()=>{
-        if (sec.open) {
-          // Accordion: close all other sections
-          const container = document.getElementById('buildList');
-          const all = container ? Array.from(container.querySelectorAll('details')) : [];
-          all.forEach(d => {
-            if (d !== sec && d.open) d.open = false;
-          });
-          // mark all others as closed, remove current from closed set
-          buildClosedCats = new Set(state.categories);
-          buildClosedCats.delete(cat);
-          scrollOpenedCategoryIntoView(sec);
-        } else {
-          buildClosedCats.add(cat);
-        }
-        setBuildClosedCats(buildClosedCats);
-      });
+    const items = state.items.slice().sort(buildListSort);
+    const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+    const activeLetters = new Set(items.map(alphaKeyForItem));
 
-      const catItems = byCat[cat].sort(sortItems);
-      attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
-      attachDropTarget(sec, cat, () => itemsInCategory(cat).length);
-
-      const labels=document.createElement('div');
-      labels.className='build-col-labels';
-      labels.innerHTML='<span class="qty-label">Now</span><span style="min-width:84px"></span><span class="prev-label">Previous</span>';
-      sec.appendChild(labels);
-
-      catItems.forEach((it,idx)=>{
-        const shell = createSwipeShell(it.id);
-        const row=shell.content;
-        row.dataset.index=idx;
-
-        const left=document.createElement('div'); left.className='left';
-        const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
-        const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        left.appendChild(handle); left.appendChild(name);
-        attachItemDrag(handle, it.id, shell.wrap);
-        const prev=document.createElement('div');
-        prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
-        prev.title='Previous run quantity';
-        prev.textContent=previousRunText(it);
-        const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
-        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
-        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
-        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
-        row.appendChild(left); row.appendChild(right);
-
-        attachDropTarget(shell.wrap, cat, () => idx);
-        sec.appendChild(shell.wrap);
-      });
-      buildList.appendChild(sec);
+    letters.forEach(letter=>{
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.textContent=letter;
+      btn.disabled = !activeLetters.has(letter);
+      btn.onclick = ()=> scrollToBuildLetter(letter);
+      alphaNav.appendChild(btn);
     });
+
+    if(!items.length){
+      buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
+    }
+
+    let currentLetter = '';
+    items.forEach(it=>{
+      const letter = alphaKeyForItem(it);
+      if(letter !== currentLetter){
+        currentLetter = letter;
+        const heading=document.createElement('div');
+        heading.className='build-letter-heading';
+        heading.id='build-letter-' + (letter === '#' ? 'num' : letter);
+        heading.textContent=letter;
+        buildList.appendChild(heading);
+      }
+
+      const shell = createSwipeShell(it.id);
+      const row=shell.content;
+
+      const left=document.createElement('div'); left.className='left';
+      const right=document.createElement('div'); right.className='right';
+      const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+      left.appendChild(name);
+
+      const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
+      const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
+      const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
+      const prev=document.createElement('div');
+      prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
+      prev.title='Previous run quantity';
+      prev.textContent=previousRunText(it);
+
+      right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
+      row.appendChild(left); row.appendChild(right);
+      buildList.appendChild(shell.wrap);
+    });
+
     document.getElementById('btnZeroAll').onclick = zeroAll;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
   }

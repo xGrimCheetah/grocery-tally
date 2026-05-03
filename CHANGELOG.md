@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.29.0] - 2026-05-02
+
+### Changed
+- Redesigned Build List as a flat alphabetical list instead of category folders.
+- Removed Build List item drag handles and item drag sorting because Build List is now alphabetical.
+- Added a sticky A-Z quick-jump index, including **#** for items starting with numbers or symbols.
+- Grouped all non-A-Z starters under one **#** section so the **#** quick jump has a single reliable target.
+- Quick-jump letters scroll directly to the first item section for that letter, while inactive letters are dimmed.
+- Kept Manage Items and Shopping Mode category organization unchanged.
+
 ## [1.28.1] - 2026-05-02
 
 ### Changed
