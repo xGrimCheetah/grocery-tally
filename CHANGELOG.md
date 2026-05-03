@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.1] - 2026-05-02
+
+### Changed
+- Moved the Build List **Previous Run** value to the far right of each item row, after the **+** button.
+- Updated **Previous Run** and **Now** quantity boxes to use the same size.
+- Updated **Previous Run** numbers to use the same font size as **Now** while keeping them slightly greyed out.
+
 ## [1.28.0] - 2026-05-02
 
 ### Added
