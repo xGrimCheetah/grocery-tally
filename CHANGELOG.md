@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.28.0] - 2026-05-02
+
+### Added
+- Added a non-editable **Previous Run** column in Build List.
+- Added a **Commit run** button in Shopping Mode.
+- Committing a run resets Previous Run to 0 for all items, then saves checked item quantities as the latest run values.
+- Committing a run clears quantities and checkmarks only for checked items while leaving unchecked current quantities unchanged.
+- Added a confirmation prompt before committing a grocery run.
+
 ## [1.27.0] - 2026-05-02
 
 ### Added

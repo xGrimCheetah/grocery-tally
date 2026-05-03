@@ -52,6 +52,12 @@
     .shop-cat-heading{font-weight:700;color:#cbd5e1;margin:12px 0 6px;padding:0 2px}
     #shopList .shop-cat-heading:first-child{margin-top:0}
     .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
+    .prev-qty{min-width:72px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#101827;border:1px solid #273449;color:#cbd5e1}
+    .prev-qty.empty{opacity:.55}
+    .build-col-labels{display:flex;justify-content:flex-end;gap:8px;padding:6px 4px 4px;color:#94a3b8;font-size:12px}
+    .build-col-labels span{text-align:center}
+    .build-col-labels .prev-label{min-width:72px}
+    .build-col-labels .qty-label{min-width:42px}
     .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cat{font-size:12px;opacity:.7}
     .row{display:flex;gap:8px;align-items:center}
@@ -128,7 +134,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.27.0"; // Category drag sorting
+  let APP_VERSION = "1.28.0"; // Grocery run history / previous quantities
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -314,6 +320,14 @@
     const target = normalizeText(name);
     return state.items.find(i => i.cat === cat && normalizeText(i.name) === target) || null;
   }
+  function previousRunValue(it){
+    const val = Number(it && it.prevQty);
+    return Number.isFinite(val) && val > 0 ? val : 0;
+  }
+  function previousRunText(it){
+    const val = previousRunValue(it);
+    return val > 0 ? String(val) : '—';
+  }
   function nonZero(){ return state.items.filter(i=>i.qty>0) }
   function zeroAll(){
     const resettable = state.items.filter(i=>i.qty>0 || i.checked);
@@ -344,6 +358,40 @@
     try{
       renderBuild();
       renderShop();
+    }catch(e){
+      console.error(e);
+    }
+  }
+  function commitRun(){
+    const checked = state.items.filter(i=>i.checked && i.qty > 0);
+    if(!checked.length){
+      alert('No checked shopping items with quantities to commit.');
+      return;
+    }
+    const totalQty = checked.reduce((sum, i)=> sum + (Number(i.qty) || 0), 0);
+    const itemWord = checked.length === 1 ? 'item' : 'items';
+    if(!confirm(`Commit this grocery run?\n\nThis will reset Previous Run to 0 for all items, save ${checked.length} checked ${itemWord} as this run's purchased quantities, clear those checked quantities to 0, and leave unchecked current quantities unchanged.`)){
+      return;
+    }
+
+    // Previous Run represents the most recently committed shopping trip.
+    // That means items not purchased in this committed run must show 0,
+    // even if they were purchased in an earlier run and even if they are
+    // not visible in Shopping Mode because their current quantity is 0.
+    state.items.forEach(i=>{
+      i.prevQty = 0;
+    });
+
+    checked.forEach(i=>{
+      i.prevQty = Number(i.qty) || 0;
+      i.qty = 0;
+      i.checked = false;
+    });
+    save();
+    try{
+      renderBuild();
+      renderShop();
+      alert(`Run committed.\nSaved checked items: ${checked.length}\nSaved total quantity: ${totalQty}\nItems not purchased this run now show Previous Run as 0.`);
     }catch(e){
       console.error(e);
     }
@@ -663,6 +711,11 @@
       attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
       attachDropTarget(sec, cat, () => itemsInCategory(cat).length);
 
+      const labels=document.createElement('div');
+      labels.className='build-col-labels';
+      labels.innerHTML='<span class="prev-label">Previous</span><span class="qty-label">Now</span><span style="min-width:84px"></span>';
+      sec.appendChild(labels);
+
       catItems.forEach((it,idx)=>{
         const shell = createSwipeShell(it.id);
         const row=shell.content;
@@ -674,10 +727,14 @@
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         left.appendChild(handle); left.appendChild(name);
         attachItemDrag(handle, it.id, shell.wrap);
+        const prev=document.createElement('div');
+        prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
+        prev.title='Previous run quantity';
+        prev.textContent=previousRunText(it);
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
         const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
-        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
+        right.appendChild(prev); right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
         row.appendChild(left); row.appendChild(right);
 
         attachDropTarget(shell.wrap, cat, () => idx);
@@ -695,11 +752,13 @@
     viewShop.innerHTML = `
       <div class="controls">
         <button class="btn" id="btnBack">← Back</button>
-        <button class="btn right-controls" id="btnResetCheckmarks">Reset checkmarks</button>
+        <button class="btn-accent right-controls" id="btnCommitRun">Commit run</button>
+        <button class="btn" id="btnResetCheckmarks">Reset checkmarks</button>
       </div>
       <div class="spacer"></div>
       <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
+    document.getElementById('btnCommitRun').onclick = commitRun;
     document.getElementById('btnResetCheckmarks').onclick = resetCheckmarks;
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
@@ -845,7 +904,7 @@ Cheese'></textarea>
       manageSelectedCat = cat;
       localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
 
-      state.items.push({ id:id(), name, cat, qty:0, pos: nextPos(cat), checked:false });
+      state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false });
       save();
 
       try{
@@ -939,7 +998,7 @@ Cheese'></textarea>
           return;
         }
 
-        state.items.push({ id:id(), name:itemName, cat, qty:0, pos: nextPos(cat), checked:false });
+        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false });
         batchKeys.add(key);
         addedItems++;
       });
