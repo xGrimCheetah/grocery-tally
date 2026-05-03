@@ -338,6 +338,11 @@
     return /^[A-Z]$/.test(first) ? first : '#';
   }
   function buildListSort(a,b){
+    const ak = alphaKeyForItem(a);
+    const bk = alphaKeyForItem(b);
+    const keyOrder = (key) => key === '#' ? '0' : '1' + key;
+    const byKey = keyOrder(ak).localeCompare(keyOrder(bk));
+    if(byKey !== 0) return byKey;
     const an = normalizeText(a && a.name);
     const bn = normalizeText(b && b.name);
     const byName = an.localeCompare(bn);
