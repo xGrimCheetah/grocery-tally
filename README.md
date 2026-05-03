@@ -2,7 +2,7 @@
 
 Personal grocery list app. Installs on iPhone via Safari → Add to Home Screen, works offline via Service Worker.
 
-- Current build: v1.28.0
+- Current build: v1.28.1
 - Changelog: see `CHANGELOG.md`
 
 ### Deploying on GitHub Pages (project site)

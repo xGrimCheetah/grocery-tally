@@ -51,13 +51,12 @@
     .shop-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;min-width:0}
     .shop-cat-heading{font-weight:700;color:#cbd5e1;margin:12px 0 6px;padding:0 2px}
     #shopList .shop-cat-heading:first-child{margin-top:0}
-    .qty{min-width:42px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
-    .prev-qty{min-width:72px;text-align:center;font-size:12px;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#101827;border:1px solid #273449;color:#cbd5e1}
+    .qty,.prev-qty{width:48px;min-width:48px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
+    .prev-qty{color:#94a3b8}
     .prev-qty.empty{opacity:.55}
     .build-col-labels{display:flex;justify-content:flex-end;gap:8px;padding:6px 4px 4px;color:#94a3b8;font-size:12px}
     .build-col-labels span{text-align:center}
-    .build-col-labels .prev-label{min-width:72px}
-    .build-col-labels .qty-label{min-width:42px}
+    .build-col-labels .qty-label,.build-col-labels .prev-label{width:48px;min-width:48px}
     .name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .cat{font-size:12px;opacity:.7}
     .row{display:flex;gap:8px;align-items:center}
@@ -134,7 +133,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.28.0"; // Grocery run history / previous quantities
+  let APP_VERSION = "1.28.1"; // Previous column layout polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -713,7 +712,7 @@
 
       const labels=document.createElement('div');
       labels.className='build-col-labels';
-      labels.innerHTML='<span class="prev-label">Previous</span><span class="qty-label">Now</span><span style="min-width:84px"></span>';
+      labels.innerHTML='<span class="qty-label">Now</span><span style="min-width:84px"></span><span class="prev-label">Previous</span>';
       sec.appendChild(labels);
 
       catItems.forEach((it,idx)=>{
@@ -734,7 +733,7 @@
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
         const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
         const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
-        right.appendChild(prev); right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
+        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
         row.appendChild(left); row.appendChild(right);
 
         attachDropTarget(shell.wrap, cat, () => idx);
