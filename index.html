@@ -39,8 +39,6 @@
     .alpha-nav button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
     .alpha-nav button:disabled{opacity:.3;cursor:default}
     .build-flat-list{display:flex;flex-direction:column;gap:8px}
-    .build-letter-heading{font-weight:800;color:#93c5fd;margin:12px 0 0;padding:4px 2px;border-bottom:1px solid #243042}
-    .build-letter-heading:first-child{margin-top:0}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
     .col-12{grid-column:span 12}
     .col-6{grid-column:span 12}
@@ -139,7 +137,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.29.0"; // Alphabetical Build List with sticky quick-jump index
+  let APP_VERSION = "1.29.1"; // Build List quick-jump polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -355,8 +353,12 @@
     const idPart = letter === '#' ? 'num' : letter;
     const target = document.getElementById('build-letter-' + idPart);
     if(!target) return;
+    const nav = document.getElementById('buildAlphaNav');
+    const navHeight = nav ? nav.getBoundingClientRect().height : 0;
+    const gap = 8;
     try{
-      target.scrollIntoView({ behavior:'smooth', block:'start' });
+      const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
+      window.scrollTo({ top: Math.max(0, targetTop - navHeight - gap), behavior:'smooth' });
     }catch(e){
       target.scrollIntoView(true);
     }
@@ -738,16 +740,13 @@
     let currentLetter = '';
     items.forEach(it=>{
       const letter = alphaKeyForItem(it);
-      if(letter !== currentLetter){
-        currentLetter = letter;
-        const heading=document.createElement('div');
-        heading.className='build-letter-heading';
-        heading.id='build-letter-' + (letter === '#' ? 'num' : letter);
-        heading.textContent=letter;
-        buildList.appendChild(heading);
-      }
+      const isFirstForLetter = letter !== currentLetter;
+      if(isFirstForLetter) currentLetter = letter;
 
       const shell = createSwipeShell(it.id);
+      if(isFirstForLetter){
+        shell.wrap.id = 'build-letter-' + (letter === '#' ? 'num' : letter);
+      }
       const row=shell.content;
 
       const left=document.createElement('div'); left.className='left';

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.29.1] - 2026-05-02
+
+### Changed
+- Removed Build List letter section headings to keep the flat alphabetical list more compact.
+- Updated Build List quick-jump scrolling so the target item lands below the sticky A-Z bar instead of underneath it.
+
 ## [1.29.0] - 2026-05-02
 
 ### Changed
