@@ -56,13 +56,21 @@
     .item .right{margin-left:auto;display:flex;gap:8px;align-items:center}
     .item.checked{opacity:.45}
     .checkmark{font-weight:700;color:var(--accent);min-width:20px;text-align:center}
-    .shop-item{cursor:pointer}
-    .shop-item .shop-left{display:grid;grid-template-columns:24px 44px 12px minmax(0,1fr);gap:8px;align-items:center;width:100%}
-    .shop-qty{text-align:right;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
-    .shop-sep{opacity:.65;text-align:center}
+    #shopList{display:flex;flex-direction:column;gap:0}
+    .shop-cat-block{overflow:hidden;max-height:1200px;transition:opacity .22s ease,max-height .24s ease,margin .24s ease}
+    .shop-cat-block.completed{opacity:.45}
+    .shop-cat-block.fading-out{opacity:0;max-height:0;margin:0}
+    .shop-cat-block.fading-in{animation:shopFadeIn .22s ease}
+    @keyframes shopFadeIn{from{opacity:0}to{opacity:.45}}
+    .shop-cat-heading{font-weight:800;color:#cbd5e1;margin:10px 0 4px;padding:0 2px}
+    #shopList .shop-cat-block:first-child .shop-cat-heading{margin-top:0}
+    .shop-cat-list{display:flex;flex-direction:column;gap:0}
+    .shop-item{display:grid;grid-template-columns:28px 1px 48px 1px minmax(0,1fr);gap:8px;align-items:center;min-height:34px;padding:4px 2px;cursor:pointer;background:transparent;border:none;border-radius:0}
+    .shop-item.checked{opacity:.65}
+    .shop-check{width:20px;height:20px;border:1px solid #64748b;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;line-height:1}
+    .shop-divider{width:1px;height:22px;background:#334155;opacity:.9}
+    .shop-qty{text-align:right;font-variant-numeric:tabular-nums;padding:0;background:transparent;border:none;border-radius:0;color:#e5e7eb}
     .shop-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;min-width:0}
-    .shop-cat-heading{font-weight:700;color:#cbd5e1;margin:12px 0 6px;padding:0 2px}
-    #shopList .shop-cat-heading:first-child{margin-top:0}
     .qty,.prev-qty{width:48px;min-width:48px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
     .prev-qty{color:#94a3b8}
     .prev-qty.empty{opacity:.55}
@@ -145,7 +153,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.30.0"; // Build List compact layout and Top jump
+  let APP_VERSION = "1.31.0"; // Shopping Mode readability and completed-category flow
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -794,7 +802,7 @@
   }
 
   // ----- Shopping Mode -----
-  function renderShop(){
+  function renderShop(fadeInCat){
     ensurePositions();
     viewShop.innerHTML = `
       <div class="controls">
@@ -807,62 +815,97 @@
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
     document.getElementById('btnCommitRun').onclick = commitRun;
     document.getElementById('btnResetCheckmarks').onclick = resetCheckmarks;
+
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
     const byCat = groupBy(items,'cat');
-    const orderedCats = Object.keys(byCat).sort((a,b)=> catIndex(a)-catIndex(b));
+    const orderedCats = Object.keys(byCat).sort((a,b)=>{
+      const aDone = byCat[a].length > 0 && byCat[a].every(i => i.checked);
+      const bDone = byCat[b].length > 0 && byCat[b].every(i => i.checked);
+      if(aDone !== bDone) return aDone ? 1 : -1;
+      return catIndex(a)-catIndex(b);
+    });
+
     if(!orderedCats.length){ shopList.innerHTML = '<p class="muted">No items yet.</p>'; return }
+
     orderedCats.forEach(cat=>{
+      const catItems = byCat[cat];
+      const catComplete = catItems.length > 0 && catItems.every(i => i.checked);
+
+      const block=document.createElement('div');
+      block.className='shop-cat-block' + (catComplete ? ' completed' : '');
+      block.dataset.cat = cat;
+
       const heading=document.createElement('div');
       heading.className='shop-cat-heading';
       heading.textContent=cat;
-      shopList.appendChild(heading);
+      block.appendChild(heading);
 
       const list=document.createElement('div');
-      list.className='list';
+      list.className='shop-cat-list';
 
-      const checkedItems = byCat[cat].filter(i => i.checked);
-      const uncheckedItems = byCat[cat].filter(i => !i.checked);
+      const checkedItems = catItems.filter(i => i.checked);
+      const uncheckedItems = catItems.filter(i => !i.checked);
 
-      // Show unchecked first, then checked
+      // Show unchecked first, then checked, while keeping completed categories grouped at the bottom.
       [...uncheckedItems, ...checkedItems].forEach(it=>{
         const row=document.createElement('div');
-        row.className='item shop-item' + (it.checked ? ' checked' : '');
-
-        const left=document.createElement('div');
-        left.className='left shop-left';
+        row.className='shop-item' + (it.checked ? ' checked' : '');
+        row.setAttribute('role','button');
+        row.setAttribute('aria-pressed', it.checked ? 'true' : 'false');
 
         const check=document.createElement('div');
-        check.className='checkmark';
+        check.className='shop-check';
+        check.setAttribute('aria-hidden','true');
         check.textContent = it.checked ? '✔' : '';
+
+        const divider1=document.createElement('div');
+        divider1.className='shop-divider';
+        divider1.setAttribute('aria-hidden','true');
 
         const qty=document.createElement('div');
         qty.className='shop-qty';
         qty.textContent = it.qty;
 
-        const sep=document.createElement('div');
-        sep.className='shop-sep';
-        sep.textContent = '–';
+        const divider2=document.createElement('div');
+        divider2.className='shop-divider';
+        divider2.setAttribute('aria-hidden','true');
 
         const name=document.createElement('div');
         name.className='shop-name';
         name.textContent = it.name;
 
-        left.appendChild(check);
-        left.appendChild(qty);
-        left.appendChild(sep);
-        left.appendChild(name);
+        row.appendChild(check);
+        row.appendChild(divider1);
+        row.appendChild(qty);
+        row.appendChild(divider2);
+        row.appendChild(name);
 
         row.onclick = ()=>{
+          const wasCatComplete = catItems.length > 0 && catItems.every(i => i.checked);
           it.checked = !it.checked;
           save();
-          renderShop();
+          const currentCatItems = state.items.filter(i => i.cat === cat && i.qty > 0);
+          const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(i => i.checked);
+
+          if(isCatComplete && !wasCatComplete){
+            block.classList.add('fading-out');
+            setTimeout(()=> renderShop(cat), 250);
+          } else {
+            renderShop();
+          }
         };
 
-        row.appendChild(left);
         list.appendChild(row);
       });
-      shopList.appendChild(list);
+
+      block.appendChild(list);
+      shopList.appendChild(block);
+
+      if(fadeInCat && cat === fadeInCat){
+        block.classList.add('fading-in');
+        setTimeout(()=> block.classList.remove('fading-in'), 260);
+      }
     });
   }
 
