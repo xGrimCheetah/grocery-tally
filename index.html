@@ -153,7 +153,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.31.0"; // Shopping Mode readability and completed-category flow
+  let APP_VERSION = "1.31.1"; // Shopping Mode checked items stay in place
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -844,11 +844,9 @@
       const list=document.createElement('div');
       list.className='shop-cat-list';
 
-      const checkedItems = catItems.filter(i => i.checked);
-      const uncheckedItems = catItems.filter(i => !i.checked);
-
-      // Show unchecked first, then checked, while keeping completed categories grouped at the bottom.
-      [...uncheckedItems, ...checkedItems].forEach(it=>{
+      // Keep each item in its original category order when checked.
+      // Fully completed categories still move to the bottom as a block.
+      catItems.forEach(it=>{
         const row=document.createElement('div');
         row.className='shop-item' + (it.checked ? ' checked' : '');
         row.setAttribute('role','button');

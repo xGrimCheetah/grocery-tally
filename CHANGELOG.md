@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.31.1] - 2026-05-04
+
+### Changed
+- Checked Shopping Mode items now stay in their original position within their category instead of moving to the bottom of that category.
+- Fully checked categories still fade out, slide the following categories upward, and reappear greyed out at the bottom of Shopping Mode.
+
 ## [1.31.0] - 2026-05-04
 
 ### Changed
