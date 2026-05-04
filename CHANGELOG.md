@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.30.0] - 2026-05-03
+
+### Changed
+- Reduced vertical spacing between Build List item rows while keeping rows readable and tappable on iPhone.
+- Added a **Top** button inside the sticky Build List quick-jump bar.
+- Tapping **Top** scrolls all the way back to the top so the app title and tabs are visible again.
+- Kept the flat alphabetical Build List, `# / A-Z` quick-jump letters, **Previous** column, `+ / –` controls, and swipe-left trash behavior unchanged.
+
 ## [1.29.1] - 2026-05-02
 
 ### Changed

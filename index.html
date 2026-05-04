@@ -38,7 +38,15 @@
     .alpha-nav{position:sticky;top:0;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}
     .alpha-nav button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
     .alpha-nav button:disabled{opacity:.3;cursor:default}
-    .build-flat-list{display:flex;flex-direction:column;gap:8px}
+    .build-flat-list{display:flex;flex-direction:column;gap:5px}
+    .build-flat-list .swipe-wrap{margin-top:0}
+    .build-flat-list .item{padding:6px 8px;min-height:44px}
+    .build-flat-list .item .left{gap:8px}
+    .build-flat-list .name{line-height:1.15}
+    .build-flat-list .cat{line-height:1.1}
+    .build-flat-list .qty,.build-flat-list .prev-qty{padding:5px 8px}
+    .build-flat-list button{padding:8px 10px}
+    .alpha-nav .top-jump{font-weight:800;min-width:46px}
     .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:10px}
     .col-12{grid-column:span 12}
     .col-6{grid-column:span 12}
@@ -137,7 +145,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.29.1"; // Build List quick-jump polish
+  let APP_VERSION = "1.30.0"; // Build List compact layout and Top jump
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -348,6 +356,13 @@
     const byCat = catIndex(a.cat) - catIndex(b.cat);
     if(byCat !== 0) return byCat;
     return sortItems(a,b);
+  }
+  function scrollToBuildTop(){
+    try{
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }catch(e){
+      window.scrollTo(0, 0);
+    }
   }
   function scrollToBuildLetter(letter){
     const idPart = letter === '#' ? 'num' : letter;
@@ -723,6 +738,13 @@
     const items = state.items.slice().sort(buildListSort);
     const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
     const activeLetters = new Set(items.map(alphaKeyForItem));
+
+    const topBtn = document.createElement('button');
+    topBtn.type = 'button';
+    topBtn.className = 'top-jump';
+    topBtn.textContent = 'Top';
+    topBtn.onclick = scrollToBuildTop;
+    alphaNav.appendChild(topBtn);
 
     letters.forEach(letter=>{
       const btn=document.createElement('button');
