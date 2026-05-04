@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.31.0] - 2026-05-04
+
+### Changed
+- Redesigned Shopping Mode rows into clean aligned columns: checkbox, quantity, and item name.
+- Removed row boxes, quantity boxes, and the hyphen between quantity and item name.
+- Added vertical divider lines between checkbox and quantity, and between quantity and item name.
+- Kept divider lines and quantities aligned across the whole Shopping Mode list, including multi-digit quantities.
+- Kept category headings tight without extra spacer rows between categories.
+- When every item in a category is checked, the whole category block fades out, following categories slide up, and the completed category reappears greyed out at the bottom of Shopping Mode.
+
 ## [1.30.0] - 2026-05-03
 
 ### Changed
