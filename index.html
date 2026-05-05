@@ -35,7 +35,7 @@
     textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.4}
     .bulk-tools{margin-top:10px}
     .bulk-help{font-size:13px;line-height:1.45}
-    .alpha-nav{position:sticky;top:0;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}
+    .alpha-nav{position:sticky;top:58px;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}
     .alpha-nav button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
     .alpha-nav button:disabled{opacity:.3;cursor:default}
     .build-flat-list{display:flex;flex-direction:column;gap:5px}
@@ -77,6 +77,10 @@
     .price-wrap{display:flex;align-items:center;gap:6px}
     .price-label{font-size:12px;color:#94a3b8;white-space:nowrap}
     .price-input{width:82px;min-width:82px;text-align:right;font-variant-numeric:tabular-nums;padding:6px 8px}
+    .estimate-sticky{position:sticky;top:0;z-index:6;display:flex;justify-content:flex-end;margin:8px 0 10px;pointer-events:none}
+    .estimate-pill{pointer-events:auto;background:#0b1220;border:1px solid #243042;border-radius:999px;padding:8px 12px;min-width:176px;text-align:right;box-shadow:0 8px 18px rgba(0,0,0,.18)}
+    .estimate-total{font-weight:800;font-variant-numeric:tabular-nums}
+    .estimate-missing{font-size:12px;color:#94a3b8;margin-top:2px}
     .build-col-labels{display:flex;justify-content:flex-end;gap:8px;padding:6px 4px 4px;color:#94a3b8;font-size:12px}
     .build-col-labels span{text-align:center}
     .build-col-labels .qty-label,.build-col-labels .prev-label{width:48px;min-width:48px}
@@ -156,7 +160,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.32.0"; // Average prices in Manage Items
+  let APP_VERSION = "1.33.0"; // Estimated total bars
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -361,6 +365,55 @@
     const amount = Number(value);
     if(!Number.isFinite(amount) || amount <= 0) return '';
     return amount.toFixed(2);
+  }
+  function activeEstimateItems(){
+    return state.items.filter(i => Number(i && i.qty) > 0);
+  }
+  function estimateActiveTotal(){
+    const active = activeEstimateItems();
+    let total = 0;
+    let missing = 0;
+    active.forEach(it=>{
+      const qty = Number(it.qty) || 0;
+      const price = Number(it.avgPrice) || 0;
+      if(qty <= 0) return;
+      if(price > 0){
+        total += qty * price;
+      } else {
+        missing++;
+      }
+    });
+    return { total, missing };
+  }
+  function formatMoney(value){
+    const amount = Number(value);
+    if(!Number.isFinite(amount)) return '$0.00';
+    return '$' + amount.toFixed(2);
+  }
+  function renderEstimatePill(container){
+    if(!container) return;
+    const estimate = estimateActiveTotal();
+    const missingText = estimate.missing === 1 ? '1 item missing price' : `${estimate.missing} items missing prices`;
+    const plus = estimate.missing > 0 ? '+' : '';
+    container.innerHTML = '';
+
+    const pill = document.createElement('div');
+    pill.className = 'estimate-pill';
+    pill.setAttribute('aria-label', 'Estimated grocery total');
+
+    const total = document.createElement('div');
+    total.className = 'estimate-total';
+    total.textContent = `Estimated total: ${formatMoney(estimate.total)}${plus}`;
+    pill.appendChild(total);
+
+    if(estimate.missing > 0){
+      const missing = document.createElement('div');
+      missing.className = 'estimate-missing';
+      missing.textContent = missingText;
+      pill.appendChild(missing);
+    }
+
+    container.appendChild(pill);
   }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
@@ -753,9 +806,12 @@
         <button class="btn-accent" id="btnFinish">Finished →</button>
         <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
       </div>
+      <div id="buildEstimate" class="estimate-sticky"></div>
       <div id="buildAlphaNav" class="alpha-nav" aria-label="Alphabet quick jump"></div>
       <div id="buildList" class="build-flat-list"></div>`;
 
+    const buildEstimate = document.getElementById('buildEstimate');
+    renderEstimatePill(buildEstimate);
     const alphaNav = document.getElementById('buildAlphaNav');
     const buildList = document.getElementById('buildList');
     const items = state.items.slice().sort(buildListSort);
@@ -825,11 +881,13 @@
         <button class="btn-accent right-controls" id="btnCommitRun">Commit run</button>
         <button class="btn" id="btnResetCheckmarks">Reset checkmarks</button>
       </div>
+      <div id="shopEstimate" class="estimate-sticky"></div>
       <div class="spacer"></div>
       <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
     document.getElementById('btnCommitRun').onclick = commitRun;
     document.getElementById('btnResetCheckmarks').onclick = resetCheckmarks;
+    renderEstimatePill(document.getElementById('shopEstimate'));
 
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
