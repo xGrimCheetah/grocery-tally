@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.32.0] - 2026-05-05
+
+### Added
+- Added optional **Avg $** fields to Manage Items rows.
+- Average prices save on each item as `avgPrice` for future estimate-total features.
+
+### Changed
+- Kept Build List free of price fields so the planning screen stays fast and easy to scan.
+- Left Shopping Mode totals for a later update after average price data is saved.
+
 ## [1.31.1] - 2026-05-04
 
 ### Changed
