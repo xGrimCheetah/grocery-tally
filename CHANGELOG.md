@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.33.0] - 2026-05-05
+
+### Added
+- Added compact right-aligned estimated total pills to Build List and Shopping Mode.
+- Estimated totals use current item quantities multiplied by saved `avgPrice` values.
+- Added a `+` indicator and missing-price count when active list items do not yet have average prices.
+
+### Changed
+- Kept item-level prices hidden from Build List and Shopping Mode rows to preserve fast scanning.
+
 ## [1.32.0] - 2026-05-05
 
 ### Added
