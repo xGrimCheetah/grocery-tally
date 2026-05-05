@@ -74,6 +74,9 @@
     .qty,.prev-qty{width:48px;min-width:48px;text-align:center;font-variant-numeric:tabular-nums;padding:6px 8px;border-radius:8px;background:#0a1627;border:1px solid #213045}
     .prev-qty{color:#94a3b8}
     .prev-qty.empty{opacity:.55}
+    .price-wrap{display:flex;align-items:center;gap:6px}
+    .price-label{font-size:12px;color:#94a3b8;white-space:nowrap}
+    .price-input{width:82px;min-width:82px;text-align:right;font-variant-numeric:tabular-nums;padding:6px 8px}
     .build-col-labels{display:flex;justify-content:flex-end;gap:8px;padding:6px 4px 4px;color:#94a3b8;font-size:12px}
     .build-col-labels span{text-align:center}
     .build-col-labels .qty-label,.build-col-labels .prev-label{width:48px;min-width:48px}
@@ -153,7 +156,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.31.1"; // Shopping Mode checked items stay in place
+  let APP_VERSION = "1.32.0"; // Average prices in Manage Items
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -346,6 +349,18 @@
   function previousRunText(it){
     const val = previousRunValue(it);
     return val > 0 ? String(val) : '—';
+  }
+  function parsePriceInput(str){
+    const cleaned = String(str || '').replace(/[$,\s]/g, '');
+    if(!cleaned) return 0;
+    const value = Number(cleaned);
+    if(!Number.isFinite(value) || value < 0) return 0;
+    return Math.round(value * 100) / 100;
+  }
+  function formatPriceInput(value){
+    const amount = Number(value);
+    if(!Number.isFinite(amount) || amount <= 0) return '';
+    return amount.toFixed(2);
   }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
@@ -992,7 +1007,7 @@ Cheese'></textarea>
       manageSelectedCat = cat;
       localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
 
-      state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false });
+      state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
       save();
 
       try{
@@ -1086,7 +1101,7 @@ Cheese'></textarea>
           return;
         }
 
-        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false });
+        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
         batchKeys.add(key);
         addedItems++;
       });
@@ -1158,10 +1173,34 @@ Cheese'></textarea>
         const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.value=it.name; input.style.display='none';
+        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap';
+        const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
+        const priceInput=document.createElement('input');
+        priceInput.className='price-input';
+        priceInput.type='number';
+        priceInput.min='0';
+        priceInput.step='0.01';
+        priceInput.inputMode='decimal';
+        priceInput.placeholder='0.00';
+        priceInput.value=formatPriceInput(it.avgPrice);
+        priceInput.title='Average price';
+        priceInput.setAttribute('aria-label','Average price');
+        priceInput.addEventListener('keydown', (e)=>{
+          if(e.key==='Enter'){ e.preventDefault(); priceInput.blur(); }
+          else if(e.key==='Escape'){ e.preventDefault(); priceInput.value=formatPriceInput(it.avgPrice); priceInput.blur(); }
+        });
+        priceInput.addEventListener('blur', ()=>{
+          const parsed = parsePriceInput(priceInput.value);
+          it.avgPrice = parsed;
+          priceInput.value = formatPriceInput(parsed);
+          save();
+        });
+        priceWrap.appendChild(priceLabel);
+        priceWrap.appendChild(priceInput);
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
-        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn);
+        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(priceWrap); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn);
         attachItemDrag(handle, it.id, shell.wrap);
         function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
         function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
