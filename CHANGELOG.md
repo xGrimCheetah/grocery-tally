@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.0] - 2026-05-06
+
+### Changed
+- Moved the combined Build List search and A-Z quick-jump control to a bottom fixed position for easier reachability.
+- Kept the same single Build List search field introduced in v1.35.0; no second search field was added.
+- Added extra Build List bottom spacing so lower items remain reachable above the bottom control.
+- Kept item rows, Shopping Mode, individual price visibility, and estimated total behavior unchanged.
+
 ## [1.35.0] - 2026-05-05
 
 ### Added
