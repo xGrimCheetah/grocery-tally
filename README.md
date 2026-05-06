@@ -2,7 +2,7 @@
 
 Personal grocery list app. Installs on iPhone via Safari → Add to Home Screen, works offline via Service Worker.
 
-- Current build: v1.33.1
+- Current build: v1.34.0
 - Changelog: see `CHANGELOG.md`
 
 ### Deploying on GitHub Pages (project site)
@@ -17,4 +17,4 @@ Personal grocery list app. Installs on iPhone via Safari → Add to Home Screen,
 - Edit files → commit → Pages redeploys.
 - To force updates on devices, bump `APP_VERSION` in `index.html` and the version in `version.json`.
 
-> Note: This is a single-file PWA app with inline UI and logic in `index.html`, supported by a versioned service worker.
+> Note: This PWA now uses `index.html` for the app shell, `styles.css` for styling, and `app.js` for app behavior, supported by a versioned service worker.
