@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.0] - 2026-05-05
+
+### Changed
+- Split the app's inline CSS out of `index.html` into `styles.css`.
+- Split the main app JavaScript out of `index.html` into `app.js`.
+- Kept `index.html` as the lightweight app shell while preserving existing app behavior.
+- Updated the service worker core asset list so the split CSS and JavaScript files are cached for offline use.
+
 ## [1.33.1] - 2026-05-05
 
 ### Fixed
