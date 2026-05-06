@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.33.1] - 2026-05-05
+
+### Fixed
+- Updated Build List alphabet quick-jump scrolling to account for the sticky estimated total pill above the A-Z bar.
+- Tapping A-Z quick-jump letters now lands target rows below the sticky navigation instead of hidden underneath it.
+
 ## [1.33.0] - 2026-05-05
 
 ### Added

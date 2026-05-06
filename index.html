@@ -160,7 +160,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.33.0"; // Estimated total bars
+  let APP_VERSION = "1.33.1"; // Fix alphabet jump offset
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -446,10 +446,12 @@
     if(!target) return;
     const nav = document.getElementById('buildAlphaNav');
     const navHeight = nav ? nav.getBoundingClientRect().height : 0;
+    const navStyle = nav && window.getComputedStyle ? window.getComputedStyle(nav) : null;
+    const stickyTop = navStyle ? (parseFloat(navStyle.top) || 0) : 0;
     const gap = 8;
     try{
       const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
-      window.scrollTo({ top: Math.max(0, targetTop - navHeight - gap), behavior:'smooth' });
+      window.scrollTo({ top: Math.max(0, targetTop - stickyTop - navHeight - gap), behavior:'smooth' });
     }catch(e){
       target.scrollIntoView(true);
     }
