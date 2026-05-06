@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.35.0] - 2026-05-05
+
+### Added
+- Added a single Build List search field inside the existing sticky A-Z quick-jump area.
+- Search filters the Build List dynamically as text is typed.
+- Search matches item names and category names while leaving Shopping Mode unchanged.
+- Added a Clear button for quickly returning to the full Build List.
+
+### Changed
+- Kept the A-Z quick-jump controls paired with the new search field instead of adding a second search area.
+- Kept the estimated total pill compact, right-aligned, and top-aligned.
+
 ## [1.34.0] - 2026-05-05
 
 ### Changed
