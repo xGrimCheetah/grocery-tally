@@ -2,31 +2,47 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.34.0"; // Split CSS and app JavaScript into separate files
+  let APP_VERSION = "1.35.0"; // Build List combined search + A-Z sticky control
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
   const CLOSED_CATS_KEY = 'manage_closed_cats';       // Manage Items collapsed
-  const BUILD_CLOSED_CATS_KEY = 'build_closed_cats';   // Build List collapsed
-  const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';       // legacy Shopping Mode collapsed state
+  const BUILD_CLOSED_CATS_KEY = 'build_closed_cats';   // legacy Build List collapsed state
+  const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';     // legacy Shopping Mode collapsed state
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
   const SELECTED_CAT_KEY = 'manage_selected_cat';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
-  // Safety: ensure structure
-  if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
-  if(!Array.isArray(state.items)) state.items = [];
-  if(!state.title) state.title = "Grocery Tally";
+  normalizeStateShape();
 
   let closedCats = getClosedCats();
   let buildClosedCats = getBuildClosedCats();
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
+  let buildSearchQuery = '';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null } }
+
+  function normalizeStateShape(){
+    if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
+    if(!Array.isArray(state.items)) state.items = [];
+    if(!state.title) state.title = "Grocery Tally";
+    state.categories = state.categories.map(c => cleanText(c)).filter(Boolean);
+    if(!state.categories.length) state.categories = DEFAULT_CATS.slice();
+    state.items.forEach((it, idx)=>{
+      if(!it.id) it.id = id();
+      it.name = cleanText(it.name || 'Untitled item');
+      if(!it.cat || !state.categories.includes(it.cat)) it.cat = state.categories[0] || 'Other';
+      it.qty = Math.max(0, Number(it.qty) || 0);
+      it.prevQty = Math.max(0, Number(it.prevQty) || 0);
+      it.checked = !!it.checked;
+      it.avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+      if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
+    });
+  }
 
   function allCurrentCatsClosedSet(){
     return new Set(state.categories);
@@ -42,7 +58,7 @@
   }
   function setClosedCats(set){ try{ localStorage.setItem(CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
   function getBuildClosedCats(){
-    // v1.23.0+: start Build List collapsed every time the app first loads.
+    // Build List is now flat alphabetical. Keep this only for legacy cleanup/renames.
     const closed = allCurrentCatsClosedSet();
     try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...closed])); }catch(e){}
     return closed;
@@ -50,7 +66,6 @@
   function setBuildClosedCats(set){ try{ localStorage.setItem(BUILD_CLOSED_CATS_KEY, JSON.stringify([...set])); }catch(e){} }
   function getShopClosedCats(){
     // v1.23.1+: Shopping Mode no longer uses category accordions.
-    // Remove old saved collapse state so it cannot hide active shopping items.
     try{ localStorage.removeItem(SHOP_CLOSED_CATS_KEY); }catch(e){}
     return new Set();
   }
@@ -129,7 +144,6 @@
       input.value = state.title || 'Grocery Tally';
     }
 
-    // Access: pencil click OR title click both enter edit
     editBtn.onclick = enterEdit;
     nameSpan.onclick = enterEdit;
     cancelBtn.onclick = exitEdit;
@@ -157,7 +171,6 @@
 
     wrap.appendChild(titleWrap);
 
-    // Briefly reveal pencil as a hint
     editBtn.classList.add('hint');
     setTimeout(()=>{ editBtn.classList.remove('hint'); }, 1500);
 
@@ -275,6 +288,10 @@
     if(byCat !== 0) return byCat;
     return sortItems(a,b);
   }
+  function matchesBuildSearch(it, query){
+    if(!query) return true;
+    return normalizeText(it && it.name).includes(query) || normalizeText(it && it.cat).includes(query);
+  }
   function scrollToBuildTop(){
     try{
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -298,9 +315,9 @@
       target.scrollIntoView(true);
     }
   }
-  function nonZero(){ return state.items.filter(i=>i.qty>0) }
+  function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
-    const resettable = state.items.filter(i=>i.qty>0 || i.checked);
+    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked);
     if(!resettable.length){
       alert('Nothing to reset.');
       return;
@@ -333,7 +350,7 @@
     }
   }
   function commitRun(){
-    const checked = state.items.filter(i=>i.checked && i.qty > 0);
+    const checked = state.items.filter(i=>i.checked && Number(i.qty) > 0);
     if(!checked.length){
       alert('No checked shopping items with quantities to commit.');
       return;
@@ -344,10 +361,6 @@
       return;
     }
 
-    // Previous Run represents the most recently committed shopping trip.
-    // That means items not purchased in this committed run must show 0,
-    // even if they were purchased in an earlier run and even if they are
-    // not visible in Shopping Mode because their current quantity is 0.
     state.items.forEach(i=>{
       i.prevQty = 0;
     });
@@ -367,8 +380,8 @@
     }
   }
   function catIndex(c){ const i = state.categories.indexOf(c); return i === -1 ? 9999 : i }
-  function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name) }
-  function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return a.name.localeCompare(b.name)}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
+  function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name)) }
+  function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name))}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
   function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
@@ -624,7 +637,6 @@
     if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
     if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
 
-    // Build/Shop act like a single switching tab
     if(which==='build'){
       tabBuild.style.display='inline-block';
       tabShop.style.display='none';
@@ -632,7 +644,6 @@
       tabBuild.style.display='none';
       tabShop.style.display='inline-block';
     } else {
-      // On Manage/Cats, show both
       tabBuild.style.display='inline-block';
       tabShop.style.display='inline-block';
     }
@@ -651,67 +662,109 @@
         <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
       </div>
       <div id="buildEstimate" class="estimate-sticky"></div>
-      <div id="buildAlphaNav" class="alpha-nav" aria-label="Alphabet quick jump"></div>
+      <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
+        <div class="build-search-row">
+          <input id="buildSearchInput" class="build-search-input" type="search" placeholder="Search Build List" autocomplete="off" aria-label="Search Build List">
+          <button class="btn build-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
+        </div>
+        <div id="buildAlphaButtons" class="alpha-buttons" aria-label="Alphabet quick jump"></div>
+      </div>
       <div id="buildList" class="build-flat-list"></div>`;
 
     const buildEstimate = document.getElementById('buildEstimate');
-    renderEstimatePill(buildEstimate);
-    const alphaNav = document.getElementById('buildAlphaNav');
     const buildList = document.getElementById('buildList');
-    const items = state.items.slice().sort(buildListSort);
-    const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
-    const activeLetters = new Set(items.map(alphaKeyForItem));
+    const alphaButtons = document.getElementById('buildAlphaButtons');
+    const searchInput = document.getElementById('buildSearchInput');
+    const clearBtn = document.getElementById('btnBuildSearchClear');
 
-    const topBtn = document.createElement('button');
-    topBtn.type = 'button';
-    topBtn.className = 'top-jump';
-    topBtn.textContent = 'Top';
-    topBtn.onclick = scrollToBuildTop;
-    alphaNav.appendChild(topBtn);
+    renderEstimatePill(buildEstimate);
+    searchInput.value = buildSearchQuery;
 
-    letters.forEach(letter=>{
-      const btn=document.createElement('button');
-      btn.type='button';
-      btn.textContent=letter;
-      btn.disabled = !activeLetters.has(letter);
-      btn.onclick = ()=> scrollToBuildLetter(letter);
-      alphaNav.appendChild(btn);
-    });
+    function drawBuildList(){
+      const query = normalizeText(buildSearchQuery);
+      const allItems = state.items.slice().sort(buildListSort);
+      const items = query ? allItems.filter(it => matchesBuildSearch(it, query)) : allItems;
+      const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+      const activeLetters = new Set(items.map(alphaKeyForItem));
 
-    if(!items.length){
-      buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
+      alphaButtons.innerHTML = '';
+      const topBtn = document.createElement('button');
+      topBtn.type = 'button';
+      topBtn.className = 'top-jump';
+      topBtn.textContent = 'Top';
+      topBtn.onclick = scrollToBuildTop;
+      alphaButtons.appendChild(topBtn);
+
+      letters.forEach(letter=>{
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.textContent=letter;
+        btn.disabled = !activeLetters.has(letter);
+        btn.onclick = ()=> scrollToBuildLetter(letter);
+        alphaButtons.appendChild(btn);
+      });
+
+      buildList.innerHTML = '';
+      if(!allItems.length){
+        buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
+        return;
+      }
+      if(!items.length){
+        buildList.innerHTML = '<p class="muted">No matching items. Clear the search to show the full Build List.</p>';
+        return;
+      }
+
+      let currentLetter = '';
+      items.forEach(it=>{
+        const letter = alphaKeyForItem(it);
+        const isFirstForLetter = letter !== currentLetter;
+        if(isFirstForLetter) currentLetter = letter;
+
+        const shell = createSwipeShell(it.id);
+        if(isFirstForLetter){
+          shell.wrap.id = 'build-letter-' + (letter === '#' ? 'num' : letter);
+        }
+        const row=shell.content;
+
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+        left.appendChild(name);
+
+        const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
+        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); save(); renderBuild() };
+        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; save(); renderBuild() };
+        const prev=document.createElement('div');
+        prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
+        prev.title='Previous run quantity';
+        prev.textContent=previousRunText(it);
+
+        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
+        row.appendChild(left); row.appendChild(right);
+        buildList.appendChild(shell.wrap);
+      });
     }
 
-    let currentLetter = '';
-    items.forEach(it=>{
-      const letter = alphaKeyForItem(it);
-      const isFirstForLetter = letter !== currentLetter;
-      if(isFirstForLetter) currentLetter = letter;
-
-      const shell = createSwipeShell(it.id);
-      if(isFirstForLetter){
-        shell.wrap.id = 'build-letter-' + (letter === '#' ? 'num' : letter);
-      }
-      const row=shell.content;
-
-      const left=document.createElement('div'); left.className='left';
-      const right=document.createElement('div'); right.className='right';
-      const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-      left.appendChild(name);
-
-      const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
-      const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,it.qty-1); save(); renderBuild() };
-      const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty++; it.checked=false; save(); renderBuild() };
-      const prev=document.createElement('div');
-      prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
-      prev.title='Previous run quantity';
-      prev.textContent=previousRunText(it);
-
-      right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
-      row.appendChild(left); row.appendChild(right);
-      buildList.appendChild(shell.wrap);
+    searchInput.addEventListener('input', ()=>{
+      buildSearchQuery = searchInput.value;
+      drawBuildList();
     });
+    searchInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape'){
+        e.preventDefault();
+        buildSearchQuery = '';
+        searchInput.value = '';
+        drawBuildList();
+      }
+    });
+    clearBtn.onclick = ()=>{
+      buildSearchQuery = '';
+      searchInput.value = '';
+      drawBuildList();
+      searchInput.focus();
+    };
 
+    drawBuildList();
     document.getElementById('btnZeroAll').onclick = zeroAll;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
   }
@@ -743,12 +796,14 @@
       return catIndex(a)-catIndex(b);
     });
 
-    if(!orderedCats.length){ shopList.innerHTML = '<p class="muted">No items yet.</p>'; return }
+    if(!orderedCats.length){
+      shopList.innerHTML = '<p class="muted">No items yet.</p>';
+      return;
+    }
 
     orderedCats.forEach(cat=>{
       const catItems = byCat[cat];
       const catComplete = catItems.length > 0 && catItems.every(i => i.checked);
-
       const block=document.createElement('div');
       block.className='shop-cat-block' + (catComplete ? ' completed' : '');
       block.dataset.cat = cat;
@@ -761,8 +816,6 @@
       const list=document.createElement('div');
       list.className='shop-cat-list';
 
-      // Keep each item in its original category order when checked.
-      // Fully completed categories still move to the bottom as a block.
       catItems.forEach(it=>{
         const row=document.createElement('div');
         row.className='shop-item' + (it.checked ? ' checked' : '');
@@ -800,9 +853,8 @@
           const wasCatComplete = catItems.length > 0 && catItems.every(i => i.checked);
           it.checked = !it.checked;
           save();
-          const currentCatItems = state.items.filter(i => i.cat === cat && i.qty > 0);
+          const currentCatItems = state.items.filter(i => i.cat === cat && Number(i.qty) > 0);
           const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(i => i.checked);
-
           if(isCatComplete && !wasCatComplete){
             block.classList.add('fading-out');
             setTimeout(()=> renderShop(cat), 250);
@@ -810,13 +862,11 @@
             renderShop();
           }
         };
-
         list.appendChild(row);
       });
 
       block.appendChild(list);
       shopList.appendChild(block);
-
       if(fadeInCat && cat === fadeInCat){
         block.classList.add('fading-in');
         setTimeout(()=> block.classList.remove('fading-in'), 260);
@@ -828,44 +878,37 @@
   function renderManage(){
     ensurePositions();
     viewManage.innerHTML = `
-      <div class='row' style='gap:6px;flex-wrap:wrap'>
-        <input id='newItemName' placeholder='Item name' style='flex:2' />
-        <select id='newItemCat' style='flex:1'></select>
-        <button class='btn-accent' id='btnAddItem'>Add Item</button>
+      <div class="grid">
+        <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
+          <input id="newItemName" placeholder="Item name" style="flex:2" />
+          <select id="newItemCat" style="flex:1"></select>
+          <button class="btn-accent" id="btnAddItem">Add Item</button>
+        </div>
       </div>
-      <div class='spacer'></div>
-      <div class='controls'>
-        <button class='btn' id='btnExport'>Export JSON</button>
-        <button class='btn' id='btnImport'>Import JSON</button>
-        <input type='file' id='fileImport' accept='application/json' style='display:none' />
-        <button class='btn-danger' id='btnWipe'>Wipe all data</button>
+      <div class="spacer"></div>
+      <div class="controls">
+        <button class="btn" id="btnExport">Export JSON</button>
+        <input type="file" id="fileImport" accept="application/json" style="display:none" />
+        <button class="btn" id="btnImport">Import JSON</button>
+        <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
       </div>
-      <div class='spacer'></div>
-      <details class='bulk-tools'>
+      <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
-        <div class='spacer'></div>
-        <p class='muted bulk-help'>Paste one item per line. Use category headers ending with a colon, like <strong>Produce:</strong>. Lines before the first category go into the selected category above.</p>
-        <textarea id='bulkSetupText' placeholder='Produce:
-Bananas
-Apples
-Lettuce
-
-Dairy:
-Milk
-Greek Yogurt
-Cheese'></textarea>
-        <div class='spacer'></div>
-        <div class='controls'>
-          <button class='btn-accent' id='btnBulkSetup'>Add pasted items/categories</button>
-          <button class='btn' id='btnBulkClear'>Clear paste box</button>
+        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category above.</p>
+        <textarea id="bulkSetupText" placeholder="Produce:\nBananas\nApples\n\nDairy:\nMilk\nYogurt"></textarea>
+        <div class="spacer"></div>
+        <div class="controls">
+          <button class="btn-accent" id="btnBulkSetup">Add pasted items/categories</button>
+          <button class="btn" id="btnBulkClear">Clear paste box</button>
         </div>
       </details>
-      <div class='spacer'></div>
-      <div id='manageList'></div>`;
+      <div class="spacer"></div>
+      <div id="manageList"></div>`;
 
-    // Sticky category selection for quick entry
     const sel=document.getElementById('newItemCat');
-    state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt) });
+    state.categories.forEach(c=>{
+      const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt);
+    });
     if(manageSelectedCat && state.categories.includes(manageSelectedCat)){
       sel.value = manageSelectedCat;
     } else if(state.categories.length){
@@ -878,52 +921,26 @@ Cheese'></textarea>
       const name=document.getElementById('newItemName').value.trim();
       const cat=sel.value;
       if(!name) return;
-
       const normalizedName = normalizeText(name);
-
-      const duplicate = state.items.find(i =>
-        i.cat === cat && normalizeText(i.name) === normalizedName
-      );
-
+      const duplicate = state.items.find(i => i.cat === cat && normalizeText(i.name) === normalizedName );
       if(duplicate){
-        duplicate.qty++;
+        duplicate.qty = (Number(duplicate.qty)||0) + 1;
         duplicate.checked = false;
         save();
-
-        try{
-          renderManage();
-          renderBuild();
-        }catch(e){
-          console.error(e);
-        }
-
+        try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
         const nameInput = document.getElementById('newItemName');
-        if(nameInput){
-          nameInput.value = '';
-          nameInput.focus();
-        }
-
+        if(nameInput){ nameInput.value = ''; nameInput.focus(); }
         return;
       }
-
       manageSelectedCat = cat;
       localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
-
       state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
       save();
-
-      try{
-        renderManage();
-        renderBuild();
-      }catch(e){
-        console.error(e);
-      }
-
+      try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
       const nameInput = document.getElementById('newItemName');
       if(nameInput){ nameInput.focus(); nameInput.select(); }
     };
 
-    // Enter key adds item
     const nameInput = document.getElementById('newItemName');
     if(nameInput){
       nameInput.addEventListener('keydown', (e)=>{
@@ -934,28 +951,39 @@ Cheese'></textarea>
       });
     }
 
-    // Export with version stamp
     document.getElementById('btnExport').onclick = ()=>{
       const dataOut = { appVersion: APP_VERSION, title: state.title, categories: state.categories, items: state.items };
       const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grocery_tally_backup_v${APP_VERSION}.json`; a.click();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `grocery_tally_backup_v${APP_VERSION}.json`;
+      a.click();
     };
-    // Import with version check
+
     const fileInput = document.getElementById('fileImport');
     document.getElementById('btnImport').onclick = ()=> fileInput.click();
     fileInput.onchange = async (e)=>{
-      const file=e.target.files[0]; if(!file) return; const text=await file.text();
+      const file=e.target.files[0];
+      if(!file) return;
+      const text=await file.text();
       try{
         const data = JSON.parse(text);
         if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
         if(data.appVersion && data.appVersion!==APP_VERSION){
-          if(!confirm(`Backup is from version ${data.appVersion}, current app is ${APP_VERSION}. Import anyway?`)){
-            fileInput.value=''; return;
+          if(!confirm(`Backup is from version ${data.appVersion}, current app is ${APP_VERSION}.\nImport anyway?`)){
+            fileInput.value='';
+            return;
           }
         }
         state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items };
-        ensurePositions(); save(); renderAll(); alert('Import complete!');
-      }catch(err){ alert('Import failed: '+err.message) }
+        normalizeStateShape();
+        ensurePositions();
+        save();
+        renderAll();
+        alert('Import complete!');
+      }catch(err){
+        alert('Import failed: '+err.message);
+      }
       fileInput.value='';
     };
 
@@ -967,11 +995,9 @@ Cheese'></textarea>
         alert('Paste one or more items first.');
         return;
       }
-
       let currentCat = sel.value || state.categories[0] || 'Other';
       const startingCat = ensureCategory(currentCat);
       currentCat = startingCat.name || 'Other';
-
       let addedCats = startingCat.created ? 1 : 0;
       let addedItems = 0;
       let skippedItems = 0;
@@ -980,7 +1006,6 @@ Cheese'></textarea>
       raw.split(/\r?\n/).forEach(line=>{
         let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, ''));
         if(!cleaned) return;
-
         if(cleaned.endsWith(':')){
           const catName = cleanText(cleaned.slice(0, -1));
           const result = ensureCategory(catName);
@@ -990,29 +1015,24 @@ Cheese'></textarea>
           }
           return;
         }
-
         const catResult = ensureCategory(currentCat || 'Other');
         const cat = catResult.name || 'Other';
         if(catResult.created) addedCats++;
-
         const itemName = cleaned;
         const key = normalizeText(cat) + '|' + normalizeText(itemName);
-
         if(batchKeys.has(key) || findItemInCategory(itemName, cat)){
           skippedItems++;
           return;
         }
-
         state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
         batchKeys.add(key);
         addedItems++;
       });
 
       if(!addedCats && !addedItems && skippedItems){
-        alert(`No new items added. Skipped ${skippedItems} duplicate item(s).`);
+        alert(`No new items added.\nSkipped ${skippedItems} duplicate item(s).`);
         return;
       }
-
       manageSelectedCat = currentCat;
       localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
       ensurePositions();
@@ -1023,46 +1043,42 @@ Cheese'></textarea>
 
     document.getElementById('btnBulkClear').onclick = ()=>{
       const box = document.getElementById('bulkSetupText');
-      if(box){
-        box.value = '';
-        box.focus();
-      }
+      if(box){ box.value = ''; box.focus(); }
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
-      if(confirm('This clears all items/categories on this device. Continue?')){ state = { categories: DEFAULT_CATS.slice(), items: [] }; save(); renderAll(); }
+      if(confirm('This clears all items/categories on this device.\nContinue?')){
+        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [] };
+        save();
+        renderAll();
+      }
     };
 
-    // Items by category (drag & drop) with persistent *collapsed* state
     const ml = document.getElementById('manageList');
     state.categories.forEach(cat=>{
       const items = state.items.filter(i=>i.cat===cat).sort((a,b)=> a.pos-b.pos);
       if(!items.length) return;
       const sec=document.createElement('details');
       sec.open = !closedCats.has(cat);
-      const sum=createCategorySummary(cat); sec.appendChild(sum);
+      const sum=createCategorySummary(cat);
+      sec.appendChild(sum);
       attachCategoryDropTarget(sec, cat);
       sec.addEventListener('toggle', ()=>{
         if (sec.open) {
-          // Accordion: close all other Manage Items sections
           const container = document.getElementById('manageList');
           const all = container ? Array.from(container.querySelectorAll('details')) : [];
-          all.forEach(d => {
-            if (d !== sec && d.open) d.open = false;
-          });
-
-          // Mark all categories closed except the one just opened
+          all.forEach(d => { if (d !== sec && d.open) d.open = false; });
           closedCats = new Set(state.categories);
           closedCats.delete(cat);
           scrollOpenedCategoryIntoView(sec);
         } else {
           closedCats.add(cat);
         }
-
         setClosedCats(closedCats);
       });
 
-      const list=document.createElement('div'); list.className='list';
+      const list=document.createElement('div');
+      list.className='list';
       attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
       attachDropTarget(list, cat, () => itemsInCategory(cat).length);
 
@@ -1070,11 +1086,12 @@ Cheese'></textarea>
         const shell = createSwipeShell(it.id);
         const row=shell.content;
         row.dataset.index=idx;
-
-        const left=document.createElement('div'); left.className='left'; const right=document.createElement('div'); right.className='right';
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
         const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.value=it.name; input.style.display='none';
+
         const priceWrap=document.createElement('div'); priceWrap.className='price-wrap';
         const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
         const priceInput=document.createElement('input');
@@ -1088,8 +1105,14 @@ Cheese'></textarea>
         priceInput.title='Average price';
         priceInput.setAttribute('aria-label','Average price');
         priceInput.addEventListener('keydown', (e)=>{
-          if(e.key==='Enter'){ e.preventDefault(); priceInput.blur(); }
-          else if(e.key==='Escape'){ e.preventDefault(); priceInput.value=formatPriceInput(it.avgPrice); priceInput.blur(); }
+          if(e.key==='Enter'){
+            e.preventDefault();
+            priceInput.blur();
+          } else if(e.key==='Escape'){
+            e.preventDefault();
+            priceInput.value=formatPriceInput(it.avgPrice);
+            priceInput.blur();
+          }
         });
         priceInput.addEventListener('blur', ()=>{
           const parsed = parsePriceInput(priceInput.value);
@@ -1099,29 +1122,79 @@ Cheese'></textarea>
         });
         priceWrap.appendChild(priceLabel);
         priceWrap.appendChild(priceInput);
+
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
-        row.appendChild(left); left.appendChild(handle); left.appendChild(name); left.appendChild(input); row.appendChild(right); right.appendChild(priceWrap); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn);
+
+        row.appendChild(left);
+        left.appendChild(handle);
+        left.appendChild(name);
+        left.appendChild(input);
+        row.appendChild(right);
+        right.appendChild(priceWrap);
+        right.appendChild(edit);
+        right.appendChild(saveBtn);
+        right.appendChild(cancelBtn);
         attachItemDrag(handle, it.id, shell.wrap);
-        function enterEdit(){ name.style.display='none'; input.style.display='block'; edit.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
-        function exitEdit(){ name.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = it.name; }
-        edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
-        input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveBtn.click(); } else if(e.key==='Escape'){ e.preventDefault(); cancelBtn.click(); } });
-        saveBtn.onclick = ()=>{ const nv = input.value.trim(); if(!nv){ alert('Item name cannot be empty.'); return } it.name = nv; save(); name.textContent = it.name; exitEdit(); renderBuild(); renderShop(); };
+
+        function enterEdit(){
+          name.style.display='none';
+          input.style.display='block';
+          edit.style.display='none';
+          saveBtn.style.display='inline-block';
+          cancelBtn.style.display='inline-block';
+          input.focus(); input.select();
+        }
+        function exitEdit(){
+          name.style.display='block';
+          input.style.display='none';
+          edit.style.display='inline-block';
+          saveBtn.style.display='none';
+          cancelBtn.style.display='none';
+          input.value = it.name;
+        }
+        edit.onclick = enterEdit;
+        cancelBtn.onclick = exitEdit;
+        input.addEventListener('keydown', (e)=>{
+          if(e.key==='Enter'){
+            e.preventDefault();
+            saveBtn.click();
+          } else if(e.key==='Escape'){
+            e.preventDefault();
+            cancelBtn.click();
+          }
+        });
+        saveBtn.onclick = ()=>{
+          const nv = input.value.trim();
+          if(!nv){ alert('Item name cannot be empty.'); return }
+          it.name = nv;
+          save();
+          name.textContent = it.name;
+          exitEdit();
+          renderBuild();
+          renderShop();
+        };
 
         attachDropTarget(shell.wrap, cat, () => idx);
         list.appendChild(shell.wrap);
       });
-      sec.appendChild(list); ml.appendChild(sec);
+
+      sec.appendChild(list);
+      ml.appendChild(sec);
     });
   }
 
   // ----- Manage Categories -----
   function renderCats(){
-    const cl=document.getElementById('catList'); cl.innerHTML='';
+    const cl=document.getElementById('catList');
+    cl.innerHTML='';
     state.categories.forEach((c,i)=>{
-      const row=document.createElement('div'); row.className='item'; row.draggable=true; row.dataset.index=i;
+      const row=document.createElement('div');
+      row.className='item';
+      row.draggable=true;
+      row.dataset.index=i;
+
       const left=document.createElement('div'); left.className='left';
       const right=document.createElement('div'); right.className='right';
       const label=document.createElement('div'); label.textContent=c; label.className='name';
@@ -1131,50 +1204,122 @@ Cheese'></textarea>
       const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
       const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
 
-      function enterEdit(){ label.style.display='none'; input.style.display='block'; edit.style.display='none'; del.style.display='none'; saveBtn.style.display='inline-block'; cancelBtn.style.display='inline-block'; input.focus(); input.select(); }
-      function exitEdit(){ label.style.display='block'; input.style.display='none'; edit.style.display='inline-block'; del.style.display='inline-block'; saveBtn.style.display='none'; cancelBtn.style.display='none'; input.value = label.textContent; }
-
-      edit.onclick = enterEdit; cancelBtn.onclick = exitEdit;
-      // Enter-to-save & Esc-to-cancel while renaming a category
+      function enterEdit(){
+        label.style.display='none';
+        input.style.display='block';
+        edit.style.display='none';
+        del.style.display='none';
+        saveBtn.style.display='inline-block';
+        cancelBtn.style.display='inline-block';
+        input.focus(); input.select();
+      }
+      function exitEdit(){
+        label.style.display='block';
+        input.style.display='none';
+        edit.style.display='inline-block';
+        del.style.display='inline-block';
+        saveBtn.style.display='none';
+        cancelBtn.style.display='none';
+        input.value = label.textContent;
+      }
+      edit.onclick = enterEdit;
+      cancelBtn.onclick = exitEdit;
       input.addEventListener('keydown', (e)=>{
-        if(e.key === 'Enter'){ e.preventDefault(); saveBtn.click(); }
-        else if(e.key === 'Escape'){ e.preventDefault(); cancelBtn.click(); }
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          saveBtn.click();
+        } else if(e.key === 'Escape'){
+          e.preventDefault();
+          cancelBtn.click();
+        }
       });
       saveBtn.onclick = ()=>{
-        const newName = input.value.trim(); if(!newName){ alert('Category name cannot be empty.'); return }
-        const dup = state.categories.some((cat,idx)=> idx!==i && cat.toLowerCase()===newName.toLowerCase()); if(dup){ alert('That category already exists.'); return }
-        const oldName = state.categories[i]; state.categories[i] = newName; state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
+        const newName = input.value.trim();
+        if(!newName){ alert('Category name cannot be empty.'); return }
+        const dup = state.categories.some((cat,idx)=> idx!==i && cat.toLowerCase()===newName.toLowerCase());
+        if(dup){ alert('That category already exists.'); return }
+        const oldName = state.categories[i];
+        state.categories[i] = newName;
+        state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
         if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
         if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
-        save(); label.textContent=newName; exitEdit(); renderManage(); renderBuild(); renderShop();
+        save();
+        label.textContent=newName;
+        exitEdit();
+        renderManage(); renderBuild(); renderShop();
       };
-      del.onclick = ()=>{ const removed = state.categories.splice(i,1)[0]; if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); } if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); } save(); renderCats(); renderManage(); renderBuild(); renderShop(); };
+      del.onclick = ()=>{
+        const removed = state.categories.splice(i,1)[0];
+        if(closedCats.has(removed)){ closedCats.delete(removed); setClosedCats(closedCats); }
+        if(buildClosedCats.has(removed)){ buildClosedCats.delete(removed); setBuildClosedCats(buildClosedCats); }
+        state.items.forEach(it=>{ if(it.cat === removed) it.cat = state.categories[0] || 'Other'; });
+        if(!state.categories.length){ state.categories = DEFAULT_CATS.slice(); }
+        save();
+        renderCats(); renderManage(); renderBuild(); renderShop();
+      };
 
       row.appendChild(left); left.appendChild(label); left.appendChild(input);
       row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
       cl.appendChild(row);
     });
 
-    // Drag & drop reorder
     let dragIndex=null;
     cl.querySelectorAll('.item').forEach(el=>{
-      el.addEventListener('dragstart', e=>{ dragIndex=parseInt(e.currentTarget.dataset.index,10); e.dataTransfer.effectAllowed='move'; });
-      el.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
-      el.addEventListener('drop', e=>{ e.preventDefault(); const targetIndex=parseInt(e.currentTarget.dataset.index,10); if(isNaN(dragIndex)||isNaN(targetIndex)||dragIndex===targetIndex) return; const moved=state.categories.splice(dragIndex,1)[0]; state.categories.splice(targetIndex,0,moved); save(); renderCats(); renderManage(); renderBuild(); renderShop(); });
+      el.addEventListener('dragstart', e=>{
+        dragIndex=parseInt(e.currentTarget.dataset.index,10);
+        e.dataTransfer.effectAllowed='move';
+      });
+      el.addEventListener('dragover', e=>{
+        e.preventDefault();
+        e.dataTransfer.dropEffect='move';
+      });
+      el.addEventListener('drop', e=>{
+        e.preventDefault();
+        const targetIndex=parseInt(e.currentTarget.dataset.index,10);
+        if(isNaN(dragIndex)||isNaN(targetIndex)||dragIndex===targetIndex) return;
+        const moved=state.categories.splice(dragIndex,1)[0];
+        state.categories.splice(targetIndex,0,moved);
+        save();
+        renderCats(); renderManage(); renderBuild(); renderShop();
+      });
     });
 
     document.getElementById('btnAddCat').onclick = ()=>{
-      const name=cleanText(document.getElementById('newCatName').value); if(!name) return;
+      const name=cleanText(document.getElementById('newCatName').value);
+      if(!name) return;
       const result = ensureCategory(name);
-      if(!result.created){ alert('Category already exists'); return }
-      save(); renderCats(); renderManage(); document.getElementById('newCatName').value='';
+      if(!result.created){
+        alert('Category already exists');
+        return;
+      }
+      save();
+      renderCats(); renderManage();
+      document.getElementById('newCatName').value='';
     };
   }
 
-  function renderAll(){ ensurePositions(); renderTitle(); renderBuild(); renderShop(); renderManage(); renderCats(); setVersionPills(); }
+  function renderAll(){
+    normalizeStateShape();
+    ensurePositions();
+    renderTitle();
+    renderBuild();
+    renderShop();
+    renderManage();
+    renderCats();
+    setVersionPills();
+  }
 
   // Initial render
   try{ renderTitle(); }catch(e){}
-  try{ ensurePositions(); renderBuild(); renderShop(); renderManage(); renderCats(); setTab('build'); }catch(e){ console.error(e) }
+  try{
+    ensurePositions();
+    renderBuild();
+    renderShop();
+    renderManage();
+    renderCats();
+    setTab('build');
+  }catch(e){
+    console.error(e);
+  }
   try{ setVersionPills(); }catch(e){}
 })();

@@ -28,9 +28,13 @@ input,select,textarea{background:#0b1220;color:var(--text);border:1px solid #243
 textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.4}
 .bulk-tools{margin-top:10px}
 .bulk-help{font-size:13px;line-height:1.45}
-.alpha-nav{position:sticky;top:58px;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;gap:4px;flex-wrap:wrap;margin:10px 0}
-.alpha-nav button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
-.alpha-nav button:disabled{opacity:.3;cursor:default}
+.alpha-nav{position:sticky;top:58px;z-index:5;background:var(--card);border:1px solid #243042;border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:8px;flex-wrap:nowrap;margin:10px 0}
+.alpha-buttons{display:flex;gap:4px;flex-wrap:wrap}
+.alpha-buttons button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
+.alpha-buttons button:disabled{opacity:.3;cursor:default}
+.build-search-row{display:flex;gap:6px;align-items:center;width:100%}
+.build-search-input{flex:1;min-width:0;width:100%}
+.alpha-nav .build-search-clear{background:#334155;padding:10px 12px;border-radius:10px;min-width:auto;white-space:nowrap}
 .build-flat-list{display:flex;flex-direction:column;gap:5px}
 .build-flat-list .swipe-wrap{margin-top:0}
 .build-flat-list .item{padding:6px 8px;min-height:44px}
