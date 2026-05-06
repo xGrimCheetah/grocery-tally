@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.35.0"; // Build List combined search + A-Z sticky control
+  let APP_VERSION = "1.36.0"; // Move Build List search + A-Z control to bottom
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
