@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.36.2"; // Fix Build List bottom search priority, keyboard, and footer behavior
+  let APP_VERSION = "1.36.3"; // Tighten Build List search and show footer only on Build List
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -291,12 +291,8 @@
   function buildSearchRank(it, query){
     if(!query) return 0;
     const name = normalizeText(it && it.name);
-    const cat = normalizeText(it && it.cat);
     if(name.startsWith(query)) return 0;
     if(name.split(/\s+/).some(part => part.startsWith(query))) return 1;
-    if(cat.startsWith(query)) return 2;
-    if(name.includes(query)) return 3;
-    if(cat.includes(query)) return 4;
     return -1;
   }
   function matchesBuildSearch(it, query){
@@ -697,6 +693,9 @@
     if(which==='shop'){  tabShop.classList.add('active');  viewShop.style.display='block'  }
     if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
     if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
+
+    const footer = document.querySelector('.footer');
+    if(footer){ footer.style.display = which === 'build' ? 'flex' : 'none'; }
 
     if(which==='build'){
       tabBuild.style.display='inline-block';
