@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.36.0"; // Move Build List search + A-Z control to bottom
+  let APP_VERSION = "1.36.1"; // Fix bottom Build List control scroll and footer behavior
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -299,21 +299,54 @@
       window.scrollTo(0, 0);
     }
   }
+  function buildTopScrollOffset(){
+    const estimate = document.getElementById('buildEstimate');
+    const estimateStyle = estimate && window.getComputedStyle ? window.getComputedStyle(estimate) : null;
+    const estimateTop = estimateStyle ? (parseFloat(estimateStyle.top) || 0) : 0;
+    const estimateHeight = estimate ? estimate.getBoundingClientRect().height : 0;
+    return estimateTop + estimateHeight + 8;
+  }
+  function scrollElementBelowBuildEstimate(target, behavior){
+    if(!target) return;
+    const runScroll = ()=>{
+      try{
+        const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
+        window.scrollTo({ top: Math.max(0, targetTop - buildTopScrollOffset()), behavior: behavior || 'smooth' });
+      }catch(e){
+        target.scrollIntoView(true);
+      }
+    };
+    try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
+  }
+  function scrollToBuildResultsStart(){
+    const list = document.getElementById('buildList');
+    if(!list) return;
+    const target = list.querySelector('.swipe-wrap') || list;
+    scrollElementBelowBuildEstimate(target, 'smooth');
+  }
   function scrollToBuildLetter(letter){
     const idPart = letter === '#' ? 'num' : letter;
     const target = document.getElementById('build-letter-' + idPart);
     if(!target) return;
+    scrollElementBelowBuildEstimate(target, 'smooth');
+  }
+  function updateBuildBottomControlLayout(){
     const nav = document.getElementById('buildAlphaNav');
-    const navHeight = nav ? nav.getBoundingClientRect().height : 0;
-    const navStyle = nav && window.getComputedStyle ? window.getComputedStyle(nav) : null;
-    const stickyTop = navStyle ? (parseFloat(navStyle.top) || 0) : 0;
-    const gap = 8;
-    try{
-      const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
-      window.scrollTo({ top: Math.max(0, targetTop - stickyTop - navHeight - gap), behavior:'smooth' });
-    }catch(e){
-      target.scrollIntoView(true);
+    if(!nav) return;
+    const navHeight = nav.getBoundingClientRect().height || 0;
+    const extraSpace = Math.ceil(navHeight + 24);
+    try{ document.documentElement.style.setProperty('--build-nav-space', extraSpace + 'px'); }catch(e){}
+
+    const footer = document.querySelector('.footer');
+    let lift = 0;
+    if(footer && typeof window.innerHeight === 'number'){
+      const fixedTop = window.innerHeight - navHeight - 8;
+      const footerTop = footer.getBoundingClientRect().top;
+      if(footerTop < fixedTop + 8){
+        lift = Math.ceil(fixedTop + 8 - footerTop);
+      }
     }
+    try{ nav.style.setProperty('--build-nav-lift', lift + 'px'); }catch(e){}
   }
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
@@ -748,6 +781,8 @@
     searchInput.addEventListener('input', ()=>{
       buildSearchQuery = searchInput.value;
       drawBuildList();
+      updateBuildBottomControlLayout();
+      scrollToBuildResultsStart();
     });
     searchInput.addEventListener('keydown', (e)=>{
       if(e.key === 'Escape'){
@@ -755,16 +790,28 @@
         buildSearchQuery = '';
         searchInput.value = '';
         drawBuildList();
+        updateBuildBottomControlLayout();
+        scrollToBuildResultsStart();
       }
     });
     clearBtn.onclick = ()=>{
       buildSearchQuery = '';
       searchInput.value = '';
       drawBuildList();
+      updateBuildBottomControlLayout();
+      scrollToBuildResultsStart();
       searchInput.focus();
     };
 
     drawBuildList();
+    updateBuildBottomControlLayout();
+    try{
+      window.removeEventListener('scroll', updateBuildBottomControlLayout);
+      window.removeEventListener('resize', updateBuildBottomControlLayout);
+      window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
+      window.addEventListener('resize', updateBuildBottomControlLayout);
+      setTimeout(updateBuildBottomControlLayout, 0);
+    }catch(e){}
     document.getElementById('btnZeroAll').onclick = zeroAll;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
   }
