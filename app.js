@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.36.1"; // Fix bottom Build List control scroll and footer behavior
+  let APP_VERSION = "1.36.2"; // Fix Build List bottom search priority, keyboard, and footer behavior
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -288,9 +288,28 @@
     if(byCat !== 0) return byCat;
     return sortItems(a,b);
   }
+  function buildSearchRank(it, query){
+    if(!query) return 0;
+    const name = normalizeText(it && it.name);
+    const cat = normalizeText(it && it.cat);
+    if(name.startsWith(query)) return 0;
+    if(name.split(/\s+/).some(part => part.startsWith(query))) return 1;
+    if(cat.startsWith(query)) return 2;
+    if(name.includes(query)) return 3;
+    if(cat.includes(query)) return 4;
+    return -1;
+  }
   function matchesBuildSearch(it, query){
     if(!query) return true;
-    return normalizeText(it && it.name).includes(query) || normalizeText(it && it.cat).includes(query);
+    return buildSearchRank(it, query) !== -1;
+  }
+  function buildSearchSort(query){
+    return (a,b)=>{
+      const ar = buildSearchRank(a, query);
+      const br = buildSearchRank(b, query);
+      if(ar !== br) return ar - br;
+      return buildListSort(a,b);
+    };
   }
   function scrollToBuildTop(){
     try{
@@ -330,23 +349,32 @@
     if(!target) return;
     scrollElementBelowBuildEstimate(target, 'smooth');
   }
+  function getKeyboardLift(){
+    const vv = window.visualViewport;
+    if(!vv || typeof window.innerHeight !== 'number') return 0;
+    const lift = window.innerHeight - vv.height - vv.offsetTop;
+    return Math.max(0, Math.ceil(lift));
+  }
   function updateBuildBottomControlLayout(){
     const nav = document.getElementById('buildAlphaNav');
     if(!nav) return;
     const navHeight = nav.getBoundingClientRect().height || 0;
-    const extraSpace = Math.ceil(navHeight + 24);
+    const keyboardLift = getKeyboardLift();
+    const extraSpace = Math.ceil(navHeight + keyboardLift + 32);
     try{ document.documentElement.style.setProperty('--build-nav-space', extraSpace + 'px'); }catch(e){}
+    try{ nav.style.setProperty('--build-keyboard-lift', keyboardLift + 'px'); }catch(e){}
 
     const footer = document.querySelector('.footer');
-    let lift = 0;
+    let footerLift = 0;
     if(footer && typeof window.innerHeight === 'number'){
-      const fixedTop = window.innerHeight - navHeight - 8;
+      const bottomOffset = 8 + keyboardLift;
+      const navBottomWithoutFooterLift = window.innerHeight - bottomOffset;
       const footerTop = footer.getBoundingClientRect().top;
-      if(footerTop < fixedTop + 8){
-        lift = Math.ceil(fixedTop + 8 - footerTop);
+      if(footerTop < navBottomWithoutFooterLift + 8){
+        footerLift = Math.ceil(navBottomWithoutFooterLift + 8 - footerTop);
       }
     }
-    try{ nav.style.setProperty('--build-nav-lift', lift + 'px'); }catch(e){}
+    try{ nav.style.setProperty('--build-nav-lift', footerLift + 'px'); }catch(e){}
   }
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
@@ -716,7 +744,7 @@
     function drawBuildList(){
       const query = normalizeText(buildSearchQuery);
       const allItems = state.items.slice().sort(buildListSort);
-      const items = query ? allItems.filter(it => matchesBuildSearch(it, query)) : allItems;
+      const items = query ? allItems.filter(it => matchesBuildSearch(it, query)).sort(buildSearchSort(query)) : allItems;
       const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
       const activeLetters = new Set(items.map(alphaKeyForItem));
 
@@ -810,6 +838,12 @@
       window.removeEventListener('resize', updateBuildBottomControlLayout);
       window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
       window.addEventListener('resize', updateBuildBottomControlLayout);
+      if(window.visualViewport){
+        window.visualViewport.removeEventListener('resize', updateBuildBottomControlLayout);
+        window.visualViewport.removeEventListener('scroll', updateBuildBottomControlLayout);
+        window.visualViewport.addEventListener('resize', updateBuildBottomControlLayout);
+        window.visualViewport.addEventListener('scroll', updateBuildBottomControlLayout);
+      }
       setTimeout(updateBuildBottomControlLayout, 0);
     }catch(e){}
     document.getElementById('btnZeroAll').onclick = zeroAll;

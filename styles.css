@@ -33,7 +33,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .alpha-buttons button{background:#1f2937;color:#e5e7eb;padding:6px 8px;border-radius:8px;min-width:32px}
 .alpha-buttons button:disabled{opacity:.3;cursor:default}
 .build-search-row{display:flex;gap:6px;align-items:center;width:100%}
-.build-search-input{flex:1;min-width:0;width:100%}
+.build-search-input{flex:1;min-width:0;width:100%;font-size:16px;line-height:1.2}
 .alpha-nav .build-search-clear{background:#334155;padding:10px 12px;border-radius:10px;min-width:auto;white-space:nowrap}
 .build-flat-list{display:flex;flex-direction:column;gap:5px;padding-bottom:var(--build-nav-space,180px)}
 .build-flat-list .swipe-wrap{margin-top:0}
@@ -102,6 +102,6 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .swipe-content{position:relative;z-index:1;transition:transform .18s ease;touch-action:pan-y}
 .swipe-wrap.revealed .swipe-content{transform:translateX(-74px)}
 .swipe-trash{position:absolute;right:0;top:0;bottom:0;width:70px;border-radius:0 12px 12px 0;background:var(--danger);z-index:0;display:flex;align-items:center;justify-content:center;font-size:20px}
-/* v1.36.1: bottom control uses measured spacing and lifts above the footer when needed. */
-.build-search-nav{position:fixed;top:auto;left:50%;right:auto;bottom:calc(8px + env(safe-area-inset-bottom, 0px) + var(--build-nav-lift,0px));transform:translateX(-50%);width:calc(100% - 32px);max-width:896px;margin:0;z-index:20;box-shadow:0 -10px 24px rgba(0,0,0,.32)}
+/* v1.36.2: bottom control uses measured spacing, keyboard lift, and footer lift. */
+.build-search-nav{position:fixed;top:auto;left:50%;right:auto;bottom:calc(8px + env(safe-area-inset-bottom, 0px) + var(--build-keyboard-lift,0px) + var(--build-nav-lift,0px));transform:translateX(-50%);width:calc(100% - 32px);max-width:896px;margin:0;z-index:20;box-shadow:0 -10px 24px rgba(0,0,0,.32)}
 @media(max-width:480px){.build-search-nav{width:calc(100% - 20px);padding:7px}.build-search-row{gap:5px}.alpha-buttons{gap:3px}.alpha-buttons button{min-width:28px;padding:6px 7px}.alpha-nav .build-search-clear{padding:10px 10px}}
