@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.3] - 2026-05-06
+
+### Changed
+- Tightened Build List search so it only matches item names that start with the typed letters or have a word that starts with the typed letters, including punctuation-separated words like gluten-free or salt/pepper.
+- Removed category-name matches and weaker contained-letter matches from Build List search to reduce clutter.
+- Hid the footer instructions and version area on Shopping Mode, Manage Items, and Manage Categories so it only appears on Build List.
+
 ## [1.36.2] - 2026-05-06
 
 ### Fixed
