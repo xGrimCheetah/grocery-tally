@@ -291,8 +291,9 @@
   function buildSearchRank(it, query){
     if(!query) return 0;
     const name = normalizeText(it && it.name);
+    const nameParts = name.split(/[^a-z0-9]+/).filter(Boolean);
     if(name.startsWith(query)) return 0;
-    if(name.split(/\s+/).some(part => part.startsWith(query))) return 1;
+    if(nameParts.some(part => part.startsWith(query))) return 1;
     return -1;
   }
   function matchesBuildSearch(it, query){
