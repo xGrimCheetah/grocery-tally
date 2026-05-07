@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.36.2] - 2026-05-06
+
+### Fixed
+- Updated Build List search ranking so item names that start with the typed letters appear before weaker matches like contained letters or category matches.
+- Kept secondary search matches available after stronger starts-with matches.
+- Set the Build List search field to a 16px font size to prevent iPhone Safari from zooming in when the field is tapped.
+- Made the bottom search/A-Z control respond to the iPhone keyboard and lift above it when possible.
+- Improved footer detection so the bottom search/A-Z control lifts when the footer instructions and version area come into view.
+
 ## [1.36.1] - 2026-05-06
 
 ### Fixed
