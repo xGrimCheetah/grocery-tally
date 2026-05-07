@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.1] - 2026-05-06
+
+### Fixed
+- Updated Build List A-Z quick-jump scrolling so target rows land below the sticky estimated total instead of near the bottom control.
+- Updated Build List search filtering so filtered results scroll into view below the sticky estimated total.
+- Made the bottom search/A-Z control reserve space based on its actual height so lower rows stay reachable on narrow phones.
+- Made the bottom search/A-Z control lift upward when the footer instructions and version area come into view.
+
 ## [1.36.0] - 2026-05-06
 
 ### Changed
