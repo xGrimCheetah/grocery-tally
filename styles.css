@@ -37,6 +37,10 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .alpha-nav .build-search-clear{background:#334155;padding:10px 12px;border-radius:10px;min-width:auto;white-space:nowrap}
 .build-flat-list{display:flex;flex-direction:column;gap:5px;padding-bottom:var(--build-nav-space,180px)}
 .build-flat-list .swipe-wrap{margin-top:0}
+.build-flat-list .swipe-wrap{transition:opacity .18s ease,filter .18s ease}
+.build-flat-list.build-letter-focused .swipe-wrap.build-letter-dim{opacity:.32;filter:grayscale(1)}
+.build-flat-list.build-letter-focused .swipe-wrap.build-letter-match{opacity:1;filter:none}
+.alpha-buttons button.selected{background:var(--accent);color:#052e16}
 .build-flat-list .item{padding:6px 8px;min-height:44px}
 .build-flat-list .item .left{gap:8px}
 .build-flat-list .name{line-height:1.15}

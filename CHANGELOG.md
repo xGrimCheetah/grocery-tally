@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.36.4] - 2026-05-06
+
+### Added
+- Added Build List A-Z focus highlighting: tapping an A-Z quick-scroll letter keeps matching letter items normal while fading non-matching rows to grey.
+- Added automatic clearing of the A-Z focus when using Top, typing in search, clearing search, or pressing Escape in the search field.
+
 ## [1.36.3] - 2026-05-06
 
 ### Changed

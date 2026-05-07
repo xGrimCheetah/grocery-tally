@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.36.3"; // Tighten Build List search and show footer only on Build List
+  let APP_VERSION = "1.36.4"; // Add Build List A-Z focus highlighting
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -21,6 +21,7 @@
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let buildSearchQuery = '';
+  let buildFocusLetter = '';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -309,6 +310,7 @@
     };
   }
   function scrollToBuildTop(){
+    clearBuildLetterFocus();
     try{
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }catch(e){
@@ -334,6 +336,31 @@
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
+  function applyBuildLetterFocus(){
+    const list = document.getElementById('buildList');
+    const nav = document.getElementById('buildAlphaButtons');
+    if(list){
+      list.classList.toggle('build-letter-focused', !!buildFocusLetter);
+      list.querySelectorAll('.swipe-wrap').forEach(wrap=>{
+        const matches = !!buildFocusLetter && wrap.dataset.letter === buildFocusLetter;
+        wrap.classList.toggle('build-letter-match', matches);
+        wrap.classList.toggle('build-letter-dim', !!buildFocusLetter && !matches);
+      });
+    }
+    if(nav){
+      nav.querySelectorAll('button').forEach(btn=>{
+        btn.classList.toggle('selected', !!buildFocusLetter && btn.dataset.buildLetter === buildFocusLetter);
+      });
+    }
+  }
+  function clearBuildLetterFocus(){
+    buildFocusLetter = '';
+    applyBuildLetterFocus();
+  }
+  function setBuildLetterFocus(letter){
+    buildFocusLetter = letter || '';
+    applyBuildLetterFocus();
+  }
   function scrollToBuildResultsStart(){
     const list = document.getElementById('buildList');
     if(!list) return;
@@ -344,6 +371,7 @@
     const idPart = letter === '#' ? 'num' : letter;
     const target = document.getElementById('build-letter-' + idPart);
     if(!target) return;
+    setBuildLetterFocus(letter);
     scrollElementBelowBuildEstimate(target, 'smooth');
   }
   function getKeyboardLift(){
@@ -747,6 +775,7 @@
       const items = query ? allItems.filter(it => matchesBuildSearch(it, query)).sort(buildSearchSort(query)) : allItems;
       const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
       const activeLetters = new Set(items.map(alphaKeyForItem));
+      if(buildFocusLetter && !activeLetters.has(buildFocusLetter)) buildFocusLetter = '';
 
       alphaButtons.innerHTML = '';
       const topBtn = document.createElement('button');
@@ -760,6 +789,8 @@
         const btn=document.createElement('button');
         btn.type='button';
         btn.textContent=letter;
+        btn.dataset.buildLetter = letter;
+        if(buildFocusLetter === letter) btn.classList.add('selected');
         btn.disabled = !activeLetters.has(letter);
         btn.onclick = ()=> scrollToBuildLetter(letter);
         alphaButtons.appendChild(btn);
@@ -768,10 +799,12 @@
       buildList.innerHTML = '';
       if(!allItems.length){
         buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
+        applyBuildLetterFocus();
         return;
       }
       if(!items.length){
         buildList.innerHTML = '<p class="muted">No matching items. Clear the search to show the full Build List.</p>';
+        applyBuildLetterFocus();
         return;
       }
 
@@ -782,6 +815,7 @@
         if(isFirstForLetter) currentLetter = letter;
 
         const shell = createSwipeShell(it.id);
+        shell.wrap.dataset.letter = letter;
         if(isFirstForLetter){
           shell.wrap.id = 'build-letter-' + (letter === '#' ? 'num' : letter);
         }
@@ -804,10 +838,12 @@
         row.appendChild(left); row.appendChild(right);
         buildList.appendChild(shell.wrap);
       });
+      applyBuildLetterFocus();
     }
 
     searchInput.addEventListener('input', ()=>{
       buildSearchQuery = searchInput.value;
+      buildFocusLetter = '';
       drawBuildList();
       updateBuildBottomControlLayout();
       scrollToBuildResultsStart();
@@ -816,6 +852,7 @@
       if(e.key === 'Escape'){
         e.preventDefault();
         buildSearchQuery = '';
+        buildFocusLetter = '';
         searchInput.value = '';
         drawBuildList();
         updateBuildBottomControlLayout();
@@ -824,6 +861,7 @@
     });
     clearBtn.onclick = ()=>{
       buildSearchQuery = '';
+      buildFocusLetter = '';
       searchInput.value = '';
       drawBuildList();
       updateBuildBottomControlLayout();
