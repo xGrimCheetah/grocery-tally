@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.36.4"; // Add Build List A-Z focus highlighting
+  let APP_VERSION = "1.37.0"; // Add commit run history
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -13,7 +13,7 @@
   const SELECTED_CAT_KEY = 'manage_selected_cat';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
-  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
+  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
   normalizeStateShape();
 
   let closedCats = getClosedCats();
@@ -28,7 +28,7 @@
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null } }
 
   function normalizeStateShape(){
-    if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [] };
+    if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
     if(!Array.isArray(state.items)) state.items = [];
     if(!state.title) state.title = "Grocery Tally";
     state.categories = state.categories.map(c => cleanText(c)).filter(Boolean);
@@ -43,6 +43,35 @@
       it.avgPrice = Math.max(0, Number(it.avgPrice) || 0);
       if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
     });
+    if(!Array.isArray(state.runHistory)) state.runHistory = [];
+    state.runHistory = state.runHistory.map((run, idx)=>{
+      const rawItems = Array.isArray(run && run.items) ? run.items : [];
+      const items = rawItems.map(rit=>{
+        const qty = Math.max(0, Number(rit && rit.qty) || 0);
+        const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
+        const estimatedPrice = Math.round((Number(rit && rit.estimatedPrice) || (qty * avgPrice)) * 100) / 100;
+        return {
+          itemId: cleanText((rit && (rit.itemId || rit.id)) || ''),
+          name: cleanText((rit && rit.name) || 'Untitled item'),
+          cat: cleanText((rit && rit.cat) || ''),
+          qty,
+          avgPrice,
+          estimatedPrice
+        };
+      }).filter(rit => rit.name && rit.qty > 0);
+      const totalQty = Math.max(0, Number(run && run.totalQty) || items.reduce((sum, rit)=> sum + (Number(rit.qty) || 0), 0));
+      const estimatedTotal = Math.round((Number(run && run.estimatedTotal) || items.reduce((sum, rit)=> sum + (Number(rit.estimatedPrice) || 0), 0)) * 100) / 100;
+      const missingPriceCount = Math.max(0, Number(run && run.missingPriceCount) || items.filter(rit => Number(rit.qty) > 0 && !(Number(rit.avgPrice) > 0)).length);
+      return {
+        id: cleanText((run && run.id) || '') || ('run_' + idx + '_' + id()),
+        committedAt: cleanText((run && (run.committedAt || run.date)) || '') || new Date().toISOString(),
+        itemCount: Math.max(0, Number(run && run.itemCount) || items.length),
+        totalQty,
+        estimatedTotal,
+        missingPriceCount,
+        items
+      };
+    }).filter(run => run.items.length || run.totalQty > 0);
   }
 
   function allCurrentCatsClosedSet(){
@@ -271,6 +300,98 @@
 
     container.appendChild(pill);
   }
+  function formatRunDate(iso){
+    try{
+      const d = new Date(iso);
+      if(Number.isNaN(d.getTime())) return String(iso || 'Unknown date');
+      return d.toLocaleString([], { month:'short', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+    }catch(e){
+      return String(iso || 'Unknown date');
+    }
+  }
+  function createRunHistoryEntry(checked){
+    const sorted = checked.slice().sort(sortItems);
+    const items = sorted.map(it=>{
+      const qty = Math.max(0, Number(it.qty) || 0);
+      const avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+      const estimatedPrice = avgPrice > 0 ? Math.round(qty * avgPrice * 100) / 100 : 0;
+      return {
+        itemId: it.id || '',
+        name: cleanText(it.name || 'Untitled item'),
+        cat: cleanText(it.cat || ''),
+        qty,
+        avgPrice,
+        estimatedPrice
+      };
+    }).filter(rit => rit.qty > 0);
+    const totalQty = items.reduce((sum, rit)=> sum + (Number(rit.qty) || 0), 0);
+    const estimatedTotal = Math.round(items.reduce((sum, rit)=> sum + (Number(rit.estimatedPrice) || 0), 0) * 100) / 100;
+    const missingPriceCount = items.filter(rit => Number(rit.qty) > 0 && !(Number(rit.avgPrice) > 0)).length;
+    return {
+      id: 'run_' + Date.now().toString(36) + '_' + id(),
+      committedAt: new Date().toISOString(),
+      itemCount: items.length,
+      totalQty,
+      estimatedTotal,
+      missingPriceCount,
+      items
+    };
+  }
+  function renderRunHistory(container){
+    if(!container) return;
+    const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    const count = document.getElementById('runHistoryCount');
+    if(count) count.textContent = String(runs.length);
+    container.innerHTML = '';
+    if(!runs.length){
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = 'No committed runs yet. Your next Commit run will be saved here.';
+      container.appendChild(empty);
+      return;
+    }
+    runs.slice(0, 10).forEach((run, index)=>{
+      const card = document.createElement('div');
+      card.className = 'item';
+      card.style.alignItems = 'flex-start';
+      card.style.flexDirection = 'column';
+      card.style.gap = '6px';
+
+      const title = document.createElement('div');
+      title.className = 'name';
+      title.textContent = `${index + 1}. ${formatRunDate(run.committedAt)}`;
+
+      const plus = Number(run.missingPriceCount) > 0 ? '+' : '';
+      const meta = document.createElement('div');
+      meta.className = 'muted';
+      meta.textContent = `${run.itemCount || 0} item${run.itemCount === 1 ? '' : 's'} · Total qty ${run.totalQty || 0} · Est. ${formatMoney(run.estimatedTotal || 0)}${plus}`;
+
+      const missing = document.createElement('div');
+      missing.className = 'muted';
+      missing.style.fontSize = '13px';
+      missing.textContent = Number(run.missingPriceCount) > 0 ? `${run.missingPriceCount} item${run.missingPriceCount === 1 ? '' : 's'} missing Avg $ at commit time.` : 'All committed items had Avg $ values.';
+
+      const itemText = document.createElement('div');
+      itemText.className = 'muted';
+      itemText.style.fontSize = '13px';
+      const runItems = Array.isArray(run.items) ? run.items : [];
+      const preview = runItems.slice(0, 8).map(rit => `${rit.qty} ${rit.name}`).join(', ');
+      const more = runItems.length > 8 ? `, +${runItems.length - 8} more` : '';
+      itemText.textContent = preview ? preview + more : 'No item detail saved for this run.';
+
+      card.appendChild(title);
+      card.appendChild(meta);
+      card.appendChild(missing);
+      card.appendChild(itemText);
+      container.appendChild(card);
+    });
+    if(runs.length > 10){
+      const note = document.createElement('p');
+      note.className = 'muted';
+      note.textContent = `Showing the latest 10 of ${runs.length} committed runs.`;
+      container.appendChild(note);
+    }
+  }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
     return /^[A-Z]$/.test(first) ? first : '#';
@@ -441,11 +562,16 @@
       alert('No checked shopping items with quantities to commit.');
       return;
     }
-    const totalQty = checked.reduce((sum, i)=> sum + (Number(i.qty) || 0), 0);
+    const runEntry = createRunHistoryEntry(checked);
+    const totalQty = runEntry.totalQty;
     const itemWord = checked.length === 1 ? 'item' : 'items';
-    if(!confirm(`Commit this grocery run?\n\nThis will reset Previous Run to 0 for all items, save ${checked.length} checked ${itemWord} as this run's purchased quantities, clear those checked quantities to 0, and leave unchecked current quantities unchanged.`)){
+    const estimatePlus = runEntry.missingPriceCount > 0 ? '+' : '';
+    if(!confirm(`Commit this grocery run?\n\nThis will save this run to Run history, reset Previous Run to 0 for all items, save ${checked.length} checked ${itemWord} as this run's purchased quantities, clear those checked quantities to 0, and leave unchecked current quantities unchanged.\n\nEstimated committed total: ${formatMoney(runEntry.estimatedTotal)}${estimatePlus}`)){
       return;
     }
+
+    if(!Array.isArray(state.runHistory)) state.runHistory = [];
+    state.runHistory.unshift(runEntry);
 
     state.items.forEach(i=>{
       i.prevQty = 0;
@@ -460,7 +586,8 @@
     try{
       renderBuild();
       renderShop();
-      alert(`Run committed.\nSaved checked items: ${checked.length}\nSaved total quantity: ${totalQty}\nItems not purchased this run now show Previous Run as 0.`);
+      renderManage();
+      alert(`Run committed and saved to history.\nSaved checked items: ${checked.length}\nSaved total quantity: ${totalQty}\nEstimated committed total: ${formatMoney(runEntry.estimatedTotal)}${estimatePlus}\nItems not purchased this run now show Previous Run as 0.`);
     }catch(e){
       console.error(e);
     }
@@ -1011,6 +1138,11 @@
         <button class="btn" id="btnImport">Import JSON</button>
         <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
       </div>
+      <details class="bulk-tools" id="runHistoryPanel">
+        <summary>Run history <span class="pill" id="runHistoryCount">0</span></summary>
+        <div class="spacer"></div>
+        <div id="runHistoryList" class="list"></div>
+      </details>
       <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
         <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category above.</p>
@@ -1035,6 +1167,7 @@
       sel.value = manageSelectedCat;
     }
     sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat) };
+    renderRunHistory(document.getElementById('runHistoryList'));
 
     document.getElementById('btnAddItem').onclick = ()=>{
       const name=document.getElementById('newItemName').value.trim();
@@ -1071,7 +1204,7 @@
     }
 
     document.getElementById('btnExport').onclick = ()=>{
-      const dataOut = { appVersion: APP_VERSION, title: state.title, categories: state.categories, items: state.items };
+      const dataOut = { appVersion: APP_VERSION, title: state.title, categories: state.categories, items: state.items, runHistory: state.runHistory || [] };
       const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -1094,7 +1227,7 @@
             return;
           }
         }
-        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items };
+        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] };
         normalizeStateShape();
         ensurePositions();
         save();
@@ -1167,7 +1300,7 @@
 
     document.getElementById('btnWipe').onclick = ()=>{
       if(confirm('This clears all items/categories on this device.\nContinue?')){
-        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [] };
+        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
         save();
         renderAll();
       }
