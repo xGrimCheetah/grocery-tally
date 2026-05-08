@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.37.0"; // Add commit run history
+  let APP_VERSION = "1.37.1"; // Warn before wiping run history
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1299,7 +1299,7 @@
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
-      if(confirm('This clears all items/categories on this device.\nContinue?')){
+      if(confirm('This clears all items, categories, and committed run history on this device.\n\nThis cannot be undone.\nContinue?')){
         state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
         save();
         renderAll();
