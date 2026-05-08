@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.37.0] - 2026-05-08
+
+### Added
+- Added Commit run history so each committed grocery run is saved with date/time, item count, total quantity, estimated committed total, missing-price count, and purchased item details.
+- Added a Run history section in Manage Items showing the latest committed runs.
+- Added run history to JSON exports and imports so committed run records can move with backups.
+
+### Changed
+- Commit run still updates Previous Run, clears checked purchased quantities, and leaves unchecked current quantities unchanged.
+
 ## [1.36.4] - 2026-05-06
 
 ### Added
