@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.37.1] - 2026-05-08
+
+### Fixed
+- Updated the Wipe all data confirmation to warn that committed run history will also be deleted.
+
 ## [1.37.0] - 2026-05-08
 
 ### Added
