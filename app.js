@@ -1020,7 +1020,13 @@
       scrollToBuildResultsStart();
       searchInput.focus();
     };
-    showAlphaBtn.onclick = ()=> setBuildControlMode('alpha');
+    showAlphaBtn.onclick = ()=>{
+      buildSearchQuery = '';
+      buildFocusLetter = '';
+      searchInput.value = '';
+      drawBuildList();
+      setBuildControlMode('alpha');
+    };
 
     drawBuildList();
     setBuildControlMode(buildControlMode);
