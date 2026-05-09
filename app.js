@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.37.2"; // Fix Manage Items mobile edit overlap
+  let APP_VERSION = "1.38.0"; // A-Z/Search bottom control toggle
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -22,6 +22,7 @@
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let buildSearchQuery = '';
   let buildFocusLetter = '';
+  let buildControlMode = 'alpha';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -879,19 +880,25 @@
       </div>
       <div id="buildEstimate" class="estimate-sticky"></div>
       <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
-        <div class="build-search-row">
+        <div id="buildAlphaView" class="build-alpha-view">
+          <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
+        </div>
+        <div id="buildSearchView" class="build-search-row" hidden>
           <input id="buildSearchInput" class="build-search-input" type="search" placeholder="Search Build List" autocomplete="off" aria-label="Search Build List">
           <button class="btn build-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
+          <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
         </div>
-        <div id="buildAlphaButtons" class="alpha-buttons" aria-label="Alphabet quick jump"></div>
       </div>
       <div id="buildList" class="build-flat-list"></div>`;
 
     const buildEstimate = document.getElementById('buildEstimate');
     const buildList = document.getElementById('buildList');
     const alphaButtons = document.getElementById('buildAlphaButtons');
+    const alphaView = document.getElementById('buildAlphaView');
+    const searchView = document.getElementById('buildSearchView');
     const searchInput = document.getElementById('buildSearchInput');
     const clearBtn = document.getElementById('btnBuildSearchClear');
+    const showAlphaBtn = document.getElementById('btnBuildShowAlpha');
 
     renderEstimatePill(buildEstimate);
     searchInput.value = buildSearchQuery;
@@ -922,6 +929,13 @@
         btn.onclick = ()=> scrollToBuildLetter(letter);
         alphaButtons.appendChild(btn);
       });
+
+      const searchToggleBtn = document.createElement('button');
+      searchToggleBtn.type = 'button';
+      searchToggleBtn.className = 'btn build-search-toggle';
+      searchToggleBtn.textContent = 'Search';
+      searchToggleBtn.onclick = ()=> setBuildControlMode('search', true);
+      alphaButtons.appendChild(searchToggleBtn);
 
       buildList.innerHTML = '';
       if(!allItems.length){
@@ -968,6 +982,17 @@
       applyBuildLetterFocus();
     }
 
+
+    function setBuildControlMode(mode, focusSearch){
+      buildControlMode = mode === 'search' ? 'search' : 'alpha';
+      alphaView.hidden = buildControlMode !== 'alpha';
+      searchView.hidden = buildControlMode !== 'search';
+      updateBuildBottomControlLayout();
+      if(focusSearch && buildControlMode === 'search'){
+        try{ searchInput.focus(); }catch(e){}
+      }
+    }
+
     searchInput.addEventListener('input', ()=>{
       buildSearchQuery = searchInput.value;
       buildFocusLetter = '';
@@ -995,8 +1020,16 @@
       scrollToBuildResultsStart();
       searchInput.focus();
     };
+    showAlphaBtn.onclick = ()=>{
+      buildSearchQuery = '';
+      buildFocusLetter = '';
+      searchInput.value = '';
+      drawBuildList();
+      setBuildControlMode('alpha');
+    };
 
     drawBuildList();
+    setBuildControlMode(buildControlMode);
     updateBuildBottomControlLayout();
     try{
       window.removeEventListener('scroll', updateBuildBottomControlLayout);
