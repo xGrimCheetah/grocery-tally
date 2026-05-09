@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.37.1"; // Warn before wiping run history
+  let APP_VERSION = "1.37.2"; // Fix Manage Items mobile edit overlap
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1337,12 +1337,13 @@
       items.forEach((it,idx)=>{
         const shell = createSwipeShell(it.id);
         const row=shell.content;
+        row.classList.add('manage-item-row');
         row.dataset.index=idx;
         const left=document.createElement('div'); left.className='left';
         const right=document.createElement('div'); right.className='right';
         const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        const input=document.createElement('input'); input.value=it.name; input.style.display='none';
+        const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.style.display='none';
 
         const priceWrap=document.createElement('div'); priceWrap.className='price-wrap';
         const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
@@ -1391,16 +1392,20 @@
         attachItemDrag(handle, it.id, shell.wrap);
 
         function enterEdit(){
+          row.classList.add('editing');
           name.style.display='none';
           input.style.display='block';
+          priceWrap.style.display='none';
           edit.style.display='none';
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
           input.focus(); input.select();
         }
         function exitEdit(){
+          row.classList.remove('editing');
           name.style.display='block';
           input.style.display='none';
+          priceWrap.style.display='flex';
           edit.style.display='inline-block';
           saveBtn.style.display='none';
           cancelBtn.style.display='none';

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.37.2] - 2026-05-09
+
+### Fixed
+- Fixed Manage Items mobile item-name editing so Avg $ controls no longer overlap the item-name edit field.
+
 ## [1.37.1] - 2026-05-08
 
 ### Fixed
