@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.1
+- Balanced the Build List mobile A-Z quick-scroll layout into stretched rows.
+- Made Top and Search span wider grid spaces so the mobile sticky control no longer leaves Search alone on an empty row.
+- Preserved the v1.38.0 A-Z/Search toggle behavior and search matching rules.
+
 ## v1.38.0
 - Redesigned the Build List bottom control so A-Z quick-scroll and Search toggle between each other.
 - Made A-Z quick-scroll buttons larger and easier to tap.
