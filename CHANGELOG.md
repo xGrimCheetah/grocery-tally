@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.0
+- Redesigned the Build List bottom control so A-Z quick-scroll and Search toggle between each other.
+- Made A-Z quick-scroll buttons larger and easier to tap.
+- Kept the Build List search behavior unchanged while saving space in the sticky bottom control.
+
 ## [1.37.2] - 2026-05-09
 
 ### Fixed
