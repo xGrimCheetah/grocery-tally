@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.3
+- Improved Manage Items mobile editing so the row being edited scrolls into view above the OS keyboard.
+- Kept item edit controls visible when editing items near the bottom of the screen.
+- Preserved existing Build List, Shopping Mode, search, quantity, and run history behavior.
+
 ## v1.38.2
 - Improved long grocery item-name readability on small screens.
 - Adjusted item row wrapping and spacing so long names do not crowd nearby controls.

@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.38.2"; // Long item-name readability polish
+  let APP_VERSION = "1.38.3"; // Manage Items mobile edit row visibility
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -116,6 +116,58 @@
     }catch(e){
       setTimeout(runScroll, 0);
     }
+  }
+
+  function scrollManageEditRowIntoView(target){
+    if(!target) return;
+
+    const runScroll = ()=>{
+      try{
+        const rect = target.getBoundingClientRect();
+        const doc = document.documentElement;
+        const viewport = window.visualViewport;
+        const viewportOffsetTop = viewport && Number.isFinite(viewport.offsetTop) ? viewport.offsetTop : 0;
+        const viewportHeight = viewport && Number.isFinite(viewport.height) ? viewport.height : (window.innerHeight || doc.clientHeight || 0);
+        if(!viewportHeight) return;
+
+        const currentScroll = window.pageYOffset || doc.scrollTop || document.body.scrollTop || 0;
+        const topPadding = 24;
+        const bottomPadding = Math.min(140, Math.max(72, viewportHeight * 0.18));
+        const visibleTop = viewportOffsetTop + topPadding;
+        const visibleBottom = viewportOffsetTop + viewportHeight - bottomPadding;
+        let nextScroll = null;
+
+        if(rect.bottom > visibleBottom){
+          nextScroll = currentScroll + rect.bottom - viewportOffsetTop - viewportHeight + bottomPadding;
+        }else if(rect.top < visibleTop){
+          nextScroll = currentScroll + rect.top - viewportOffsetTop - topPadding;
+        }
+
+        if(nextScroll === null) return;
+
+        const maxScroll = Math.max(0, doc.scrollHeight - viewportHeight);
+        const scrollTop = Math.max(0, Math.min(nextScroll, maxScroll));
+        window.scrollTo({ top: scrollTop, behavior: 'smooth' });
+      }catch(e){
+        try{
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }catch(err){
+          target.scrollIntoView(false);
+        }
+      }
+    };
+
+    const scheduleScroll = (delay)=>{
+      try{
+        requestAnimationFrame(()=> setTimeout(runScroll, delay));
+      }catch(e){
+        setTimeout(runScroll, delay);
+      }
+    };
+
+    scheduleScroll(0);
+    scheduleScroll(180);
+    scheduleScroll(360);
   }
 
   // ===== Helpers =====
@@ -1433,6 +1485,7 @@
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
           input.focus(); input.select();
+          scrollManageEditRowIntoView(row);
         }
         function exitEdit(){
           row.classList.remove('editing');
