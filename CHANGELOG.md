@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.2
+- Improved long grocery item-name readability on small screens.
+- Adjusted item row wrapping and spacing so long names do not crowd nearby controls.
+- Preserved existing quantity, search, Shopping Mode, Manage Items, and run history behavior.
+
 ## v1.38.1
 - Balanced the Build List mobile A-Z quick-scroll layout into stretched rows.
 - Made Top and Search span wider grid spaces so the mobile sticky control no longer leaves Search alone on an empty row.
