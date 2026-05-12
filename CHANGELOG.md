@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.5
+- Hid the Shopping Mode tab on management screens where it is not part of the intended workflow.
+- Preserved the Build List Finished button as the way to enter Shopping Mode.
+- Kept Shopping Mode, Build List, Manage Items, Manage Categories, and saved data behavior unchanged.
+
 ## v1.38.4
 - Added extra mobile clearance when editing Manage Items rows so inputs stay visible above the iOS keyboard accessory/AutoFill bar.
 - Increased mobile edit input text sizing to help prevent iOS focus zoom.

@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.38.4"; // Manage Items mobile edit keyboard clearance
+  let APP_VERSION = "1.38.5"; // Hide Shopping Mode tab on management screens
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -928,7 +928,7 @@
       tabShop.style.display='inline-block';
     } else {
       tabBuild.style.display='inline-block';
-      tabShop.style.display='inline-block';
+      tabShop.style.display='none';
     }
   }
   tabBuild.onclick=()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
