@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.38.3"; // Manage Items mobile edit row visibility
+  let APP_VERSION = "1.38.4"; // Manage Items mobile edit keyboard clearance
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -123,7 +123,13 @@
 
     const runScroll = ()=>{
       try{
-        const rect = target.getBoundingClientRect();
+        const rowRect = target.getBoundingClientRect();
+        const input = target.querySelector ? target.querySelector('.manage-name-input') : null;
+        const inputRect = input ? input.getBoundingClientRect() : rowRect;
+        const rect = {
+          top: Math.min(rowRect.top, inputRect.top),
+          bottom: Math.max(rowRect.bottom, inputRect.bottom)
+        };
         const doc = document.documentElement;
         const viewport = window.visualViewport;
         const viewportOffsetTop = viewport && Number.isFinite(viewport.offsetTop) ? viewport.offsetTop : 0;
@@ -132,7 +138,14 @@
 
         const currentScroll = window.pageYOffset || doc.scrollTop || document.body.scrollTop || 0;
         const topPadding = 24;
-        const bottomPadding = Math.min(140, Math.max(72, viewportHeight * 0.18));
+        const isMobileViewport = window.matchMedia ? window.matchMedia('(max-width: 680px)').matches : viewportHeight < 700;
+        const desktopBottomPadding = Math.min(140, Math.max(72, viewportHeight * 0.18));
+        const mobileBottomPadding = Math.min(
+          260,
+          Math.max(180, viewportHeight * 0.38),
+          Math.max(120, viewportHeight - topPadding - 80)
+        );
+        const bottomPadding = isMobileViewport ? mobileBottomPadding : desktopBottomPadding;
         const visibleTop = viewportOffsetTop + topPadding;
         const visibleBottom = viewportOffsetTop + viewportHeight - bottomPadding;
         let nextScroll = null;
@@ -166,8 +179,9 @@
     };
 
     scheduleScroll(0);
-    scheduleScroll(180);
-    scheduleScroll(360);
+    scheduleScroll(200);
+    scheduleScroll(450);
+    scheduleScroll(750);
   }
 
   // ===== Helpers =====

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.38.4
+- Added extra mobile clearance when editing Manage Items rows so inputs stay visible above the iOS keyboard accessory/AutoFill bar.
+- Increased mobile edit input text sizing to help prevent iOS focus zoom.
+- Preserved existing Build List, Shopping Mode, search, quantity, and run history behavior.
+
 ## v1.38.3
 - Improved Manage Items mobile editing so the row being edited scrolls into view above the OS keyboard.
 - Kept item edit controls visible when editing items near the bottom of the screen.
