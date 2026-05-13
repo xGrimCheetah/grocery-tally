@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.40.0
+- Added date-range quantity summaries to the Insights tab.
+- Shows total quantity, purchase count, and most recent purchase date for each item within the selected range.
+- Kept Build List, Shopping Mode, and Manage Items behavior unchanged.
+
 ## v1.39.0
 - Added an Insights tab for grocery purchase-frequency information based on committed run history.
 - Shows purchase count, most recent purchase date, and available average price information outside of Manage Items.
