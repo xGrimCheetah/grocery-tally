@@ -99,6 +99,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .manage-item-row.editing .left{flex:1 1 auto}
 .manage-item-row.editing .right{flex:0 0 auto}
 .manage-item-row.editing .manage-name-input{width:100%;min-width:0}
+@media(pointer:fine){.manage-item-row:not(.editing){cursor:grab}.manage-item-row:not(.editing) button,.manage-item-row:not(.editing) input,.manage-item-row:not(.editing) select,.manage-item-row:not(.editing) textarea{cursor:auto}}
 .estimate-sticky{position:sticky;top:0;z-index:6;display:flex;justify-content:flex-end;margin:8px 0 10px;pointer-events:none}
 .estimate-pill{pointer-events:auto;background:#0b1220;border:1px solid #243042;border-radius:999px;padding:8px 12px;min-width:176px;text-align:right;box-shadow:0 8px 18px rgba(0,0,0,.18)}
 .estimate-total{font-weight:800;font-variant-numeric:tabular-nums}
