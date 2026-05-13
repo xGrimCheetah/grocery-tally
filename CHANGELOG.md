@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.41.0 — Insights estimated spending summaries
+
+- Added estimated spending summaries to Insights using committed run-history quantities and Avg $ values.
+- Used saved run-item Avg $ values when available, with fallback to the current item Avg $.
+- Added subtle missing-price handling for estimates that cannot fully account for every purchased quantity.
+- Kept the update read-only and limited to Insights.
+
 ## v1.40.1
 - Polished Manage Items drag sorting to better match Manage Categories.
 - Removed the blue dashed drag-over styling from Manage Items.

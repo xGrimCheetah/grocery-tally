@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.40.1"; // Manage Items drag polish
+  let APP_VERSION = "1.41.0"; // Insights estimated spending summaries
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -502,29 +502,58 @@
     const runCat = cleanText(runItem.cat || '');
     return !runCat || runCat === item.cat;
   }
+  function usableAvgPrice(value){
+    const price = Number(value);
+    return Number.isFinite(price) && price > 0 ? price : 0;
+  }
   function purchaseInsightsForItem(item, rangeKey){
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    const currentAvgPrice = usableAvgPrice(item && item.avgPrice);
     let purchaseCount = 0;
     let totalQty = 0;
+    let estimatedSpend = 0;
+    let hasMissingPriceData = false;
     let lastRun = null;
     let lastTime = -1;
     runs.forEach((run, idx)=>{
       if(!runInInsightsDateRange(run, rangeKey)) return;
       const runItems = Array.isArray(run && run.items) ? run.items : [];
-      const purchasedQty = runItems.reduce((sum, rit)=>{
-        if(!itemMatchesRunItem(item, rit)) return sum;
-        return sum + Math.max(0, Number(rit.qty) || 0);
-      }, 0);
-      if(purchasedQty <= 0) return;
+      let runPurchasedQty = 0;
+      runItems.forEach(rit=>{
+        if(!itemMatchesRunItem(item, rit)) return;
+        const qty = Math.max(0, Number(rit.qty) || 0);
+        if(qty <= 0) return;
+        const runAvgPrice = usableAvgPrice(rit && rit.avgPrice);
+        const price = runAvgPrice || currentAvgPrice;
+        totalQty += qty;
+        runPurchasedQty += qty;
+        if(price > 0){
+          estimatedSpend += qty * price;
+        } else {
+          hasMissingPriceData = true;
+        }
+      });
+      if(runPurchasedQty <= 0) return;
       purchaseCount++;
-      totalQty += purchasedQty;
       const time = insightsRunTime(run) || (runs.length - idx);
       if(time > lastTime){
         lastTime = time;
         lastRun = run;
       }
     });
-    return { totalQty, purchaseCount, lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : '' };
+    return {
+      totalQty,
+      purchaseCount,
+      estimatedSpend: Math.round(estimatedSpend * 100) / 100,
+      hasMissingPriceData,
+      lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : ''
+    };
+  }
+  function insightsSpendText(insight){
+    if(!insight || Number(insight.purchaseCount) <= 0) return `Est. ${formatMoney(0)}`;
+    const spend = Number(insight.estimatedSpend) || 0;
+    if(insight.hasMissingPriceData && spend <= 0) return 'Missing price data';
+    return `Est. ${formatMoney(spend)}${insight.hasMissingPriceData ? '+' : ''}`;
   }
   function renderInsights(){
     if(!viewInsights) return;
@@ -533,7 +562,7 @@
       <div class="insights-header">
         <div>
           <h2>Insights</h2>
-          <p class="muted">Quantity summaries are calculated from committed run history.</p>
+          <p class="muted">Quantity and estimated spending summaries are calculated from committed run history.</p>
         </div>
         <div class="insights-controls">
           <label for="insightsRange">Date range</label>
@@ -598,18 +627,15 @@
       count.textContent = `${insight.purchaseCount} purchase${insight.purchaseCount === 1 ? '' : 's'}`;
       right.appendChild(count);
 
+      const spend = document.createElement('span');
+      spend.className = insight.hasMissingPriceData ? 'insight-detail muted' : 'insight-detail';
+      spend.textContent = insightsSpendText(insight);
+      right.appendChild(spend);
+
       const last = document.createElement('span');
       last.className = insight.lastPurchased ? 'insight-detail' : 'insight-detail muted';
       last.textContent = insight.lastPurchased ? `Last: ${insight.lastPurchased}` : 'No purchases in range';
       right.appendChild(last);
-
-      const avgPrice = Number(item.avgPrice) || 0;
-      if(avgPrice > 0){
-        const avg = document.createElement('span');
-        avg.className = 'insight-detail';
-        avg.textContent = `Avg ${formatMoney(avgPrice)}`;
-        right.appendChild(avg);
-      }
 
       row.appendChild(left);
       row.appendChild(right);
