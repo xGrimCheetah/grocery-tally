@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.38.5"; // Hide Shopping Mode tab on management screens
+  let APP_VERSION = "1.39.0"; // Insights tab and cleaner Manage Items layout
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -459,6 +459,125 @@
       container.appendChild(note);
     }
   }
+  function itemHistoryKey(itemId, cat, name){
+    const cleanId = cleanText(itemId || '');
+    if(cleanId) return 'id:' + cleanId;
+    return 'name:' + normalizeText(cat || '') + '|' + normalizeText(name || '');
+  }
+  function runTimeValue(run){
+    const d = new Date(run && run.committedAt);
+    const time = d.getTime();
+    return Number.isFinite(time) ? time : 0;
+  }
+  function buildInsightStats(){
+    const stats = new Map();
+    state.items.forEach(it=>{
+      const stat = { count: 0, lastPurchasedAt: '' };
+      stats.set(itemHistoryKey(it.id, it.cat, it.name), stat);
+      stats.set(itemHistoryKey('', it.cat, it.name), stat);
+    });
+    const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    runs.forEach(run=>{
+      const seenInRun = new Set();
+      const runItems = Array.isArray(run && run.items) ? run.items : [];
+      runItems.forEach(rit=>{
+        const qty = Math.max(0, Number(rit && rit.qty) || 0);
+        if(qty <= 0) return;
+        const key = itemHistoryKey(rit && (rit.itemId || rit.id), rit && rit.cat, rit && rit.name);
+        const stat = stats.get(key);
+        if(!stat || seenInRun.has(stat)) return;
+        seenInRun.add(stat);
+      });
+      seenInRun.forEach(stat=>{
+        stat.count += 1;
+        const parsedCurrent = stat.lastPurchasedAt ? new Date(stat.lastPurchasedAt).getTime() : 0;
+        const currentTime = Number.isFinite(parsedCurrent) ? parsedCurrent : 0;
+        const candidateTime = runTimeValue(run);
+        if(!stat.lastPurchasedAt || candidateTime >= currentTime){
+          stat.lastPurchasedAt = cleanText(run && run.committedAt) || '';
+        }
+      });
+    });
+    return stats;
+  }
+  function renderInsights(){
+    const container = viewInsights;
+    if(!container) return;
+    const stats = buildInsightStats();
+    container.innerHTML = '';
+
+    const intro = document.createElement('div');
+    intro.className = 'insights-header';
+    const title = document.createElement('div');
+    title.className = 'name';
+    title.textContent = 'Purchase insights';
+    const help = document.createElement('div');
+    help.className = 'muted';
+    help.textContent = 'Based on committed run history. Each committed run counts once per item when quantity was greater than 0.';
+    intro.appendChild(title);
+    intro.appendChild(help);
+    container.appendChild(intro);
+
+    if(!state.items.length){
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = 'No items yet. Add items from Manage Items.';
+      container.appendChild(empty);
+      return;
+    }
+
+    const list = document.createElement('div');
+    list.className = 'list insights-list';
+    state.categories.forEach(cat=>{
+      const items = state.items.filter(i=>i.cat===cat).sort(sortItems);
+      if(!items.length) return;
+      const sec = document.createElement('details');
+      sec.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = cat;
+      sec.appendChild(summary);
+      const catList = document.createElement('div');
+      catList.className = 'list insights-category-list';
+      items.forEach(it=>{
+        const stat = stats.get(itemHistoryKey(it.id, it.cat, it.name)) || { count: 0, lastPurchasedAt: '' };
+        const row = document.createElement('div');
+        row.className = 'item insight-item';
+
+        const left = document.createElement('div');
+        left.className = 'left insight-left';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = it.name;
+        const note = document.createElement('div');
+        note.className = 'muted insight-note';
+        note.textContent = stat.count > 0 ? `Last purchased ${formatRunDate(stat.lastPurchasedAt)}` : 'No purchases yet';
+        left.appendChild(name);
+        left.appendChild(note);
+
+        const right = document.createElement('div');
+        right.className = 'right insight-meta';
+        const count = document.createElement('span');
+        count.className = 'pill';
+        count.textContent = `${stat.count} purchase${stat.count === 1 ? '' : 's'}`;
+        right.appendChild(count);
+        const avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+        if(avgPrice > 0){
+          const price = document.createElement('span');
+          price.className = 'pill';
+          price.textContent = `Avg ${formatMoney(avgPrice)}`;
+          right.appendChild(price);
+        }
+
+        row.appendChild(left);
+        row.appendChild(right);
+        catList.appendChild(row);
+      });
+      sec.appendChild(catList);
+      list.appendChild(sec);
+    });
+    container.appendChild(list);
+  }
+
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
     return /^[A-Z]$/.test(first) ? first : '#';
@@ -654,6 +773,7 @@
       renderBuild();
       renderShop();
       renderManage();
+      renderInsights();
       alert(`Run committed and saved to history.\nSaved checked items: ${checked.length}\nSaved total quantity: ${totalQty}\nEstimated committed total: ${formatMoney(runEntry.estimatedTotal)}${estimatePlus}\nItems not purchased this run now show Previous Run as 0.`);
     }catch(e){
       console.error(e);
@@ -686,10 +806,10 @@
     state.items = state.items.filter(x=>x.id!==itemId);
     reindexCategory(oldCat);
     save();
-    try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+    try{ renderManage(); renderBuild(); renderShop(); renderInsights(); }catch(e){ console.error(e) }
   }
   function rerenderItemViews(){
-    try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+    try{ renderManage(); renderBuild(); renderShop(); renderInsights(); }catch(e){ console.error(e) }
   }
   let draggedItemId = null;
   let draggedCategoryName = null;
@@ -721,7 +841,7 @@
     return true;
   }
   function rerenderCategoryOrderViews(){
-    try{ renderCats(); renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
+    try{ renderCats(); renderManage(); renderBuild(); renderShop(); renderInsights(); }catch(e){ console.error(e) }
   }
   function attachCategoryDrag(handleEl, cat, dragClassEl){
     if(!handleEl) return;
@@ -901,19 +1021,22 @@
   // ===== Tabs & Views =====
   const tabBuild=document.getElementById('tabBuild');
   const tabShop=document.getElementById('tabShop');
+  const tabInsights=document.getElementById('tabInsights');
   const tabManage=document.getElementById('tabManage');
   const tabCats=document.getElementById('tabCats');
   const viewBuild=document.getElementById('viewBuild');
   const viewShop=document.getElementById('viewShop');
+  const viewInsights=document.getElementById('viewInsights');
   const viewManage=document.getElementById('viewManage');
   const viewCats=document.getElementById('viewCats');
 
   function setTab(which){
-    [tabBuild,tabShop,tabManage,tabCats].forEach(b=> b.classList.remove('active'));
-    [viewBuild,viewShop,viewManage,viewCats].forEach(v=> v.style.display='none');
+    [tabBuild,tabShop,tabInsights,tabManage,tabCats].forEach(b=> b.classList.remove('active'));
+    [viewBuild,viewShop,viewInsights,viewManage,viewCats].forEach(v=> v.style.display='none');
 
     if(which==='build'){ tabBuild.classList.add('active'); viewBuild.style.display='block' }
     if(which==='shop'){  tabShop.classList.add('active');  viewShop.style.display='block'  }
+    if(which==='insights'){tabInsights.classList.add('active'); viewInsights.style.display='block'}
     if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
     if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
 
@@ -933,6 +1056,7 @@
   }
   tabBuild.onclick=()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
   tabShop.onclick = ()=>{ /* disabled: must press Finished in Build */ };
+  tabInsights.onclick=()=>{ try{ renderInsights(); }catch(e){ console.error(e) } setTab('insights') };
   tabManage.onclick=()=>{ try{ renderManage(); }catch(e){ console.error(e) } setTab('manage') };
   tabCats.onclick=()=>{ try{ renderCats(); }catch(e){ console.error(e) } setTab('cats') };
 
@@ -1278,7 +1402,7 @@
         duplicate.qty = (Number(duplicate.qty)||0) + 1;
         duplicate.checked = false;
         save();
-        try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
+        try{ renderManage(); renderBuild(); renderInsights(); }catch(e){ console.error(e); }
         const nameInput = document.getElementById('newItemName');
         if(nameInput){ nameInput.value = ''; nameInput.focus(); }
         return;
@@ -1287,7 +1411,7 @@
       localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
       state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
       save();
-      try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
+      try{ renderManage(); renderBuild(); renderInsights(); }catch(e){ console.error(e); }
       const nameInput = document.getElementById('newItemName');
       if(nameInput){ nameInput.focus(); nameInput.select(); }
     };
@@ -1444,7 +1568,7 @@
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.style.display='none';
 
-        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap';
+        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap'; priceWrap.style.display='none';
         const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
         const priceInput=document.createElement('input');
         priceInput.className='price-input';
@@ -1494,7 +1618,7 @@
           row.classList.add('editing');
           name.style.display='none';
           input.style.display='block';
-          priceWrap.style.display='none';
+          priceWrap.style.display='flex';
           edit.style.display='none';
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
@@ -1505,7 +1629,7 @@
           row.classList.remove('editing');
           name.style.display='block';
           input.style.display='none';
-          priceWrap.style.display='flex';
+          priceWrap.style.display='none';
           edit.style.display='inline-block';
           saveBtn.style.display='none';
           cancelBtn.style.display='none';
@@ -1603,7 +1727,7 @@
         save();
         label.textContent=newName;
         exitEdit();
-        renderManage(); renderBuild(); renderShop();
+        renderManage(); renderBuild(); renderShop(); renderInsights();
       };
       del.onclick = ()=>{
         const removed = state.categories.splice(i,1)[0];
@@ -1612,7 +1736,7 @@
         state.items.forEach(it=>{ if(it.cat === removed) it.cat = state.categories[0] || 'Other'; });
         if(!state.categories.length){ state.categories = DEFAULT_CATS.slice(); }
         save();
-        renderCats(); renderManage(); renderBuild(); renderShop();
+        renderCats(); renderManage(); renderBuild(); renderShop(); renderInsights();
       };
 
       row.appendChild(left); left.appendChild(label); left.appendChild(input);
@@ -1637,7 +1761,7 @@
         const moved=state.categories.splice(dragIndex,1)[0];
         state.categories.splice(targetIndex,0,moved);
         save();
-        renderCats(); renderManage(); renderBuild(); renderShop();
+        renderCats(); renderManage(); renderBuild(); renderShop(); renderInsights();
       });
     });
 
@@ -1661,6 +1785,7 @@
     renderTitle();
     renderBuild();
     renderShop();
+    renderInsights();
     renderManage();
     renderCats();
     setVersionPills();
@@ -1672,6 +1797,7 @@
     ensurePositions();
     renderBuild();
     renderShop();
+    renderInsights();
     renderManage();
     renderCats();
     setTab('build');
