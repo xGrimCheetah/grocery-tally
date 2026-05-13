@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.40.1
+- Polished Manage Items drag sorting to better match Manage Categories.
+- Removed the blue dashed drag-over styling from Manage Items.
+- Kept item reordering on the drag handle so edit controls and swipe-delete gestures continue to work.
+
 ## v1.40.0
 - Added date-range quantity summaries to the Insights tab.
 - Shows total quantity, purchase count, and most recent purchase date for each item within the selected range.

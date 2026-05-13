@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.40.0"; // Insights date-range quantity summaries
+  let APP_VERSION = "1.40.1"; // Manage Items drag polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -944,11 +944,28 @@
     attachCategoryDropTarget(sum, cat);
     return sum;
   }
+  function isInteractiveItemDragTarget(target){
+    return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
+  }
+  function itemDragRowFor(dragClassEl, eventTarget){
+    if(dragClassEl && dragClassEl.querySelector){
+      const row = dragClassEl.querySelector('.manage-item-row');
+      if(row) return row;
+    }
+    if(eventTarget && eventTarget.closest) return eventTarget.closest('.manage-item-row');
+    return null;
+  }
   function attachItemDrag(handleEl, itemId, dragClassEl){
     if(!handleEl) return;
     handleEl.draggable = true;
     handleEl.dataset.itemId = itemId;
     handleEl.addEventListener('dragstart', e=>{
+      const row = itemDragRowFor(dragClassEl, e.target);
+      if((row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
+        draggedItemId = null;
+        e.preventDefault();
+        return;
+      }
       draggedItemId = itemId;
       const visual = dragClassEl || handleEl;
       visual.classList.add('dragging');
@@ -956,6 +973,7 @@
         e.dataTransfer.effectAllowed='move';
         e.dataTransfer.setData('text/plain', itemId);
       }catch(err){}
+      e.stopPropagation();
     });
     handleEl.addEventListener('dragend', ()=>{
       draggedItemId = null;
@@ -969,16 +987,13 @@
       const itemId = getDragItemId(e);
       if(!itemId) return;
       e.preventDefault();
-      el.classList.add('drop-target');
       try{ e.dataTransfer.dropEffect='move'; }catch(err){}
     });
-    el.addEventListener('dragleave', ()=> el.classList.remove('drop-target'));
     el.addEventListener('drop', e=>{
       const itemId = getDragItemId(e);
       if(!itemId) return;
       e.preventDefault();
       e.stopPropagation();
-      el.classList.remove('drop-target');
       const idx = typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn;
       if(moveItemToCategory(itemId, targetCat, idx)){
         draggedItemId = null;
@@ -1016,7 +1031,7 @@
     let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
     content.addEventListener('pointerdown', e=>{
       if(e.button !== undefined && e.button !== 0) return;
-      if(e.target && e.target.closest && e.target.closest('.drag-handle,button,input,select')) return;
+      if(e.target && e.target.closest && e.target.closest('.drag-handle,button,input,select,textarea')) return;
       tracking=true; swiping=false;
       startX=e.clientX; startY=e.clientY; currentX=startX;
     });
@@ -1644,9 +1659,14 @@
         right.appendChild(saveBtn);
         right.appendChild(cancelBtn);
         attachItemDrag(handle, it.id, shell.wrap);
+        function setItemDragEnabled(enabled){
+          handle.draggable = !!enabled;
+        }
+        setItemDragEnabled(true);
 
         function enterEdit(){
           row.classList.add('editing');
+          setItemDragEnabled(false);
           name.style.display='none';
           input.style.display='block';
           priceWrap.style.display='flex';
@@ -1659,6 +1679,7 @@
         }
         function exitEdit(){
           row.classList.remove('editing');
+          setItemDragEnabled(true);
           name.style.display='block';
           input.style.display='none';
           priceWrap.style.display='none';
