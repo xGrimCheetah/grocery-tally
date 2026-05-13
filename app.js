@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.39.0"; // Insights tab and cleaner Manage Items layout
+  let APP_VERSION = "1.40.0"; // Insights date-range quantity summaries
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -23,6 +23,7 @@
   let buildSearchQuery = '';
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
+  let insightsDateRange = 'all';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -464,6 +465,33 @@
     const time = d.getTime();
     return Number.isNaN(time) ? 0 : time;
   }
+  function insightsRunDate(run){
+    const d = new Date(run && run.committedAt);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  function addDays(date, days){
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+  function insightsDateRangeBounds(rangeKey){
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startOfTomorrow = addDays(startOfToday, 1);
+    if(rangeKey === 'last30') return { start: addDays(startOfToday, -29), end: startOfTomorrow };
+    if(rangeKey === 'last90') return { start: addDays(startOfToday, -89), end: startOfTomorrow };
+    if(rangeKey === 'thisMonth') return { start: new Date(today.getFullYear(), today.getMonth(), 1), end: startOfTomorrow };
+    if(rangeKey === 'lastMonth') return { start: new Date(today.getFullYear(), today.getMonth() - 1, 1), end: new Date(today.getFullYear(), today.getMonth(), 1) };
+    return { start: null, end: null };
+  }
+  function runInInsightsDateRange(run, rangeKey){
+    if(rangeKey === 'all') return true;
+    const d = insightsRunDate(run);
+    if(!d) return false;
+    const bounds = insightsDateRangeBounds(rangeKey);
+    const time = d.getTime();
+    return (!bounds.start || time >= bounds.start.getTime()) && (!bounds.end || time < bounds.end.getTime());
+  }
   function itemMatchesRunItem(item, runItem){
     if(!item || !runItem || Number(runItem.qty) <= 0) return false;
     const runItemId = cleanText(runItem.itemId || runItem.id || '');
@@ -474,23 +502,29 @@
     const runCat = cleanText(runItem.cat || '');
     return !runCat || runCat === item.cat;
   }
-  function purchaseInsightsForItem(item){
+  function purchaseInsightsForItem(item, rangeKey){
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
     let purchaseCount = 0;
+    let totalQty = 0;
     let lastRun = null;
     let lastTime = -1;
     runs.forEach((run, idx)=>{
+      if(!runInInsightsDateRange(run, rangeKey)) return;
       const runItems = Array.isArray(run && run.items) ? run.items : [];
-      const purchased = runItems.some(rit => itemMatchesRunItem(item, rit));
-      if(!purchased) return;
+      const purchasedQty = runItems.reduce((sum, rit)=>{
+        if(!itemMatchesRunItem(item, rit)) return sum;
+        return sum + Math.max(0, Number(rit.qty) || 0);
+      }, 0);
+      if(purchasedQty <= 0) return;
       purchaseCount++;
+      totalQty += purchasedQty;
       const time = insightsRunTime(run) || (runs.length - idx);
       if(time > lastTime){
         lastTime = time;
         lastRun = run;
       }
     });
-    return { purchaseCount, lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : '' };
+    return { totalQty, purchaseCount, lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : '' };
   }
   function renderInsights(){
     if(!viewInsights) return;
@@ -499,12 +533,31 @@
       <div class="insights-header">
         <div>
           <h2>Insights</h2>
-          <p class="muted">Purchase frequency is calculated from committed run history.</p>
+          <p class="muted">Quantity summaries are calculated from committed run history.</p>
         </div>
-        <span class="pill">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
+        <div class="insights-controls">
+          <label for="insightsRange">Date range</label>
+          <select id="insightsRange">
+            <option value="all">All time</option>
+            <option value="last30">Last 30 days</option>
+            <option value="last90">Last 90 days</option>
+            <option value="thisMonth">This month</option>
+            <option value="lastMonth">Last month</option>
+          </select>
+          <span class="pill">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
+        </div>
       </div>
       <div class="spacer"></div>
       <div id="insightsList" class="insights-list"></div>`;
+
+    const rangeSelect = document.getElementById('insightsRange');
+    if(rangeSelect){
+      rangeSelect.value = insightsDateRange;
+      rangeSelect.onchange = ()=>{
+        insightsDateRange = rangeSelect.value || 'all';
+        renderInsights();
+      };
+    }
 
     const list = document.getElementById('insightsList');
     if(!list) return;
@@ -515,7 +568,7 @@
     }
 
     items.forEach(item=>{
-      const insight = purchaseInsightsForItem(item);
+      const insight = purchaseInsightsForItem(item, insightsDateRange);
       const row = document.createElement('div');
       row.className = 'item insights-row';
 
@@ -535,6 +588,11 @@
       const right = document.createElement('div');
       right.className = 'right insights-meta';
 
+      const qty = document.createElement('span');
+      qty.className = 'pill';
+      qty.textContent = `Total qty ${insight.totalQty}`;
+      right.appendChild(qty);
+
       const count = document.createElement('span');
       count.className = 'pill';
       count.textContent = `${insight.purchaseCount} purchase${insight.purchaseCount === 1 ? '' : 's'}`;
@@ -542,7 +600,7 @@
 
       const last = document.createElement('span');
       last.className = insight.lastPurchased ? 'insight-detail' : 'insight-detail muted';
-      last.textContent = insight.lastPurchased ? `Last: ${insight.lastPurchased}` : 'No purchases yet';
+      last.textContent = insight.lastPurchased ? `Last: ${insight.lastPurchased}` : 'No purchases in range';
       right.appendChild(last);
 
       const avgPrice = Number(item.avgPrice) || 0;
