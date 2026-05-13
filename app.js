@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.40.0"; // Insights date-range quantity summaries
+  let APP_VERSION = "1.40.1"; // Manage Items drag polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -944,20 +944,36 @@
     attachCategoryDropTarget(sum, cat);
     return sum;
   }
-  function attachItemDrag(handleEl, itemId, dragClassEl){
-    if(!handleEl) return;
-    handleEl.draggable = true;
-    handleEl.dataset.itemId = itemId;
-    handleEl.addEventListener('dragstart', e=>{
+  function isItemDragBlockedTarget(target){
+    return !!(target && target.closest && target.closest('button,input,select,textarea,[contenteditable="true"]'));
+  }
+  function isFinePointer(){
+    try{ return window.matchMedia && window.matchMedia('(pointer: fine)').matches; }catch(err){ return false }
+  }
+  function attachItemDrag(dragEl, itemId, dragClassEl, options){
+    if(!dragEl) return;
+    const opts = options || {};
+    const rowDrag = !!opts.rowDrag;
+    const canUseRowDrag = !rowDrag || isFinePointer();
+    if(!canUseRowDrag) return;
+    dragEl.draggable = true;
+    dragEl.dataset.itemId = itemId;
+    dragEl.addEventListener('dragstart', e=>{
+      const target = e.target;
+      const startedOnHandle = !!(target && target.closest && target.closest('.drag-handle'));
+      if(rowDrag && (isItemDragBlockedTarget(target) || ((dragClassEl || dragEl).classList.contains('editing') && !startedOnHandle))){
+        e.preventDefault();
+        return;
+      }
       draggedItemId = itemId;
-      const visual = dragClassEl || handleEl;
+      const visual = dragClassEl || dragEl;
       visual.classList.add('dragging');
       try{
         e.dataTransfer.effectAllowed='move';
         e.dataTransfer.setData('text/plain', itemId);
       }catch(err){}
     });
-    handleEl.addEventListener('dragend', ()=>{
+    dragEl.addEventListener('dragend', ()=>{
       draggedItemId = null;
       document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
       document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
@@ -969,16 +985,13 @@
       const itemId = getDragItemId(e);
       if(!itemId) return;
       e.preventDefault();
-      el.classList.add('drop-target');
       try{ e.dataTransfer.dropEffect='move'; }catch(err){}
     });
-    el.addEventListener('dragleave', ()=> el.classList.remove('drop-target'));
     el.addEventListener('drop', e=>{
       const itemId = getDragItemId(e);
       if(!itemId) return;
       e.preventDefault();
       e.stopPropagation();
-      el.classList.remove('drop-target');
       const idx = typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn;
       if(moveItemToCategory(itemId, targetCat, idx)){
         draggedItemId = null;
@@ -1644,6 +1657,7 @@
         right.appendChild(saveBtn);
         right.appendChild(cancelBtn);
         attachItemDrag(handle, it.id, shell.wrap);
+        attachItemDrag(row, it.id, shell.wrap, { rowDrag: true });
 
         function enterEdit(){
           row.classList.add('editing');

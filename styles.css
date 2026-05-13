@@ -95,6 +95,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .insights-meta{flex-wrap:wrap;justify-content:flex-end}
 .insight-detail{color:#cbd5e1;font-size:13px;line-height:1.4}
 .manage-item-row .left{flex:1 1 0}
+@media(pointer:fine){.manage-item-row{cursor:grab}.manage-item-row.editing,.manage-item-row button,.manage-item-row input,.manage-item-row select,.manage-item-row textarea{cursor:auto}}
 .manage-item-row .name{line-height:1.2}
 .manage-item-row.editing .left{flex:1 1 auto}
 .manage-item-row.editing .right{flex:0 0 auto}
