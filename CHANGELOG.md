@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.40.2
+- Restored desktop swipe-left delete access in Manage Items by keeping item drag reordering on the drag handle only.
+- Kept the v1.40.1 Manage Items drag polish while avoiding whole-row native drag conflicts.
+
 ## v1.40.1
 - Polished Manage Items drag sorting to better match Manage Categories.
 - Removed the blue dashed drag-over styling from Manage Items.

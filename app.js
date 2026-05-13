@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.40.1"; // Manage Items drag polish
+  let APP_VERSION = "1.40.2"; // Manage Items swipe-delete drag fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -944,9 +944,6 @@
     attachCategoryDropTarget(sum, cat);
     return sum;
   }
-  function hasFinePointer(){
-    try{ return !!(window.matchMedia && window.matchMedia('(pointer: fine)').matches); }catch(e){ return false }
-  }
   function isInteractiveItemDragTarget(target){
     return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
   }
@@ -958,16 +955,13 @@
     if(eventTarget && eventTarget.closest) return eventTarget.closest('.manage-item-row');
     return null;
   }
-  function attachItemDrag(handleEl, itemId, dragClassEl, opts){
+  function attachItemDrag(handleEl, itemId, dragClassEl){
     if(!handleEl) return;
-    const options = opts || {};
-    const rowBodyDrag = !!options.rowBodyDrag;
-    const dragAllowed = () => !rowBodyDrag || hasFinePointer();
-    handleEl.draggable = dragAllowed();
+    handleEl.draggable = true;
     handleEl.dataset.itemId = itemId;
     handleEl.addEventListener('dragstart', e=>{
       const row = itemDragRowFor(dragClassEl, e.target);
-      if(!dragAllowed() || (row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
+      if((row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
         draggedItemId = null;
         e.preventDefault();
         return;
@@ -979,7 +973,7 @@
         e.dataTransfer.effectAllowed='move';
         e.dataTransfer.setData('text/plain', itemId);
       }catch(err){}
-      if(!rowBodyDrag) e.stopPropagation();
+      e.stopPropagation();
     });
     handleEl.addEventListener('dragend', ()=>{
       draggedItemId = null;
@@ -1665,10 +1659,8 @@
         right.appendChild(saveBtn);
         right.appendChild(cancelBtn);
         attachItemDrag(handle, it.id, shell.wrap);
-        attachItemDrag(row, it.id, shell.wrap, { rowBodyDrag: true });
         function setItemDragEnabled(enabled){
           handle.draggable = !!enabled;
-          row.draggable = !!enabled && hasFinePointer();
         }
         setItemDragEnabled(true);
 
