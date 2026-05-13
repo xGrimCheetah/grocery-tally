@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.40.2"; // Manage Items swipe-delete drag fix
+  let APP_VERSION = "1.40.1"; // Manage Items drag polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
