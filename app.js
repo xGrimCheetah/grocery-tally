@@ -525,7 +525,6 @@
         if(qty <= 0) return;
         const runAvgPrice = usableAvgPrice(rit && rit.avgPrice);
         const price = runAvgPrice || currentAvgPrice;
-        purchaseCount++;
         totalQty += qty;
         runPurchasedQty += qty;
         if(price > 0){
@@ -535,6 +534,7 @@
         }
       });
       if(runPurchasedQty <= 0) return;
+      purchaseCount++;
       const time = insightsRunTime(run) || (runs.length - idx);
       if(time > lastTime){
         lastTime = time;
