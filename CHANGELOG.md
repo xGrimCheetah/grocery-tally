@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.39.0
+- Added an Insights tab for grocery purchase-frequency information based on committed run history.
+- Shows purchase count, most recent purchase date, and available average price information outside of Manage Items.
+- Cleaned up Manage Items by hiding Avg $ from normal item rows while keeping it editable in item edit mode.
+
 ## v1.38.5
 - Hid the Shopping Mode tab on management screens where it is not part of the intended workflow.
 - Preserved the Build List Finished button as the way to enter Shopping Mode.

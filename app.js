@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.38.5"; // Hide Shopping Mode tab on management screens
+  let APP_VERSION = "1.39.0"; // Insights tab and cleaner Manage Items layout
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -459,6 +459,105 @@
       container.appendChild(note);
     }
   }
+  function insightsRunTime(run){
+    const d = new Date(run && run.committedAt);
+    const time = d.getTime();
+    return Number.isNaN(time) ? 0 : time;
+  }
+  function itemMatchesRunItem(item, runItem){
+    if(!item || !runItem || Number(runItem.qty) <= 0) return false;
+    const runItemId = cleanText(runItem.itemId || runItem.id || '');
+    if(runItemId && item.id && runItemId === item.id) return true;
+    const itemName = normalizeText(item.name);
+    const runName = normalizeText(runItem.name);
+    if(!itemName || !runName || itemName !== runName) return false;
+    const runCat = cleanText(runItem.cat || '');
+    return !runCat || runCat === item.cat;
+  }
+  function purchaseInsightsForItem(item){
+    const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    let purchaseCount = 0;
+    let lastRun = null;
+    let lastTime = -1;
+    runs.forEach((run, idx)=>{
+      const runItems = Array.isArray(run && run.items) ? run.items : [];
+      const purchased = runItems.some(rit => itemMatchesRunItem(item, rit));
+      if(!purchased) return;
+      purchaseCount++;
+      const time = insightsRunTime(run) || (runs.length - idx);
+      if(time > lastTime){
+        lastTime = time;
+        lastRun = run;
+      }
+    });
+    return { purchaseCount, lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : '' };
+  }
+  function renderInsights(){
+    if(!viewInsights) return;
+    const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    viewInsights.innerHTML = `
+      <div class="insights-header">
+        <div>
+          <h2>Insights</h2>
+          <p class="muted">Purchase frequency is calculated from committed run history.</p>
+        </div>
+        <span class="pill">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="spacer"></div>
+      <div id="insightsList" class="insights-list"></div>`;
+
+    const list = document.getElementById('insightsList');
+    if(!list) return;
+    const items = state.items.slice().sort(buildListSort);
+    if(!items.length){
+      list.innerHTML = '<p class="muted">No items yet. Add items from Manage Items to see insights here.</p>';
+      return;
+    }
+
+    items.forEach(item=>{
+      const insight = purchaseInsightsForItem(item);
+      const row = document.createElement('div');
+      row.className = 'item insights-row';
+
+      const left = document.createElement('div');
+      left.className = 'left';
+      const title = document.createElement('div');
+      title.className = 'name';
+      title.textContent = item.name;
+      const sub = document.createElement('div');
+      sub.className = 'cat';
+      sub.textContent = item.cat || '';
+      const nameWrap = document.createElement('div');
+      nameWrap.appendChild(title);
+      if(sub.textContent) nameWrap.appendChild(sub);
+      left.appendChild(nameWrap);
+
+      const right = document.createElement('div');
+      right.className = 'right insights-meta';
+
+      const count = document.createElement('span');
+      count.className = 'pill';
+      count.textContent = `${insight.purchaseCount} purchase${insight.purchaseCount === 1 ? '' : 's'}`;
+      right.appendChild(count);
+
+      const last = document.createElement('span');
+      last.className = insight.lastPurchased ? 'insight-detail' : 'insight-detail muted';
+      last.textContent = insight.lastPurchased ? `Last: ${insight.lastPurchased}` : 'No purchases yet';
+      right.appendChild(last);
+
+      const avgPrice = Number(item.avgPrice) || 0;
+      if(avgPrice > 0){
+        const avg = document.createElement('span');
+        avg.className = 'insight-detail';
+        avg.textContent = `Avg ${formatMoney(avgPrice)}`;
+        right.appendChild(avg);
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+      list.appendChild(row);
+    });
+  }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
     return /^[A-Z]$/.test(first) ? first : '#';
@@ -654,6 +753,7 @@
       renderBuild();
       renderShop();
       renderManage();
+      renderInsights();
       alert(`Run committed and saved to history.\nSaved checked items: ${checked.length}\nSaved total quantity: ${totalQty}\nEstimated committed total: ${formatMoney(runEntry.estimatedTotal)}${estimatePlus}\nItems not purchased this run now show Previous Run as 0.`);
     }catch(e){
       console.error(e);
@@ -902,19 +1002,22 @@
   const tabBuild=document.getElementById('tabBuild');
   const tabShop=document.getElementById('tabShop');
   const tabManage=document.getElementById('tabManage');
+  const tabInsights=document.getElementById('tabInsights');
   const tabCats=document.getElementById('tabCats');
   const viewBuild=document.getElementById('viewBuild');
   const viewShop=document.getElementById('viewShop');
   const viewManage=document.getElementById('viewManage');
+  const viewInsights=document.getElementById('viewInsights');
   const viewCats=document.getElementById('viewCats');
 
   function setTab(which){
-    [tabBuild,tabShop,tabManage,tabCats].forEach(b=> b.classList.remove('active'));
-    [viewBuild,viewShop,viewManage,viewCats].forEach(v=> v.style.display='none');
+    [tabBuild,tabShop,tabManage,tabInsights,tabCats].forEach(b=> b.classList.remove('active'));
+    [viewBuild,viewShop,viewManage,viewInsights,viewCats].forEach(v=> v.style.display='none');
 
     if(which==='build'){ tabBuild.classList.add('active'); viewBuild.style.display='block' }
     if(which==='shop'){  tabShop.classList.add('active');  viewShop.style.display='block'  }
     if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
+    if(which==='insights'){tabInsights.classList.add('active'); viewInsights.style.display='block'}
     if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
 
     const footer = document.querySelector('.footer');
@@ -934,6 +1037,7 @@
   tabBuild.onclick=()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
   tabShop.onclick = ()=>{ /* disabled: must press Finished in Build */ };
   tabManage.onclick=()=>{ try{ renderManage(); }catch(e){ console.error(e) } setTab('manage') };
+  tabInsights.onclick=()=>{ try{ renderInsights(); }catch(e){ console.error(e) } setTab('insights') };
   tabCats.onclick=()=>{ try{ renderCats(); }catch(e){ console.error(e) } setTab('cats') };
 
   // ----- Build List -----
@@ -1444,7 +1548,7 @@
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.style.display='none';
 
-        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap';
+        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap'; priceWrap.style.display='none';
         const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
         const priceInput=document.createElement('input');
         priceInput.className='price-input';
@@ -1459,18 +1563,11 @@
         priceInput.addEventListener('keydown', (e)=>{
           if(e.key==='Enter'){
             e.preventDefault();
-            priceInput.blur();
+            saveBtn.click();
           } else if(e.key==='Escape'){
             e.preventDefault();
-            priceInput.value=formatPriceInput(it.avgPrice);
-            priceInput.blur();
+            cancelBtn.click();
           }
-        });
-        priceInput.addEventListener('blur', ()=>{
-          const parsed = parsePriceInput(priceInput.value);
-          it.avgPrice = parsed;
-          priceInput.value = formatPriceInput(parsed);
-          save();
         });
         priceWrap.appendChild(priceLabel);
         priceWrap.appendChild(priceInput);
@@ -1494,7 +1591,8 @@
           row.classList.add('editing');
           name.style.display='none';
           input.style.display='block';
-          priceWrap.style.display='none';
+          priceWrap.style.display='flex';
+          priceInput.value=formatPriceInput(it.avgPrice);
           edit.style.display='none';
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
@@ -1505,7 +1603,8 @@
           row.classList.remove('editing');
           name.style.display='block';
           input.style.display='none';
-          priceWrap.style.display='flex';
+          priceWrap.style.display='none';
+          priceInput.value = formatPriceInput(it.avgPrice);
           edit.style.display='inline-block';
           saveBtn.style.display='none';
           cancelBtn.style.display='none';
@@ -1525,12 +1624,16 @@
         saveBtn.onclick = ()=>{
           const nv = input.value.trim();
           if(!nv){ alert('Item name cannot be empty.'); return }
+          const parsedPrice = parsePriceInput(priceInput.value);
           it.name = nv;
+          it.avgPrice = parsedPrice;
           save();
           name.textContent = it.name;
+          priceInput.value = formatPriceInput(it.avgPrice);
           exitEdit();
           renderBuild();
           renderShop();
+          renderInsights();
         };
 
         attachDropTarget(shell.wrap, cat, () => idx);
@@ -1662,6 +1765,7 @@
     renderBuild();
     renderShop();
     renderManage();
+    renderInsights();
     renderCats();
     setVersionPills();
   }
@@ -1673,6 +1777,7 @@
     renderBuild();
     renderShop();
     renderManage();
+    renderInsights();
     renderCats();
     setTab('build');
   }catch(e){
