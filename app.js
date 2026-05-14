@@ -537,8 +537,8 @@
       });
       if(runPurchasedQty <= 0) return;
       purchaseCount++;
-      const time = insightsRunTime(run);
-      if(time > 0 && time > lastTime){
+      const time = insightsRunTime(run) || (runs.length - idx);
+      if(time > lastTime){
         lastTime = time;
         lastRun = run;
       }
