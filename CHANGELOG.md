@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.42.0 — Insights sorting and filtering polish
+
+- Added an Insights Sort dropdown with options for item name, purchase count, total quantity, estimated spend, and most recent purchase.
+- Added an Insights Filter dropdown for all items, purchased items in the selected range, and items with missing price data.
+- Kept Insights read-only and preserved the existing date-range selector.
+- Preserved Build List, Shopping Mode, Manage Items, Manage Categories, run history, item data, and import/export behavior.
+
 ## v1.41.0 — Insights estimated spending summaries
 
 - Added estimated spending summaries to Insights using committed run-history quantities and Avg $ values.

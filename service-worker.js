@@ -1,5 +1,6 @@
 // Grocery Tally Service Worker - versioned via version.json
 // Caches are named based on the version in version.json to ensure clean upgrades.
+const CACHE_VERSION = "1.42.0";
 
 const CORE_ASSETS = [
   "./",
@@ -20,8 +21,8 @@ self.addEventListener("install", (event) => {
       const cache = await caches.open(cacheName);
       await cache.addAll(CORE_ASSETS);
     } catch (e) {
-      // If version.json fetch fails, still try to cache core assets without versioned naming
-      const cache = await caches.open("gt-cache-v-unknown");
+      // If version.json fetch fails, still try to cache core assets with the release version
+      const cache = await caches.open(cacheNameFor(CACHE_VERSION));
       try { await cache.addAll(CORE_ASSETS); } catch {}
       console.warn("[SW] install: version.json unavailable; cached with fallback name", e);
     }
@@ -95,12 +96,12 @@ self.addEventListener("message", (event) => {
 
 // Helpers
 function cacheNameFor(version) {
-  return `gt-cache-v${version || 'unknown'}`;
+  return `gt-cache-v${version || CACHE_VERSION || 'unknown'}`;
 }
 async function fetchVersion() {
   const res = await fetch("version.json", { cache: "no-store" });
   const data = await res.json();
-  return data || {};
+  return data && data.version ? data : { version: CACHE_VERSION };
 }
 async function safeCurrentCacheName() {
   try {
