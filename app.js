@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.42.0"; // Insights sorting and filtering polish
+  let APP_VERSION = "1.43.0"; // Run History detail expansion
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -26,6 +26,8 @@
   let insightsDateRange = 'all';
   let insightsSort = 'name';
   let insightsFilter = 'all';
+  let runHistoryShowAll = false;
+  const runHistoryExpandedIds = new Set();
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -407,6 +409,30 @@
       items
     };
   }
+  function runEstimatedTotal(run){
+    const storedTotal = Number(run && run.estimatedTotal);
+    if(Number.isFinite(storedTotal) && storedTotal > 0) return Math.round(storedTotal * 100) / 100;
+    const runItems = Array.isArray(run && run.items) ? run.items : [];
+    return Math.round(runItems.reduce((sum, rit)=>{
+      const storedPrice = Number(rit && rit.estimatedPrice);
+      if(Number.isFinite(storedPrice) && storedPrice > 0) return sum + storedPrice;
+      const qty = Math.max(0, Number(rit && rit.qty) || 0);
+      const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
+      return avgPrice > 0 ? sum + (qty * avgPrice) : sum;
+    }, 0) * 100) / 100;
+  }
+  function runMissingPriceCount(run){
+    const storedMissing = Number(run && run.missingPriceCount);
+    if(Number.isFinite(storedMissing) && storedMissing > 0) return Math.max(0, storedMissing);
+    const runItems = Array.isArray(run && run.items) ? run.items : [];
+    return runItems.filter(rit => Number(rit && rit.qty) > 0 && !(Number(rit && rit.avgPrice) > 0) && !(Number(rit && rit.estimatedPrice) > 0)).length;
+  }
+  function runTotalQty(run){
+    const storedQty = Number(run && run.totalQty);
+    if(Number.isFinite(storedQty) && storedQty > 0) return storedQty;
+    const runItems = Array.isArray(run && run.items) ? run.items : [];
+    return runItems.reduce((sum, rit)=> sum + (Number(rit && rit.qty) || 0), 0);
+  }
   function renderRunHistory(container){
     if(!container) return;
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
@@ -420,46 +446,121 @@
       container.appendChild(empty);
       return;
     }
-    runs.slice(0, 10).forEach((run, index)=>{
+    const visibleRuns = runHistoryShowAll ? runs : runs.slice(0, 10);
+    visibleRuns.forEach((run, index)=>{
+      const runId = cleanText(run && run.id) || `run-index-${index}`;
+      const expanded = runHistoryExpandedIds.has(runId);
+      const runItems = Array.isArray(run.items) ? run.items : [];
+      const totalQty = runTotalQty(run);
+      const estimatedTotal = runEstimatedTotal(run);
+      const missingCount = runMissingPriceCount(run);
+      const plus = missingCount > 0 ? '+' : '';
+
       const card = document.createElement('div');
-      card.className = 'item';
-      card.style.alignItems = 'flex-start';
-      card.style.flexDirection = 'column';
-      card.style.gap = '6px';
+      card.className = 'item run-history-card';
+
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'run-history-toggle';
+      header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+
+      const heading = document.createElement('div');
+      heading.className = 'run-history-heading';
 
       const title = document.createElement('div');
       title.className = 'name';
       title.textContent = `${index + 1}. ${formatRunDate(run.committedAt)}`;
 
-      const plus = Number(run.missingPriceCount) > 0 ? '+' : '';
       const meta = document.createElement('div');
-      meta.className = 'muted';
-      meta.textContent = `${run.itemCount || 0} item${run.itemCount === 1 ? '' : 's'} · Total qty ${run.totalQty || 0} · Est. ${formatMoney(run.estimatedTotal || 0)}${plus}`;
+      meta.className = 'muted run-history-meta';
+      meta.textContent = `${run.itemCount || runItems.length || 0} item${(run.itemCount || runItems.length) === 1 ? '' : 's'} · Total qty ${totalQty || 0} · Est. ${formatMoney(estimatedTotal)}${plus}`;
 
       const missing = document.createElement('div');
-      missing.className = 'muted';
-      missing.style.fontSize = '13px';
-      missing.textContent = Number(run.missingPriceCount) > 0 ? `${run.missingPriceCount} item${run.missingPriceCount === 1 ? '' : 's'} missing Avg $ at commit time.` : 'All committed items had Avg $ values.';
+      missing.className = 'muted run-history-missing';
+      missing.textContent = missingCount > 0 ? `${missingCount} item${missingCount === 1 ? '' : 's'} missing Avg $ at commit time.` : 'All committed items had Avg $ values.';
 
-      const itemText = document.createElement('div');
-      itemText.className = 'muted';
-      itemText.style.fontSize = '13px';
-      const runItems = Array.isArray(run.items) ? run.items : [];
-      const preview = runItems.slice(0, 8).map(rit => `${rit.qty} ${rit.name}`).join(', ');
-      const more = runItems.length > 8 ? `, +${runItems.length - 8} more` : '';
-      itemText.textContent = preview ? preview + more : 'No item detail saved for this run.';
+      heading.appendChild(title);
+      heading.appendChild(meta);
+      heading.appendChild(missing);
 
-      card.appendChild(title);
-      card.appendChild(meta);
-      card.appendChild(missing);
-      card.appendChild(itemText);
+      const action = document.createElement('span');
+      action.className = 'run-history-action';
+      action.textContent = expanded ? 'Collapse' : 'Expand';
+
+      header.appendChild(heading);
+      header.appendChild(action);
+      header.onclick = ()=>{
+        if(expanded) runHistoryExpandedIds.delete(runId);
+        else runHistoryExpandedIds.add(runId);
+        renderRunHistory(container);
+      };
+
+      card.appendChild(header);
+
+      if(expanded){
+        const detail = document.createElement('div');
+        detail.className = 'run-history-detail';
+
+        const summary = document.createElement('div');
+        summary.className = 'run-history-summary';
+        summary.textContent = `Run total quantity: ${totalQty || 0} · Estimated run total: ${formatMoney(estimatedTotal)}${plus} · Missing Avg $: ${missingCount}`;
+        detail.appendChild(summary);
+
+        if(runItems.length){
+          const list = document.createElement('div');
+          list.className = 'run-history-items';
+          runItems.forEach(rit=>{
+            const qty = Math.max(0, Number(rit && rit.qty) || 0);
+            const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
+            const estimatedPrice = Number(rit && rit.estimatedPrice) > 0 ? Math.round(Number(rit.estimatedPrice) * 100) / 100 : (avgPrice > 0 ? Math.round(qty * avgPrice * 100) / 100 : 0);
+            const row = document.createElement('div');
+            row.className = 'run-history-item-row';
+            const itemName = document.createElement('div');
+            itemName.className = 'run-history-item-name';
+            itemName.textContent = cleanText(rit && rit.name) || 'Untitled item';
+            const itemMeta = document.createElement('div');
+            itemMeta.className = 'muted run-history-item-meta';
+            const catText = cleanText(rit && rit.cat);
+            let priceText = 'Missing Avg $';
+            if(avgPrice > 0){
+              priceText = `Avg ${formatMoney(avgPrice)} · Est. ${formatMoney(estimatedPrice)}`;
+            } else if(estimatedPrice > 0){
+              priceText = `Committed est. ${formatMoney(estimatedPrice)}`;
+            }
+            itemMeta.textContent = `${catText ? catText + ' · ' : ''}Qty ${qty} · ${priceText}`;
+            row.appendChild(itemName);
+            row.appendChild(itemMeta);
+            list.appendChild(row);
+          });
+          detail.appendChild(list);
+        } else {
+          const emptyDetail = document.createElement('p');
+          emptyDetail.className = 'muted';
+          emptyDetail.textContent = 'No item detail saved for this run.';
+          detail.appendChild(emptyDetail);
+        }
+        card.appendChild(detail);
+      }
+
       container.appendChild(card);
     });
     if(runs.length > 10){
+      const controls = document.createElement('div');
+      controls.className = 'run-history-more controls';
       const note = document.createElement('p');
       note.className = 'muted';
-      note.textContent = `Showing the latest 10 of ${runs.length} committed runs.`;
-      container.appendChild(note);
+      note.textContent = runHistoryShowAll ? `Showing all ${runs.length} committed runs.` : `Showing the latest 10 of ${runs.length} committed runs.`;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn';
+      btn.textContent = runHistoryShowAll ? 'Show latest 10' : 'Show more';
+      btn.onclick = ()=>{
+        runHistoryShowAll = !runHistoryShowAll;
+        renderRunHistory(container);
+      };
+      controls.appendChild(note);
+      controls.appendChild(btn);
+      container.appendChild(controls);
     }
   }
   function insightsRunTime(run){

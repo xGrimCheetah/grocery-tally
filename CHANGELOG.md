@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.43.0 — Run History detail expansion
+
+- Added expandable committed run history cards.
+- Added full item details inside expanded run history entries.
+- Added run total quantity, estimated run total, and missing Avg $ count.
+- Added a way to view more run history entries when the list is limited.
+- Kept run history read-only and preserved existing grocery list, item, category, localStorage, and JSON import/export behavior.
+
 ## v1.42.0 — Insights sorting and filtering polish
 
 - Added an Insights Sort dropdown with options for item name, purchase count, total quantity, estimated spend, and most recent purchase.
