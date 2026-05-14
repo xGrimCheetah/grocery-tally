@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.41.0"; // Insights estimated spending summaries
+  let APP_VERSION = "1.42.0"; // Insights sorting and filtering polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -24,6 +24,8 @@
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
   let insightsDateRange = 'all';
+  let insightsSort = 'name';
+  let insightsFilter = 'all';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -546,7 +548,8 @@
       purchaseCount,
       estimatedSpend: Math.round(estimatedSpend * 100) / 100,
       hasMissingPriceData,
-      lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : ''
+      lastPurchased: lastRun ? formatRunDate(lastRun.committedAt) : '',
+      lastPurchasedTime: lastRun ? lastTime : 0
     };
   }
   function insightsSpendText(insight){
@@ -554,6 +557,46 @@
     const spend = Number(insight.estimatedSpend) || 0;
     if(insight.hasMissingPriceData && spend <= 0) return 'Missing price data';
     return `Est. ${formatMoney(spend)}${insight.hasMissingPriceData ? '+' : ''}`;
+  }
+  function insightsNameSort(a, b){
+    const an = cleanText(a && a.item && a.item.name);
+    const bn = cleanText(b && b.item && b.item.name);
+    return an.localeCompare(bn, undefined, { sensitivity: 'base' });
+  }
+  function insightNeedsAvgPrice(item, insight){
+    return !!(insight && insight.hasMissingPriceData) || usableAvgPrice(item && item.avgPrice) <= 0;
+  }
+  function insightMatchesFilter(row, filterKey){
+    if(filterKey === 'purchased') return Number(row && row.insight && row.insight.purchaseCount) > 0;
+    if(filterKey === 'missingPrice') return insightNeedsAvgPrice(row && row.item, row && row.insight);
+    return true;
+  }
+  function sortInsightRows(rows, sortKey){
+    rows.sort((a, b)=>{
+      const nameResult = insightsNameSort(a, b);
+      if(sortKey === 'mostPurchased'){
+        const diff = (Number(b.insight.purchaseCount) || 0) - (Number(a.insight.purchaseCount) || 0);
+        return diff || nameResult;
+      }
+      if(sortKey === 'totalQty'){
+        const diff = (Number(b.insight.totalQty) || 0) - (Number(a.insight.totalQty) || 0);
+        return diff || nameResult;
+      }
+      if(sortKey === 'estimatedSpend'){
+        const diff = (Number(b.insight.estimatedSpend) || 0) - (Number(a.insight.estimatedSpend) || 0);
+        return diff || nameResult;
+      }
+      if(sortKey === 'recent'){
+        const at = Number(a.insight.lastPurchasedTime) || 0;
+        const bt = Number(b.insight.lastPurchasedTime) || 0;
+        if(at && bt && at !== bt) return bt - at;
+        if(at && !bt) return -1;
+        if(!at && bt) return 1;
+        return nameResult;
+      }
+      return nameResult;
+    });
+    return rows;
   }
   function renderInsights(){
     if(!viewInsights) return;
@@ -565,14 +608,34 @@
           <p class="muted">Quantity and estimated spending summaries are calculated from committed run history.</p>
         </div>
         <div class="insights-controls">
-          <label for="insightsRange">Date range</label>
-          <select id="insightsRange">
-            <option value="all">All time</option>
-            <option value="last30">Last 30 days</option>
-            <option value="last90">Last 90 days</option>
-            <option value="thisMonth">This month</option>
-            <option value="lastMonth">Last month</option>
-          </select>
+          <div class="insights-control">
+            <label for="insightsRange">Date range</label>
+            <select id="insightsRange">
+              <option value="all">All time</option>
+              <option value="last30">Last 30 days</option>
+              <option value="last90">Last 90 days</option>
+              <option value="thisMonth">This month</option>
+              <option value="lastMonth">Last month</option>
+            </select>
+          </div>
+          <div class="insights-control">
+            <label for="insightsSort">Sort</label>
+            <select id="insightsSort">
+              <option value="name">Item name A–Z</option>
+              <option value="mostPurchased">Most purchased</option>
+              <option value="totalQty">Highest total qty</option>
+              <option value="estimatedSpend">Highest estimated spend</option>
+              <option value="recent">Most recently purchased</option>
+            </select>
+          </div>
+          <div class="insights-control">
+            <label for="insightsFilter">Filter</label>
+            <select id="insightsFilter">
+              <option value="all">All items</option>
+              <option value="purchased">Purchased in selected range</option>
+              <option value="missingPrice">Missing price data</option>
+            </select>
+          </div>
           <span class="pill">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
         </div>
       </div>
@@ -587,6 +650,22 @@
         renderInsights();
       };
     }
+    const sortSelect = document.getElementById('insightsSort');
+    if(sortSelect){
+      sortSelect.value = insightsSort;
+      sortSelect.onchange = ()=>{
+        insightsSort = sortSelect.value || 'name';
+        renderInsights();
+      };
+    }
+    const filterSelect = document.getElementById('insightsFilter');
+    if(filterSelect){
+      filterSelect.value = insightsFilter;
+      filterSelect.onchange = ()=>{
+        insightsFilter = filterSelect.value || 'all';
+        renderInsights();
+      };
+    }
 
     const list = document.getElementById('insightsList');
     if(!list) return;
@@ -596,8 +675,16 @@
       return;
     }
 
-    items.forEach(item=>{
-      const insight = purchaseInsightsForItem(item, insightsDateRange);
+    const insightRows = sortInsightRows(items.map(item => ({
+      item,
+      insight: purchaseInsightsForItem(item, insightsDateRange)
+    })).filter(row => insightMatchesFilter(row, insightsFilter)), insightsSort);
+    if(!insightRows.length){
+      list.innerHTML = '<p class="muted">No items match the selected Insights filter.</p>';
+      return;
+    }
+
+    insightRows.forEach(({ item, insight })=>{
       const row = document.createElement('div');
       row.className = 'item insights-row';
 
