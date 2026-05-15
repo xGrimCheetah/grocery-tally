@@ -71,8 +71,9 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .shop-cat-heading{font-weight:800;color:#cbd5e1;margin:10px 0 4px;padding:0 2px}
 #shopList .shop-cat-block:first-child .shop-cat-heading{margin-top:0}
 .shop-cat-list{display:flex;flex-direction:column;gap:0}
-.shop-item{display:grid;grid-template-columns:28px 1px 48px 1px minmax(0,1fr);gap:8px;align-items:center;min-height:34px;padding:4px 2px;cursor:pointer;background:transparent;border:none;border-radius:0}
-.shop-item.checked{opacity:.65}
+.shop-instruction{font-size:13px;line-height:1.35;margin:0 0 4px;text-align:right}
+.shop-item{display:grid;grid-template-columns:28px 1px 48px 1px minmax(0,1fr);gap:8px;align-items:center;min-height:34px;padding:4px 2px;cursor:pointer;background:transparent;border:none;border-radius:0;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.shop-item.checked,.shop-item.skipped{opacity:.65}
 .shop-check{width:20px;height:20px;border:1px solid #64748b;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--accent);font-weight:800;line-height:1}
 .shop-divider{width:1px;height:22px;background:#334155;opacity:.9}
 .shop-qty{text-align:right;font-variant-numeric:tabular-nums;padding:0;background:transparent;border:none;border-radius:0;color:#e5e7eb}

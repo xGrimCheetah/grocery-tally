@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.46.0 — Shopping Mode skip item option
+
+- Added a Shopping Mode long-press interaction to skip or unskip items that cannot be found or need to be bought later.
+- Skipped items fade and move out of the active shopping flow without showing a checkmark or counting as purchased.
+- Committed runs continue to include only checked/purchased items; skipped item quantities remain for later.
+- Preserved Build List, Manage Items, Manage Categories, Insights, Run History data shape, localStorage keys, and JSON import/export compatibility.
+
 ## v1.45.0 — Insights search polish
 
 - Added an Insights-only item search field for Item Insights.
