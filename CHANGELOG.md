@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.45.0 — Insights search polish
+
+- Added an Insights-only item search field for Item Insights.
+- Search filters item insight rows by item name live as the user types while preserving the existing date range, Sort, and Filter controls.
+- Kept Run History separate from item search and preserved existing read-only Insights behavior.
+- Preserved Build List, Shopping Mode, Manage Items, Manage Categories, localStorage keys, and JSON import/export behavior.
+
 ## v1.44.0 — Data safety / backup polish
 
 - Added a Data Safety / Backup panel with app version, item count, category count, committed run count, and last backup information.
