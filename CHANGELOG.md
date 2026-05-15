@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.44.0 — Data safety / backup polish
+
+- Added a Data Safety / Backup panel with app version, item count, category count, committed run count, and last backup information.
+- Improved backup export wording and backup filenames.
+- Tracked the last local backup export time.
+- Added clearer import warnings and backup preview counts before replacing current data.
+- Strengthened the wipe-all-data warning.
+- Preserved existing grocery data, run history, localStorage keys, JSON import/export compatibility, and core grocery workflows.
+
 ## v1.43.2 — Add Insights Run History toggle
 
 - Added an Insights view toggle for Item Insights and Run History.

@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.43.2"; // Add Insights Run History toggle
+  let APP_VERSION = "1.44.0"; // Data safety / backup polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -11,6 +11,7 @@
   const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';     // legacy Shopping Mode collapsed state
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
   const SELECTED_CAT_KEY = 'manage_selected_cat';
+  const LAST_BACKUP_KEY = 'grocery_tally_last_backup_at';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
@@ -79,6 +80,86 @@
         items
       };
     }).filter(run => run.items.length || run.totalQty > 0);
+  }
+
+
+  function countCommittedRuns(source){
+    return Array.isArray(source && source.runHistory) ? source.runHistory.length : 0;
+  }
+
+  function getDataSafetyStats(source){
+    const data = source || state || {};
+    return {
+      itemCount: Array.isArray(data.items) ? data.items.length : 0,
+      categoryCount: Array.isArray(data.categories) ? data.categories.length : 0,
+      committedRunCount: countCommittedRuns(data)
+    };
+  }
+
+  function getLastBackupAt(){
+    try{ return localStorage.getItem(LAST_BACKUP_KEY) || ''; }catch(e){ return ''; }
+  }
+
+  function setLastBackupAt(value){
+    try{ localStorage.setItem(LAST_BACKUP_KEY, value); }catch(e){}
+  }
+
+  function clearLastBackupAt(){
+    try{ localStorage.removeItem(LAST_BACKUP_KEY); }catch(e){}
+  }
+
+  function formatBackupTimestamp(value){
+    if(!value) return 'Never exported on this device';
+    const date = new Date(value);
+    if(Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString([], { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+  }
+
+  function refreshDataSafetyPanel(){
+    const panel = document.getElementById('dataSafetyPanel');
+    if(!panel) return;
+    const stats = getDataSafetyStats(state);
+    const appVersionEl = panel.querySelector('[data-backup-stat="version"]');
+    const itemCountEl = panel.querySelector('[data-backup-stat="items"]');
+    const categoryCountEl = panel.querySelector('[data-backup-stat="categories"]');
+    const runCountEl = panel.querySelector('[data-backup-stat="runs"]');
+    const lastBackupEl = panel.querySelector('[data-backup-stat="last-backup"]');
+    if(appVersionEl) appVersionEl.textContent = `v${APP_VERSION}`;
+    if(itemCountEl) itemCountEl.textContent = String(stats.itemCount);
+    if(categoryCountEl) categoryCountEl.textContent = String(stats.categoryCount);
+    if(runCountEl) runCountEl.textContent = String(stats.committedRunCount);
+    if(lastBackupEl) lastBackupEl.textContent = formatBackupTimestamp(getLastBackupAt());
+  }
+
+  function backupDateStamp(date){
+    const d = date || new Date();
+    return d.toISOString().slice(0,10);
+  }
+
+  function getBackupFileVersion(data){
+    const meta = data && (data.exportMetadata || data.metadata);
+    return (data && data.appVersion) || (meta && (meta.appVersion || meta.version)) || 'Not included';
+  }
+
+  function makeImportPreview(data){
+    const backupStats = getDataSafetyStats(data);
+    const currentStats = getDataSafetyStats(state);
+    return [
+      'Import backup JSON? This will replace the current grocery data stored in this browser.',
+      '',
+      'Backup file:',
+      `- Version: ${getBackupFileVersion(data)}`,
+      `- Items: ${backupStats.itemCount}`,
+      `- Categories: ${backupStats.categoryCount}`,
+      `- Committed runs: ${backupStats.committedRunCount}`,
+      '',
+      'Current data:',
+      `- Items: ${currentStats.itemCount}`,
+      `- Categories: ${currentStats.categoryCount}`,
+      `- Committed runs: ${currentStats.committedRunCount}`,
+      '',
+      'Replacing data cannot be undone unless you exported a backup first. Continue?'
+    ].join('\n');
   }
 
   function allCurrentCatsClosedSet(){
@@ -1653,12 +1734,26 @@
         </div>
       </div>
       <div class="spacer"></div>
-      <div class="controls">
-        <button class="btn" id="btnExport">Export JSON</button>
-        <input type="file" id="fileImport" accept="application/json" style="display:none" />
-        <button class="btn" id="btnImport">Import JSON</button>
-        <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
-      </div>
+      <section class="data-safety-panel" id="dataSafetyPanel" aria-labelledby="dataSafetyHeading">
+        <div class="data-safety-heading">
+          <h3 id="dataSafetyHeading">Data Safety / Backup</h3>
+          <span class="pill">Local only</span>
+        </div>
+        <p class="muted data-safety-help">Export backup JSON before major changes, imports, or wiping this browser. This is the safe backup action for your grocery data.</p>
+        <div class="data-safety-stats" aria-label="Backup and data summary">
+          <div><span>App version</span><strong data-backup-stat="version"></strong></div>
+          <div><span>Items</span><strong data-backup-stat="items"></strong></div>
+          <div><span>Categories</span><strong data-backup-stat="categories"></strong></div>
+          <div><span>Committed runs</span><strong data-backup-stat="runs"></strong></div>
+          <div class="data-safety-last"><span>Last backup</span><strong data-backup-stat="last-backup"></strong></div>
+        </div>
+        <div class="controls data-safety-actions">
+          <button class="btn" id="btnExport">Export backup JSON</button>
+          <input type="file" id="fileImport" accept="application/json" style="display:none" />
+          <button class="btn" id="btnImport">Import JSON</button>
+          <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
+        </div>
+      </section>
       <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
         <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category above.</p>
@@ -1671,6 +1766,8 @@
       </details>
       <div class="spacer"></div>
       <div id="manageList"></div>`;
+
+    refreshDataSafetyPanel();
 
     const sel=document.getElementById('newItemCat');
     state.categories.forEach(c=>{
@@ -1718,12 +1815,30 @@
     }
 
     document.getElementById('btnExport').onclick = ()=>{
-      const dataOut = { appVersion: APP_VERSION, title: state.title, categories: state.categories, items: state.items, runHistory: state.runHistory || [] };
+      const stats = getDataSafetyStats(state);
+      const exportedAt = new Date().toISOString();
+      const dataOut = {
+        appVersion: APP_VERSION,
+        exportMetadata: {
+          appVersion: APP_VERSION,
+          exportedAt,
+          itemCount: stats.itemCount,
+          categoryCount: stats.categoryCount,
+          committedRunCount: stats.committedRunCount
+        },
+        title: state.title,
+        categories: state.categories,
+        items: state.items,
+        runHistory: state.runHistory || []
+      };
       const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `grocery_tally_backup_v${APP_VERSION}.json`;
+      a.download = `grocery-tally-backup-v${APP_VERSION}-${backupDateStamp(new Date(exportedAt))}.json`;
       a.click();
+      setTimeout(()=> URL.revokeObjectURL(a.href), 0);
+      setLastBackupAt(exportedAt);
+      refreshDataSafetyPanel();
     };
 
     const fileInput = document.getElementById('fileImport');
@@ -1731,15 +1846,14 @@
     fileInput.onchange = async (e)=>{
       const file=e.target.files[0];
       if(!file) return;
-      const text=await file.text();
       try{
+        const text=await file.text();
         const data = JSON.parse(text);
         if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
-        if(data.appVersion && data.appVersion!==APP_VERSION){
-          if(!confirm(`Backup is from version ${data.appVersion}, current app is ${APP_VERSION}.\nImport anyway?`)){
-            fileInput.value='';
-            return;
-          }
+        const confirmed = confirm(makeImportPreview(data));
+        if(!confirmed){
+          fileInput.value='';
+          return;
         }
         state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] };
         normalizeStateShape();
@@ -1813,8 +1927,10 @@
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
-      if(confirm('This clears all items, categories, and committed run history on this device.\n\nThis cannot be undone.\nContinue?')){
+      const message = 'Wipe all grocery data stored in this browser?\n\nThis deletes your grocery list, categories, quantities, checked items, run history, and last backup timestamp on this device.\n\nExport backup JSON first unless you are absolutely sure. This cannot be undone.\n\nContinue?';
+      if(confirm(message)){
         state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
+        clearLastBackupAt();
         save();
         renderAll();
       }
