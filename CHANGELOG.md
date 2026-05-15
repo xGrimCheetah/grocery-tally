@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.43.1 — Move Run History into Insights
+
+- Moved Run History into the Insights tab.
+- Kept expandable committed run cards, item details, run totals, estimated totals, missing Avg $ counts, and Show more behavior.
+- Preserved existing run history data, JSON import/export behavior, localStorage keys, and grocery list workflows.
+
 ## v1.43.0 — Run History detail expansion
 
 - Added expandable committed run history cards.
