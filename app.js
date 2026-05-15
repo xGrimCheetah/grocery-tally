@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.44.0"; // Data safety / backup polish
+  let APP_VERSION = "1.45.0"; // Insights search polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -27,6 +27,7 @@
   let insightsDateRange = 'all';
   let insightsSort = 'name';
   let insightsFilter = 'all';
+  let insightsSearchQuery = '';
   let insightsViewMode = 'items';
   let runHistoryShowAll = false;
   const runHistoryExpandedIds = new Set();
@@ -800,6 +801,10 @@
         </div>
         ${viewingHistory ? '' : `
         <div class="insights-controls">
+          <div class="insights-control insights-search-control">
+            <label for="insightsSearch">Search items</label>
+            <input id="insightsSearch" class="insights-search-input" type="search" placeholder="Search Item Insights" autocomplete="off" aria-label="Search Item Insights">
+          </div>
           <div class="insights-control">
             <label for="insightsRange">Date range</label>
             <select id="insightsRange">
@@ -855,6 +860,15 @@
       return;
     }
 
+    const searchInput = document.getElementById('insightsSearch');
+    if(searchInput){
+      searchInput.value = insightsSearchQuery;
+      searchInput.oninput = ()=>{
+        insightsSearchQuery = searchInput.value;
+        renderInsightItemsList();
+      };
+    }
+
     const rangeSelect = document.getElementById('insightsRange');
     if(rangeSelect){
       rangeSelect.value = insightsDateRange;
@@ -880,20 +894,35 @@
       };
     }
 
+    renderInsightItemsList();
+  }
+  function matchesInsightsSearch(item, query){
+    const normalizedQuery = normalizeText(query);
+    if(!normalizedQuery) return true;
+    return normalizeText(item && item.name).startsWith(normalizedQuery);
+  }
+  function renderInsightItemsList(){
     const list = document.getElementById('insightsList');
     if(!list) return;
+    list.innerHTML = '';
+
     const items = state.items.slice().sort(buildListSort);
     if(!items.length){
       list.innerHTML = '<p class="muted">No items yet. Add items from Manage Items to see insights here.</p>';
       return;
     }
 
-    const insightRows = sortInsightRows(items.map(item => ({
+    const baseRows = items.map(item => ({
       item,
       insight: purchaseInsightsForItem(item, insightsDateRange)
-    })).filter(row => insightMatchesFilter(row, insightsFilter)), insightsSort);
+    })).filter(row => insightMatchesFilter(row, insightsFilter));
+
+    const query = normalizeText(insightsSearchQuery);
+    const insightRows = sortInsightRows(baseRows.filter(row => matchesInsightsSearch(row.item, query)), insightsSort);
     if(!insightRows.length){
-      list.innerHTML = '<p class="muted">No items match the selected Insights filter.</p>';
+      list.innerHTML = query
+        ? '<p class="muted">No Item Insights match this search.</p>'
+        : '<p class="muted">No items match the selected Insights filter.</p>';
       return;
     }
 
