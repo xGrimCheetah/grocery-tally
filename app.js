@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.43.0"; // Run History detail expansion
+  let APP_VERSION = "1.43.1"; // Move Run History into Insights
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -741,7 +741,16 @@
         </div>
       </div>
       <div class="spacer"></div>
-      <div id="insightsList" class="insights-list"></div>`;
+      <div id="insightsList" class="insights-list"></div>
+      <div class="spacer"></div>
+      <section class="bulk-tools" id="runHistoryPanel" aria-labelledby="runHistoryHeading">
+        <div class="run-history-section-heading">
+          <h3 id="runHistoryHeading">Run History</h3>
+          <span class="pill" id="runHistoryCount">0</span>
+        </div>
+        <div class="spacer"></div>
+        <div id="runHistoryList" class="list"></div>
+      </section>`;
 
     const rangeSelect = document.getElementById('insightsRange');
     if(rangeSelect){
@@ -773,6 +782,7 @@
     const items = state.items.slice().sort(buildListSort);
     if(!items.length){
       list.innerHTML = '<p class="muted">No items yet. Add items from Manage Items to see insights here.</p>';
+      renderRunHistory(document.getElementById('runHistoryList'));
       return;
     }
 
@@ -782,6 +792,7 @@
     })).filter(row => insightMatchesFilter(row, insightsFilter)), insightsSort);
     if(!insightRows.length){
       list.innerHTML = '<p class="muted">No items match the selected Insights filter.</p>';
+      renderRunHistory(document.getElementById('runHistoryList'));
       return;
     }
 
@@ -829,6 +840,7 @@
       row.appendChild(right);
       list.appendChild(row);
     });
+    renderRunHistory(document.getElementById('runHistoryList'));
   }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
@@ -1628,11 +1640,6 @@
         <button class="btn" id="btnImport">Import JSON</button>
         <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
       </div>
-      <details class="bulk-tools" id="runHistoryPanel">
-        <summary>Run history <span class="pill" id="runHistoryCount">0</span></summary>
-        <div class="spacer"></div>
-        <div id="runHistoryList" class="list"></div>
-      </details>
       <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
         <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category above.</p>
@@ -1657,8 +1664,6 @@
       sel.value = manageSelectedCat;
     }
     sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat) };
-    renderRunHistory(document.getElementById('runHistoryList'));
-
     document.getElementById('btnAddItem').onclick = ()=>{
       const name=document.getElementById('newItemName').value.trim();
       const cat=sel.value;
