@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.43.2 — Add Insights Run History toggle
+
+- Added an Insights view toggle for Item Insights and Run History.
+- Made Item Insights the default Insights view.
+- Showed Run History as its own Insights view instead of placing it below the item summaries.
+- Preserved expandable run cards, run totals, estimated totals, missing Avg $ counts, item details, and Show more behavior.
+- Preserved existing run history data, JSON import/export behavior, localStorage keys, and grocery list workflows.
+
 ## v1.43.1 — Move Run History into Insights
 
 - Moved Run History into the Insights tab.

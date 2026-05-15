@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.43.1"; // Move Run History into Insights
+  let APP_VERSION = "1.43.2"; // Add Insights Run History toggle
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -26,6 +26,7 @@
   let insightsDateRange = 'all';
   let insightsSort = 'name';
   let insightsFilter = 'all';
+  let insightsViewMode = 'items';
   let runHistoryShowAll = false;
   const runHistoryExpandedIds = new Set();
 
@@ -437,7 +438,7 @@
     if(!container) return;
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
     const count = document.getElementById('runHistoryCount');
-    if(count) count.textContent = String(runs.length);
+    if(count) count.textContent = `${runs.length} committed run${runs.length === 1 ? '' : 's'}`;
     container.innerHTML = '';
     if(!runs.length){
       const empty = document.createElement('p');
@@ -702,12 +703,21 @@
   function renderInsights(){
     if(!viewInsights) return;
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    const viewingHistory = insightsViewMode === 'history';
     viewInsights.innerHTML = `
       <div class="insights-header">
         <div>
           <h2>Insights</h2>
           <p class="muted">Quantity and estimated spending summaries are calculated from committed run history.</p>
         </div>
+        <div class="insights-actions">
+          <div class="insights-view-toggle" role="group" aria-label="Insights view">
+            <button type="button" class="insights-view-btn${!viewingHistory ? ' active' : ''}" data-insights-view="items" aria-pressed="${!viewingHistory ? 'true' : 'false'}">Item Insights</button>
+            <button type="button" class="insights-view-btn${viewingHistory ? ' active' : ''}" data-insights-view="history" aria-pressed="${viewingHistory ? 'true' : 'false'}">Run History</button>
+          </div>
+          <span class="pill" id="runHistoryCount">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
+        </div>
+        ${viewingHistory ? '' : `
         <div class="insights-controls">
           <div class="insights-control">
             <label for="insightsRange">Date range</label>
@@ -737,20 +747,32 @@
               <option value="missingPrice">Missing price data</option>
             </select>
           </div>
-          <span class="pill">${runs.length} committed run${runs.length === 1 ? '' : 's'}</span>
-        </div>
+        </div>`}
       </div>
       <div class="spacer"></div>
-      <div id="insightsList" class="insights-list"></div>
-      <div class="spacer"></div>
+      ${viewingHistory ? `
       <section class="bulk-tools" id="runHistoryPanel" aria-labelledby="runHistoryHeading">
         <div class="run-history-section-heading">
           <h3 id="runHistoryHeading">Run History</h3>
-          <span class="pill" id="runHistoryCount">0</span>
         </div>
         <div class="spacer"></div>
         <div id="runHistoryList" class="list"></div>
-      </section>`;
+      </section>` : '<div id="insightsList" class="insights-list"></div>'}`;
+
+    document.querySelectorAll('[data-insights-view]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const nextMode = btn.getAttribute('data-insights-view') === 'history' ? 'history' : 'items';
+        if(insightsViewMode !== nextMode){
+          insightsViewMode = nextMode;
+          renderInsights();
+        }
+      };
+    });
+
+    if(viewingHistory){
+      renderRunHistory(document.getElementById('runHistoryList'));
+      return;
+    }
 
     const rangeSelect = document.getElementById('insightsRange');
     if(rangeSelect){
@@ -782,7 +804,6 @@
     const items = state.items.slice().sort(buildListSort);
     if(!items.length){
       list.innerHTML = '<p class="muted">No items yet. Add items from Manage Items to see insights here.</p>';
-      renderRunHistory(document.getElementById('runHistoryList'));
       return;
     }
 
@@ -792,7 +813,6 @@
     })).filter(row => insightMatchesFilter(row, insightsFilter)), insightsSort);
     if(!insightRows.length){
       list.innerHTML = '<p class="muted">No items match the selected Insights filter.</p>';
-      renderRunHistory(document.getElementById('runHistoryList'));
       return;
     }
 
@@ -840,7 +860,6 @@
       row.appendChild(right);
       list.appendChild(row);
     });
-    renderRunHistory(document.getElementById('runHistoryList'));
   }
   function alphaKeyForItem(it){
     const first = cleanText(it && it.name).charAt(0).toUpperCase();
