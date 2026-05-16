@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.47.0 — Build List last-run browsing shortcut
+
+- Added a top-of-Build-List segmented toggle for All items and Last run.
+- Last run mode shows current master list items from the most recent committed run while preserving existing + / – quantity controls.
+- Build List search now filters within the selected All items or Last run item pool.
+- Preserved Shopping Mode skip behavior, Insights, Run History data shape, localStorage keys, and JSON import/export compatibility.
+
 ## v1.46.0 — Shopping Mode skip item option
 
 - Added a Shopping Mode long-press interaction to skip or unskip items that cannot be found or need to be bought later.

@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.46.0"; // Shopping Mode skip item option
+  let APP_VERSION = "1.47.0"; // Build List last-run browsing shortcut
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -24,6 +24,7 @@
   let buildSearchQuery = '';
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
+  let buildListMode = 'all';
   let insightsDateRange = 'all';
   let insightsSort = 'name';
   let insightsFilter = 'all';
@@ -1011,6 +1012,31 @@
       return buildListSort(a,b);
     };
   }
+  function getLastRunItemPool(allItems){
+    const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
+    const lastRun = runs[0];
+    if(!lastRun || !Array.isArray(lastRun.items)) return { hasRun:false, items:[] };
+
+    const ids = new Set();
+    const fallbackKeysWithoutIds = new Set();
+    lastRun.items.forEach(rit=>{
+      const itemId = cleanText((rit && (rit.itemId || rit.id)) || '');
+      if(itemId){
+        ids.add(itemId);
+        return;
+      }
+      const name = normalizeText(rit && rit.name);
+      const cat = normalizeText(rit && rit.cat);
+      if(name && cat) fallbackKeysWithoutIds.add(name + '|' + cat);
+    });
+
+    const items = allItems.filter(it=>{
+      if(ids.has(cleanText(it && it.id))) return true;
+      const fallbackKey = normalizeText(it && it.name) + '|' + normalizeText(it && it.cat);
+      return fallbackKeysWithoutIds.has(fallbackKey);
+    });
+    return { hasRun:true, items };
+  }
   function scrollToBuildTop(){
     clearBuildLetterFocus();
     try{
@@ -1484,6 +1510,12 @@
         <button class="btn-accent" id="btnFinish">Finished →</button>
         <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
       </div>
+      <div class="build-view-toggle-row">
+        <div class="insights-view-toggle" role="group" aria-label="Build List view">
+          <button type="button" class="insights-view-btn${buildListMode === 'all' ? ' active' : ''}" data-build-list-mode="all" aria-pressed="${buildListMode === 'all' ? 'true' : 'false'}">All items</button>
+          <button type="button" class="insights-view-btn${buildListMode === 'lastRun' ? ' active' : ''}" data-build-list-mode="lastRun" aria-pressed="${buildListMode === 'lastRun' ? 'true' : 'false'}">Last run</button>
+        </div>
+      </div>
       <div id="buildEstimate" class="estimate-sticky"></div>
       <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
         <div id="buildAlphaView" class="build-alpha-view">
@@ -1505,6 +1537,7 @@
     const searchInput = document.getElementById('buildSearchInput');
     const clearBtn = document.getElementById('btnBuildSearchClear');
     const showAlphaBtn = document.getElementById('btnBuildShowAlpha');
+    const buildModeButtons = viewBuild.querySelectorAll('[data-build-list-mode]');
 
     renderEstimatePill(buildEstimate, { includeSkipped: true });
     searchInput.value = buildSearchQuery;
@@ -1512,7 +1545,9 @@
     function drawBuildList(){
       const query = normalizeText(buildSearchQuery);
       const allItems = state.items.slice().sort(buildListSort);
-      const items = query ? allItems.filter(it => matchesBuildSearch(it, query)).sort(buildSearchSort(query)) : allItems;
+      const lastRunPool = buildListMode === 'lastRun' ? getLastRunItemPool(allItems) : { hasRun:true, items:allItems };
+      const itemPool = buildListMode === 'lastRun' ? lastRunPool.items : allItems;
+      const items = query ? itemPool.filter(it => matchesBuildSearch(it, query)).sort(buildSearchSort(query)) : itemPool;
       const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
       const activeLetters = new Set(items.map(alphaKeyForItem));
       if(buildFocusLetter && !activeLetters.has(buildFocusLetter)) buildFocusLetter = '';
@@ -1544,13 +1579,25 @@
       alphaButtons.appendChild(searchToggleBtn);
 
       buildList.innerHTML = '';
+      if(buildListMode === 'lastRun' && !lastRunPool.hasRun){
+        buildList.innerHTML = '<p class="muted">No committed runs yet. Commit a shopping run to use Last run.</p>';
+        applyBuildLetterFocus();
+        return;
+      }
       if(!allItems.length){
         buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
         applyBuildLetterFocus();
         return;
       }
+      if(buildListMode === 'lastRun' && !itemPool.length){
+        buildList.innerHTML = '<p class="muted">No current items were found from the last run.</p>';
+        applyBuildLetterFocus();
+        return;
+      }
       if(!items.length){
-        buildList.innerHTML = '<p class="muted">No matching items. Clear the search to show the full Build List.</p>';
+        buildList.innerHTML = buildListMode === 'lastRun' && query
+          ? '<p class="muted">No last-run items match this search.</p>'
+          : '<p class="muted">No matching items. Clear the search to show the full Build List.</p>';
         applyBuildLetterFocus();
         return;
       }
@@ -1598,6 +1645,17 @@
         try{ searchInput.focus(); }catch(e){}
       }
     }
+
+    buildModeButtons.forEach(btn=>{
+      btn.onclick = ()=>{
+        const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : 'all';
+        if(buildListMode !== nextMode){
+          buildListMode = nextMode;
+          buildFocusLetter = '';
+          renderBuild();
+        }
+      };
+    });
 
     searchInput.addEventListener('input', ()=>{
       buildSearchQuery = searchInput.value;

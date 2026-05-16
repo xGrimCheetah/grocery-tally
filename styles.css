@@ -11,6 +11,7 @@ h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
 .controls .right-controls{margin-left:auto}
 .build-actions{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .build-actions .right-controls{margin-left:auto}
+.build-view-toggle-row{display:flex;justify-content:flex-start;margin:10px 0 0}
 button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:white;cursor:pointer}
 .btn{background:#334155}
 .btn:hover{filter:brightness(1.05)}
