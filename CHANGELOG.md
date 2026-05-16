@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.48.0 — Manage tab consolidation
+
+- Combined Manage Items and Manage Categories into one top-level Manage tab.
+- Added an internal Items / Categories management switch.
+- Preserved existing item editing, category editing, drag sorting, and swipe-delete behavior.
+- Preserved the Data Safety / Backup panel and existing backup/import/wipe behavior.
+- Preserved Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON import/export compatibility.
+
 ## v1.47.0 — Build List last-run browsing shortcut
 
 - Added a top-of-Build-List segmented toggle for All items and Last run.
