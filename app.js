@@ -1217,9 +1217,11 @@
     const it = state.items.find(x=>x.id===itemId);
     if(!it || !state.categories.includes(targetCat)) return false;
     const oldCat = it.cat;
+    const originalIndex = oldCat === targetCat ? itemsInCategory(oldCat).findIndex(x=>x.id===itemId) : -1;
     const targetItems = itemsInCategory(targetCat).filter(x=>x.id!==itemId);
     let insertAt = Number(targetIndex);
     if(!Number.isFinite(insertAt)) insertAt = targetItems.length;
+    if(originalIndex >= 0 && originalIndex < insertAt) insertAt -= 1;
     insertAt = Math.max(0, Math.min(insertAt, targetItems.length));
     it.cat = targetCat;
     targetItems.splice(insertAt, 0, it);
