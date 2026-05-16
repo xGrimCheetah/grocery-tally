@@ -2097,6 +2097,25 @@
         priceWrap.appendChild(priceLabel);
         priceWrap.appendChild(priceInput);
 
+        const categoryWrap=document.createElement('div'); categoryWrap.className='price-wrap category-edit-wrap'; categoryWrap.style.display='none';
+        const categoryLabel=document.createElement('span'); categoryLabel.className='price-label'; categoryLabel.textContent='Category';
+        const categorySelect=document.createElement('select'); categorySelect.className='manage-category-select'; categorySelect.setAttribute('aria-label','Item category');
+        state.categories.forEach(categoryName=>{
+          const opt=document.createElement('option'); opt.value=categoryName; opt.textContent=categoryName; categorySelect.appendChild(opt);
+        });
+        categorySelect.value = it.cat;
+        categorySelect.addEventListener('keydown', (e)=>{
+          if(e.key==='Enter'){
+            e.preventDefault();
+            saveBtn.click();
+          } else if(e.key==='Escape'){
+            e.preventDefault();
+            cancelBtn.click();
+          }
+        });
+        categoryWrap.appendChild(categoryLabel);
+        categoryWrap.appendChild(categorySelect);
+
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
@@ -2124,6 +2143,7 @@
         left.appendChild(input);
         row.appendChild(right);
         right.appendChild(priceWrap);
+        right.appendChild(categoryWrap);
         if(manageItemReorderMode){
           row.classList.add('reordering');
           shell.wrap.classList.add('reorder-mode');
@@ -2145,7 +2165,9 @@
           name.style.display='none';
           input.style.display='block';
           priceWrap.style.display='flex';
+          categoryWrap.style.display='flex';
           priceInput.value=formatPriceInput(it.avgPrice);
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='none';
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
@@ -2158,7 +2180,9 @@
           name.style.display='block';
           input.style.display='none';
           priceWrap.style.display='none';
+          categoryWrap.style.display='none';
           priceInput.value = formatPriceInput(it.avgPrice);
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='inline-block';
           saveBtn.style.display='none';
           cancelBtn.style.display='none';
@@ -2179,12 +2203,23 @@
           const nv = input.value.trim();
           if(!nv){ alert('Item name cannot be empty.'); return }
           const parsedPrice = parsePriceInput(priceInput.value);
+          const selectedCat = state.categories.includes(categorySelect.value) ? categorySelect.value : it.cat;
+          const oldCat = it.cat;
+          const categoryChanged = selectedCat && selectedCat !== oldCat;
           it.name = nv;
           it.avgPrice = parsedPrice;
+          if(categoryChanged){
+            moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
+          }
           save();
           name.textContent = it.name;
           priceInput.value = formatPriceInput(it.avgPrice);
-          exitEdit();
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
+          if(categoryChanged){
+            renderManage();
+          } else {
+            exitEdit();
+          }
           renderBuild();
           renderShop();
           renderInsights();
