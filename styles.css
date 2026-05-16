@@ -153,7 +153,9 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .pill{background:#0b1220;border:1px solid #243042;border-radius:999px;padding:6px 10px;font-size:12px}
 .link{color:#93c5fd;text-decoration:underline;cursor:pointer}
 .category-summary,.manage-category-row,.manage-item-row{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
-.category-summary,.manage-item-row{cursor:grab}
+.category-summary{cursor:grab}
+.manage-item-row{cursor:default}
+.manage-item-row input{user-select:text;-webkit-user-select:text;-webkit-touch-callout:default}
 .category-title{vertical-align:middle}
 .dragging{opacity:.55}
 .touch-drag-source{visibility:hidden;opacity:1;touch-action:none}
@@ -161,6 +163,14 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .touch-drag-clone,.touch-drag-clone *{pointer-events:none}
 .item-touch-drag-active{touch-action:none;overscroll-behavior:contain}
 .drop-target{outline:none}
+.manage-reorder-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.manage-reorder-help{font-size:.92rem}
+.manage-item-row.reordering{cursor:default}
+.manage-item-row.reordering .right{gap:6px}
+.reorder-btn{min-width:44px;min-height:40px;font-size:1.1rem;font-weight:800;line-height:1}
+.reorder-btn:disabled{opacity:.35;cursor:not-allowed}
+#manageList.reorder-mode .swipe-trash{display:none}
+#manageList.reorder-mode .swipe-content{transform:none!important}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
 .list .swipe-wrap{margin-top:0}
 .swipe-content{position:relative;z-index:1;transition:transform .18s ease;touch-action:pan-y}
