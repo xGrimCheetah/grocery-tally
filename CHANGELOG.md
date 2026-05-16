@@ -1,3 +1,5 @@
+# Changelog
+
 ## v1.48.2 — Manage Items mobile drag behavior fix
 
 - Improved Manage Items mobile drag behavior on iPhone PWA.
@@ -6,8 +8,6 @@
 - Prevented unwanted iOS text selection during Manage Items drag actions.
 - Kept drag feedback fade-only with no dashed blue outlines.
 - Preserved Manage Categories drag behavior, tab order, mobile Insights layout, Build List, Shopping Mode, Run History, localStorage keys, and JSON export/import compatibility.
-
-# Changelog
 
 ## v1.48.1 — Mobile manage and insights polish
 
