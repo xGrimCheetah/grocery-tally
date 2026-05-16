@@ -1122,12 +1122,12 @@
     try{ renderBuild(); renderShop(); }catch(e){}
   }
   function resetCheckmarks(){
-    const checked = state.items.filter(i=>i.checked);
-    if(!checked.length){
-      alert('No checkmarks to reset.');
+    const handled = state.items.filter(i=>i.checked || i.skipped);
+    if(!handled.length){
+      alert('No checked or skipped items to reset.');
       return;
     }
-    checked.forEach(i=>{
+    handled.forEach(i=>{
       i.checked = false;
       i.skipped = false;
     });
@@ -1661,7 +1661,7 @@
       <div class="controls">
         <button class="btn" id="btnBack">← Back</button>
         <button class="btn-accent right-controls" id="btnCommitRun">Commit run</button>
-        <button class="btn" id="btnResetCheckmarks">Reset checkmarks</button>
+        <button class="btn" id="btnResetCheckmarks">Reset checked/skipped</button>
       </div>
       <div id="shopEstimate" class="estimate-sticky"></div>
       <p class="muted shop-instruction">Tap to check off. Press and hold to skip or unskip.</p>
