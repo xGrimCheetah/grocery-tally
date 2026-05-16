@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.0"; // Manage tab consolidation
+  let APP_VERSION = "1.48.1"; // Mobile manage and insights polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1271,11 +1271,67 @@
   function rerenderCategoryOrderViews(){
     try{ renderCats(); renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
+  let touchCategoryDrag = null;
+  function clearCategoryDragState(){
+    touchCategoryDrag = null;
+    draggedCategoryName = null;
+    document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+    document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+  }
+  function categoryDropElementFromPoint(x, y, visual){
+    if(visual) visual.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(x, y);
+    if(visual) visual.style.pointerEvents = '';
+    return el && el.closest ? el.closest('[data-category-drop-target="true"]') : null;
+  }
+  function attachCategoryTouchDrag(handleEl, cat, dragClassEl){
+    if(!handleEl || typeof PointerEvent === 'undefined') return;
+    handleEl.addEventListener('pointerdown', e=>{
+      if(e.pointerType === 'mouse' || e.button !== 0) return;
+      const visual = dragClassEl || handleEl;
+      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+      draggedCategoryName = cat;
+      visual.classList.add('dragging');
+      try{ handleEl.setPointerCapture(e.pointerId); }catch(err){}
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    handleEl.addEventListener('pointermove', e=>{
+      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
+      touchCategoryDrag.x = e.clientX;
+      touchCategoryDrag.y = e.clientY;
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    handleEl.addEventListener('pointerup', e=>{
+      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
+      const drag = touchCategoryDrag;
+      const targetEl = categoryDropElementFromPoint(e.clientX, e.clientY, drag.visual);
+      const targetCat = targetEl ? targetEl.dataset.category : '';
+      let moved = false;
+      if(targetCat && targetCat !== drag.cat){
+        const rect = targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
+        const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
+        moved = moveCategoryNear(drag.cat, targetCat, placeAfter);
+      }
+      clearCategoryDragState();
+      if(moved){
+        save();
+        rerenderCategoryOrderViews();
+      }
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    handleEl.addEventListener('pointercancel', e=>{
+      if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) clearCategoryDragState();
+    });
+  }
   function attachCategoryDrag(handleEl, cat, dragClassEl){
     if(!handleEl) return;
     handleEl.draggable = true;
     handleEl.dataset.category = cat;
     handleEl.addEventListener('click', e=> e.stopPropagation());
+    attachCategoryTouchDrag(handleEl, cat, dragClassEl);
     handleEl.addEventListener('dragstart', e=>{
       draggedCategoryName = cat;
       const visual = dragClassEl || handleEl;
@@ -1285,15 +1341,16 @@
         e.dataTransfer.setData('application/x-grocery-category', cat);
         e.dataTransfer.setData('text/plain', '');
       }catch(err){}
+      e.stopPropagation();
     });
     handleEl.addEventListener('dragend', ()=>{
-      draggedCategoryName = null;
-      document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-      document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+      clearCategoryDragState();
     });
   }
   function attachCategoryDropTarget(el, targetCat){
     if(!el) return;
+    el.dataset.categoryDropTarget = 'true';
+    el.dataset.category = targetCat;
     el.addEventListener('dragover', e=>{
       const sourceCat = getDragCategoryName(e);
       if(!sourceCat || sourceCat === targetCat) return;
@@ -2264,11 +2321,17 @@
     cl.innerHTML='';
     state.categories.forEach((c,i)=>{
       const row=document.createElement('div');
-      row.className='item';
+      row.className='item manage-category-row';
       row.draggable=true;
       row.dataset.index=i;
+      row.dataset.category=c;
 
       const left=document.createElement('div'); left.className='left';
+      const handle=document.createElement('span');
+      handle.className='drag-handle category-drag-handle';
+      handle.textContent='☰';
+      handle.title='Drag to reorder category';
+      handle.setAttribute('aria-label','Drag to reorder category');
       const right=document.createElement('div'); right.className='right';
       const label=document.createElement('div'); label.textContent=c; label.className='name';
       const input=document.createElement('input'); input.value=c; input.style.display='none';
@@ -2331,30 +2394,25 @@
         renderCats(); renderManage(); renderBuild(); renderShop();
       };
 
-      row.appendChild(left); left.appendChild(label); left.appendChild(input);
+      row.appendChild(left); left.appendChild(handle); left.appendChild(label); left.appendChild(input);
       row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+      row.addEventListener('dragstart', e=>{
+        if(e.target && e.target.closest && e.target.closest('button,input,select,textarea,a,[contenteditable="true"]')){
+          e.preventDefault();
+          return;
+        }
+        draggedCategoryName = c;
+        row.classList.add('dragging');
+        try{
+          e.dataTransfer.effectAllowed='move';
+          e.dataTransfer.setData('application/x-grocery-category', c);
+          e.dataTransfer.setData('text/plain', '');
+        }catch(err){}
+      });
+      row.addEventListener('dragend', ()=> clearCategoryDragState());
+      attachCategoryDrag(handle, c, row);
+      attachCategoryDropTarget(row, c);
       cl.appendChild(row);
-    });
-
-    let dragIndex=null;
-    cl.querySelectorAll('.item').forEach(el=>{
-      el.addEventListener('dragstart', e=>{
-        dragIndex=parseInt(e.currentTarget.dataset.index,10);
-        e.dataTransfer.effectAllowed='move';
-      });
-      el.addEventListener('dragover', e=>{
-        e.preventDefault();
-        e.dataTransfer.dropEffect='move';
-      });
-      el.addEventListener('drop', e=>{
-        e.preventDefault();
-        const targetIndex=parseInt(e.currentTarget.dataset.index,10);
-        if(isNaN(dragIndex)||isNaN(targetIndex)||dragIndex===targetIndex) return;
-        const moved=state.categories.splice(dragIndex,1)[0];
-        state.categories.splice(targetIndex,0,moved);
-        save();
-        renderCats(); renderManage(); renderBuild(); renderShop();
-      });
     });
 
     const addCatBtn = document.getElementById('btnAddCat');

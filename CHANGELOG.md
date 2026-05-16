@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.48.1 — Mobile manage and insights polish
+
+- Fixed Manage Categories drag sorting on iPhone PWA.
+- Removed unwanted dashed drag highlights from category dragging visuals.
+- Kept category drag feedback clean with fade-only styling while dragging.
+- Improved the mobile Item Insights control layout for Date range, Sort, and Filter.
+- Moved the top-level Manage tab after Insights for a cleaner navigation order.
+- Preserved Manage Items, Manage Categories, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.0 — Manage tab consolidation
 
 - Combined Manage Items and Manage Categories into one top-level Manage tab.
