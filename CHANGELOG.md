@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.48.8 — Mobile item edit layout fix
+
+- Improved the mobile Manage Items edit-row layout.
+- Stacked item name, Avg $, Category, Save, and Cancel controls on narrow screens so they no longer overlap.
+- Kept item recategorizing, Reorder Items mode, Reorder Categories mode, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.7 — Category reorder mode
 
 - Removed long-press drag sorting from the Manage tabs.

@@ -122,6 +122,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .manage-item-row.editing .left{flex:1 1 auto}
 .manage-item-row.editing .right{flex:0 0 auto}
 .manage-item-row.editing .manage-name-input{width:100%;min-width:0}
+@media(max-width:640px){.manage-item-row.editing{flex-direction:column;align-items:stretch;gap:10px;padding:12px}.manage-item-row.editing .left{width:100%;flex:0 0 auto;align-self:stretch}.manage-item-row.editing .right{display:grid;grid-template-columns:1fr 1fr;width:100%;margin-left:0;align-self:stretch;gap:10px}.manage-item-row.editing .manage-name-input{display:block;width:100%;min-height:42px;font-size:16px;line-height:1.2}.manage-item-row.editing .price-wrap{grid-column:1/-1;width:100%;align-items:center}.manage-item-row.editing .price-input{flex:1 1 auto;width:auto;min-width:0;min-height:42px;font-size:16px;line-height:1.2}.manage-item-row.editing .category-edit-wrap .manage-category-select{flex:1 1 auto;width:100%;max-width:none;min-width:0;min-height:42px;font-size:16px;line-height:1.2}.manage-item-row.editing .right > button{width:100%;min-height:42px}}
 .estimate-sticky{position:sticky;top:0;z-index:6;display:flex;justify-content:flex-end;margin:8px 0 10px;pointer-events:none}
 .estimate-pill{pointer-events:auto;background:#0b1220;border:1px solid #243042;border-radius:999px;padding:8px 12px;min-width:176px;text-align:right;box-shadow:0 8px 18px rgba(0,0,0,.18)}
 .estimate-total{font-weight:800;font-variant-numeric:tabular-nums}
