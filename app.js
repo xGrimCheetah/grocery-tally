@@ -1502,6 +1502,9 @@
     }
     return { targetCat: drop.targetCat, idx };
   }
+  function itemDropCountExcludingDragged(cat, itemId){
+    return itemsInCategory(cat).filter(it=>it.id !== itemId).length;
+  }
   function itemDropPositionFromCenter(itemId, centerY){
     const sections = Array.from(document.querySelectorAll('#manageList details')).map(sec=>{
       const sum = sec.querySelector('summary[data-category-drop-target="true"]');
@@ -1526,9 +1529,12 @@
       if(centerY < top){
         if(previousVisible){
           const prevBottom = previousVisible.listRect && previousVisible.listRect.height > 0 ? previousVisible.listRect.bottom : previousVisible.summaryRect.bottom;
-          if(centerY - prevBottom < top - centerY) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).filter(it=>it.id !== itemId).length, fromCenterline: true };
+          if(centerY - prevBottom < top - centerY) return { targetCat: previousVisible.cat, idx: itemDropCountExcludingDragged(previousVisible.cat, itemId), fromCenterline: true };
         }
         return { targetCat: section.cat, idx: 0, fromCenterline: true };
+      }
+      if(centerY <= section.summaryRect.bottom){
+        return { targetCat: section.cat, idx: itemDropCountExcludingDragged(section.cat, itemId), fromCenterline: true, fromCategoryHeader: true };
       }
       if(centerY <= bottom){
         let idx = 0;
@@ -1541,7 +1547,7 @@
       }
       previousVisible = section;
     }
-    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).filter(it=>it.id !== itemId).length, fromCenterline: true };
+    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemDropCountExcludingDragged(previousVisible.cat, itemId), fromCenterline: true };
     return null;
   }
   function itemDropPositionFromPoint(x, y, visual, itemId){
