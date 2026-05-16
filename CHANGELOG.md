@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.48.5 — Manage Items item drag stabilization
+
+- Stabilized Manage Items item-row dragging on iPhone PWA.
+- Prevented item rows from remaining hidden after canceled or failed drag interactions.
+- Made mobile item-row dragging safer by limiting touch reordering to the original category.
+- Prevented ambiguous mobile drops from accidentally moving items into the wrong category.
+- Preserved Manage Categories dragging, Manage Items category-header dragging, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.4 — Mobile drag centerline and lift polish
 
 - Changed mobile management drag/drop placement to use dragged-row centerline positioning instead of finicky release targets.

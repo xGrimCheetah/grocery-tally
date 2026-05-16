@@ -156,9 +156,10 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .category-summary,.manage-item-row{cursor:grab}
 .category-title{vertical-align:middle}
 .dragging{opacity:.55}
-.touch-drag-source{visibility:hidden;opacity:1}
+.touch-drag-source{visibility:hidden;opacity:1;touch-action:none}
 .touch-drag-clone{position:fixed;left:0;top:0;z-index:9999;margin:0;box-sizing:border-box;pointer-events:none;opacity:1;transform-origin:top left;box-shadow:0 14px 30px rgba(15,23,42,.24);filter:none}
 .touch-drag-clone,.touch-drag-clone *{pointer-events:none}
+.item-touch-drag-active{touch-action:none;overscroll-behavior:contain}
 .drop-target{outline:none}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
 .list .swipe-wrap{margin-top:0}
