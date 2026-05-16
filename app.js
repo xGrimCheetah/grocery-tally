@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.4"; // Mobile drag centerline and lift polish
+  let APP_VERSION = "1.48.5"; // Manage Items item drag stabilization
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1315,13 +1315,28 @@
     if(drag && drag.clone && drag.clone.parentNode) drag.clone.parentNode.removeChild(drag.clone);
     if(drag && drag.visual) drag.visual.classList.remove('touch-drag-source');
   }
+  function restoreTouchDragSource(el){
+    if(!el || !el.classList) return;
+    el.classList.remove('touch-drag-source','dragging','drop-target');
+    if(el.style){
+      el.style.removeProperty('visibility');
+      el.style.removeProperty('opacity');
+      el.style.removeProperty('display');
+      el.style.removeProperty('pointer-events');
+      el.style.removeProperty('touch-action');
+    }
+  }
+  function clearTouchDragArtifacts(){
+    document.querySelectorAll('.touch-drag-clone').forEach(el=>{ if(el.parentNode) el.parentNode.removeChild(el); });
+    document.querySelectorAll('.touch-drag-source,.dragging,.drop-target').forEach(restoreTouchDragSource);
+    document.body.classList.remove('item-touch-drag-active');
+  }
   function clearCategoryDragState(){
     if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
     removeTouchDragClone(touchCategoryDrag);
     touchCategoryDrag = null;
     draggedCategoryName = null;
-    document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-    document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+    clearTouchDragArtifacts();
   }
   function elementFromPointIgnoringVisual(x, y, visual){
     if(visual) visual.style.pointerEvents = 'none';
@@ -1485,8 +1500,7 @@
     removeTouchDragClone(touchItemDrag);
     touchItemDrag = null;
     draggedItemId = null;
-    document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-    document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+    clearTouchDragArtifacts();
   }
   function itemDropElementFromPoint(x, y, visual){
     const el = elementFromPointIgnoringVisual(x, y, visual);
@@ -1504,6 +1518,10 @@
   }
   function itemDropCountExcludingDragged(cat, itemId){
     return itemsInCategory(cat).filter(it=>it.id !== itemId).length;
+  }
+  function itemCategoryById(itemId){
+    const item = state.items.find(it=>it.id === itemId);
+    return item ? item.cat : '';
   }
   function itemDropPositionFromCenter(itemId, centerY){
     const sections = Array.from(document.querySelectorAll('#manageList details')).map(sec=>{
@@ -1550,6 +1568,31 @@
     if(previousVisible) return { targetCat: previousVisible.cat, idx: itemDropCountExcludingDragged(previousVisible.cat, itemId), fromCenterline: true };
     return null;
   }
+  function itemDropPositionWithinCategory(itemId, sourceCat, centerY){
+    if(!itemId || !sourceCat || !Number.isFinite(centerY)) return null;
+    const sections = Array.from(document.querySelectorAll('#manageList details'));
+    const sec = sections.find(section=>{
+      const sum = section.querySelector('summary[data-category-drop-target="true"]');
+      return sum && sum.dataset.category === sourceCat;
+    });
+    if(!sec || !sec.open) return null;
+    const list = sec.querySelector('.list');
+    const listRect = list && list.getBoundingClientRect ? list.getBoundingClientRect() : null;
+    if(!listRect || listRect.width <= 0 || listRect.height <= 0) return null;
+    if(centerY < listRect.top || centerY > listRect.bottom) return null;
+    const rows = Array.from(sec.querySelectorAll('[data-item-drop-row="true"]')).map(row=>({
+      rect: row.getBoundingClientRect ? row.getBoundingClientRect() : null,
+      itemId: row.dataset.itemId || ''
+    })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.itemId !== itemId)
+      .sort((a,b)=> (a.rect.top + a.rect.height / 2) - (b.rect.top + b.rect.height / 2));
+    let idx = 0;
+    for(const row of rows){
+      const rowCenter = row.rect.top + row.rect.height / 2;
+      if(centerY < rowCenter) break;
+      idx += 1;
+    }
+    return { targetCat: sourceCat, idx, fromCenterline: true };
+  }
   function itemDropPositionFromPoint(x, y, visual, itemId){
     return itemDropPositionFromCenter(itemId || draggedItemId || '', y);
   }
@@ -1558,6 +1601,8 @@
     drag.active = true;
     draggedItemId = drag.itemId;
     drag.visual.classList.add('dragging');
+    drag.visual.style.touchAction = 'none';
+    document.body.classList.add('item-touch-drag-active');
     createTouchDragClone(drag);
     try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
   }
@@ -1569,7 +1614,7 @@
       if(e.pointerType === 'mouse' || e.button !== 0 || (row && row.classList.contains('editing')) || (wrap && wrap.classList.contains('revealed')) || isInteractiveItemDragTarget(e.target)) return;
       const visual = dragClassEl || surfaceEl;
       if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
-      touchItemDrag = { itemId, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
+      touchItemDrag = { itemId, sourceCat: itemCategoryById(itemId), visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
       touchItemDrag.holdTimer = setTimeout(()=>{
         if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) startItemTouchDrag(surfaceEl, touchItemDrag);
       }, TOUCH_DRAG_HOLD_MS);
@@ -1598,8 +1643,8 @@
       const wasActive = !!drag.active;
       let moved = false;
       if(wasActive){
-        const drop = itemDropPositionFromCenter(drag.itemId, projectedDragCenterY(drag, e.clientY));
-        if(drop){
+        const drop = itemDropPositionWithinCategory(drag.itemId, drag.sourceCat, projectedDragCenterY(drag, e.clientY));
+        if(drop && drop.targetCat === drag.sourceCat){
           moved = moveItemToCategory(drag.itemId, drop.targetCat, drop.idx, true);
         }
       }
@@ -1617,6 +1662,25 @@
       if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
     });
   }
+  window.addEventListener('pointermove', e=>{
+    if(!touchItemDrag || !touchItemDrag.active || touchItemDrag.pointerId !== e.pointerId) return;
+    touchItemDrag.x = e.clientX;
+    touchItemDrag.y = e.clientY;
+    syncTouchDragClone(touchItemDrag);
+    e.preventDefault();
+  }, { capture: true });
+  window.addEventListener('pointerup', e=>{
+    if(!touchItemDrag || !touchItemDrag.active || touchItemDrag.pointerId !== e.pointerId) return;
+    setTimeout(()=>{
+      if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
+    }, 0);
+  }, { capture: true });
+  window.addEventListener('pointercancel', e=>{
+    if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
+  }, { capture: true });
+  window.addEventListener('scroll', ()=>{
+    if(touchItemDrag && touchItemDrag.active) clearItemDragState();
+  }, { capture: true, passive: true });
   function itemDragRowFor(dragClassEl, eventTarget){
     if(dragClassEl && dragClassEl.querySelector){
       const row = dragClassEl.querySelector('.manage-item-row');
@@ -2153,6 +2217,7 @@
 
   // ----- Manage Items -----
   function renderManage(){
+    clearItemDragState();
     viewManage.innerHTML = `
       <div class="manage-view-toggle-row">
         <div class="insights-view-toggle manage-view-toggle" role="group" aria-label="Manage view">
@@ -2171,9 +2236,11 @@
     const subView = document.getElementById('manageSubView');
     if(manageView === 'categories') renderManageCategories(subView);
     else renderManageItems(subView);
+    clearTouchDragArtifacts();
   }
 
   function renderManageItems(target){
+    clearItemDragState();
     ensurePositions();
     (target || viewManage).innerHTML = `
       <div class="grid">
