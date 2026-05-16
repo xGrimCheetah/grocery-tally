@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.45.0"; // Insights search polish
+  let APP_VERSION = "1.46.0"; // Shopping Mode skip item option
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -49,6 +49,8 @@
       it.qty = Math.max(0, Number(it.qty) || 0);
       it.prevQty = Math.max(0, Number(it.prevQty) || 0);
       it.checked = !!it.checked;
+      it.skipped = !!it.skipped;
+      if(it.checked) it.skipped = false;
       it.avgPrice = Math.max(0, Number(it.avgPrice) || 0);
       if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
     });
@@ -406,11 +408,11 @@
     if(!Number.isFinite(amount) || amount <= 0) return '';
     return amount.toFixed(2);
   }
-  function activeEstimateItems(){
-    return state.items.filter(i => Number(i && i.qty) > 0);
+  function activeEstimateItems(includeSkipped){
+    return state.items.filter(i => Number(i && i.qty) > 0 && (includeSkipped || !i.skipped));
   }
-  function estimateActiveTotal(){
-    const active = activeEstimateItems();
+  function estimateActiveTotal(includeSkipped){
+    const active = activeEstimateItems(includeSkipped);
     let total = 0;
     let missing = 0;
     active.forEach(it=>{
@@ -430,9 +432,9 @@
     if(!Number.isFinite(amount)) return '$0.00';
     return '$' + amount.toFixed(2);
   }
-  function renderEstimatePill(container){
+  function renderEstimatePill(container, options){
     if(!container) return;
-    const estimate = estimateActiveTotal();
+    const estimate = estimateActiveTotal(!!(options && options.includeSkipped));
     const missingText = estimate.missing === 1 ? '1 item missing price' : `${estimate.missing} items missing prices`;
     const plus = estimate.missing > 0 ? '+' : '';
     container.innerHTML = '';
@@ -1114,18 +1116,20 @@
     state.items.forEach(i=>{
       i.qty = 0;
       i.checked = false;
+      i.skipped = false;
     });
     save();
     try{ renderBuild(); renderShop(); }catch(e){}
   }
   function resetCheckmarks(){
-    const checked = state.items.filter(i=>i.checked);
-    if(!checked.length){
-      alert('No checkmarks to reset.');
+    const handled = state.items.filter(i=>i.checked || i.skipped);
+    if(!handled.length){
+      alert('No checked or skipped items to reset.');
       return;
     }
-    checked.forEach(i=>{
+    handled.forEach(i=>{
       i.checked = false;
+      i.skipped = false;
     });
     save();
     try{
@@ -1160,6 +1164,10 @@
       i.prevQty = Number(i.qty) || 0;
       i.qty = 0;
       i.checked = false;
+      i.skipped = false;
+    });
+    state.items.forEach(i=>{
+      if(i.skipped) i.skipped = false;
     });
     save();
     try{
@@ -1498,7 +1506,7 @@
     const clearBtn = document.getElementById('btnBuildSearchClear');
     const showAlphaBtn = document.getElementById('btnBuildShowAlpha');
 
-    renderEstimatePill(buildEstimate);
+    renderEstimatePill(buildEstimate, { includeSkipped: true });
     searchInput.value = buildSearchQuery;
 
     function drawBuildList(){
@@ -1566,8 +1574,8 @@
         left.appendChild(name);
 
         const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
-        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); save(); renderBuild() };
-        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; save(); renderBuild() };
+        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
+        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; it.skipped=false; save(); renderBuild() };
         const prev=document.createElement('div');
         prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
         prev.title='Previous run quantity';
@@ -1653,9 +1661,10 @@
       <div class="controls">
         <button class="btn" id="btnBack">← Back</button>
         <button class="btn-accent right-controls" id="btnCommitRun">Commit run</button>
-        <button class="btn" id="btnResetCheckmarks">Reset checkmarks</button>
+        <button class="btn" id="btnResetCheckmarks">Reset checked/skipped</button>
       </div>
       <div id="shopEstimate" class="estimate-sticky"></div>
+      <p class="muted shop-instruction">Tap to check off. Press and hold to skip or unskip.</p>
       <div class="spacer"></div>
       <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
@@ -1666,9 +1675,10 @@
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
     const byCat = groupBy(items,'cat');
+    const isHandled = item => !!(item && (item.checked || item.skipped));
     const orderedCats = Object.keys(byCat).sort((a,b)=>{
-      const aDone = byCat[a].length > 0 && byCat[a].every(i => i.checked);
-      const bDone = byCat[b].length > 0 && byCat[b].every(i => i.checked);
+      const aDone = byCat[a].length > 0 && byCat[a].every(isHandled);
+      const bDone = byCat[b].length > 0 && byCat[b].every(isHandled);
       if(aDone !== bDone) return aDone ? 1 : -1;
       return catIndex(a)-catIndex(b);
     });
@@ -1680,7 +1690,7 @@
 
     orderedCats.forEach(cat=>{
       const catItems = byCat[cat];
-      const catComplete = catItems.length > 0 && catItems.every(i => i.checked);
+      const catComplete = catItems.length > 0 && catItems.every(isHandled);
       const block=document.createElement('div');
       block.className='shop-cat-block' + (catComplete ? ' completed' : '');
       block.dataset.cat = cat;
@@ -1693,11 +1703,17 @@
       const list=document.createElement('div');
       list.className='shop-cat-list';
 
-      catItems.forEach(it=>{
+      catItems.slice().sort((a,b)=>{
+        const ah = isHandled(a);
+        const bh = isHandled(b);
+        if(ah !== bh) return ah ? 1 : -1;
+        return sortItems(a,b);
+      }).forEach(it=>{
         const row=document.createElement('div');
-        row.className='shop-item' + (it.checked ? ' checked' : '');
+        row.className='shop-item' + (it.checked ? ' checked' : '') + (it.skipped ? ' skipped' : '');
         row.setAttribute('role','button');
         row.setAttribute('aria-pressed', it.checked ? 'true' : 'false');
+        row.setAttribute('aria-label', `${it.name}. ${it.checked ? 'Checked' : (it.skipped ? 'Skipped' : 'Not checked')}. Tap to check off. Press and hold to skip or unskip.`);
 
         const check=document.createElement('div');
         check.className='shop-check';
@@ -1726,18 +1742,64 @@
         row.appendChild(divider2);
         row.appendChild(name);
 
-        row.onclick = ()=>{
-          const wasCatComplete = catItems.length > 0 && catItems.every(i => i.checked);
-          it.checked = !it.checked;
+        let longPressTimer = null;
+        let longPressTriggered = false;
+        let startX = 0;
+        let startY = 0;
+        const clearLongPressTimer = ()=>{
+          if(longPressTimer){
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        };
+        const refreshAfterShopChange = (wasCatComplete)=>{
           save();
+          renderEstimatePill(document.getElementById('shopEstimate'));
           const currentCatItems = state.items.filter(i => i.cat === cat && Number(i.qty) > 0);
-          const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(i => i.checked);
+          const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(isHandled);
           if(isCatComplete && !wasCatComplete){
             block.classList.add('fading-out');
             setTimeout(()=> renderShop(cat), 250);
           } else {
             renderShop();
           }
+        };
+        row.addEventListener('pointerdown', e=>{
+          if(e.button !== undefined && e.button !== 0) return;
+          startX = e.clientX;
+          startY = e.clientY;
+          longPressTriggered = false;
+          clearLongPressTimer();
+          try{ row.setPointerCapture(e.pointerId); }catch(err){}
+          longPressTimer = setTimeout(()=>{
+            longPressTimer = null;
+            longPressTriggered = true;
+            if(it.checked) return;
+            const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
+            it.skipped = !it.skipped;
+            it.checked = false;
+            refreshAfterShopChange(wasCatComplete);
+          }, 600);
+        });
+        row.addEventListener('pointermove', e=>{
+          if(!longPressTimer) return;
+          if(Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10){
+            clearLongPressTimer();
+          }
+        });
+        row.addEventListener('pointerup', clearLongPressTimer);
+        row.addEventListener('pointercancel', clearLongPressTimer);
+        row.addEventListener('contextmenu', e=> e.preventDefault());
+        row.onclick = ()=>{
+          if(longPressTriggered){
+            longPressTriggered = false;
+            return;
+          }
+          if(it.skipped) return;
+          const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
+          it.checked = !it.checked;
+          if(it.checked) it.skipped = false;
+          refreshAfterShopChange(wasCatComplete);
         };
         list.appendChild(row);
       });
@@ -1818,6 +1880,7 @@
       if(duplicate){
         duplicate.qty = (Number(duplicate.qty)||0) + 1;
         duplicate.checked = false;
+        duplicate.skipped = false;
         save();
         try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
         const nameInput = document.getElementById('newItemName');
