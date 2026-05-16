@@ -1519,7 +1519,7 @@
         itemId: row.dataset.itemId || ''
       })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.drop && entry.itemId !== itemId)
         .sort((a,b)=> (a.rect.top + a.rect.height / 2) - (b.rect.top + b.rect.height / 2));
-      return { sec, cat, summaryRect, listRect, rows };
+      return { sec, cat, summaryRect, listRect, rows, isOpen: !!sec.open };
     }).filter(entry=> entry.cat && entry.summaryRect && entry.summaryRect.width > 0 && entry.summaryRect.height > 0);
 
     let previousVisible = null;
@@ -1534,7 +1534,7 @@
         return { targetCat: section.cat, idx: 0, fromCenterline: true };
       }
       if(centerY <= section.summaryRect.bottom){
-        return { targetCat: section.cat, idx: itemDropCountExcludingDragged(section.cat, itemId), fromCenterline: true, fromCategoryHeader: true };
+        return { targetCat: section.cat, idx: section.isOpen ? 0 : itemDropCountExcludingDragged(section.cat, itemId), fromCenterline: true, fromCategoryHeader: true };
       }
       if(centerY <= bottom){
         let idx = 0;
