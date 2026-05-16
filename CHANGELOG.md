@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.48.3 — Mobile drag drop-zone polish
+
+- Made mobile drag release/drop behavior more forgiving for management rows.
+- Allowed dragged categories and items to land based on finger position across the visible row field instead of requiring release on a tiny target.
+- Removed unnecessary sort symbols from Manage Items and Manage Categories now that full-row dragging works.
+- Preserved fade-only drag feedback with no dashed blue outlines.
+- Preserved Manage Items, Manage Categories, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.2 — Manage Items mobile drag behavior fix
 
 - Improved Manage Items mobile drag behavior on iPhone PWA.

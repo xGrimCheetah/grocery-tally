@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.2"; // Manage Items mobile drag behavior fix
+  let APP_VERSION = "1.48.3"; // Mobile drag drop-zone polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1217,9 +1217,11 @@
     const it = state.items.find(x=>x.id===itemId);
     if(!it || !state.categories.includes(targetCat)) return false;
     const oldCat = it.cat;
+    const originalIndex = oldCat === targetCat ? itemsInCategory(oldCat).findIndex(x=>x.id===itemId) : -1;
     const targetItems = itemsInCategory(targetCat).filter(x=>x.id!==itemId);
     let insertAt = Number(targetIndex);
     if(!Number.isFinite(insertAt)) insertAt = targetItems.length;
+    if(originalIndex >= 0 && originalIndex < insertAt) insertAt -= 1;
     insertAt = Math.max(0, Math.min(insertAt, targetItems.length));
     it.cat = targetCat;
     targetItems.splice(insertAt, 0, it);
@@ -1282,11 +1284,38 @@
     document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
     document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
   }
-  function categoryDropElementFromPoint(x, y, visual){
+  function elementFromPointIgnoringVisual(x, y, visual){
     if(visual) visual.style.pointerEvents = 'none';
     const el = document.elementFromPoint(x, y);
     if(visual) visual.style.pointerEvents = '';
+    return el;
+  }
+  function visibleDragRects(selector){
+    return Array.from(document.querySelectorAll(selector)).map(el=>{
+      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      return { el, rect };
+    }).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.rect.bottom >= 0 && entry.rect.top <= window.innerHeight);
+  }
+  function categoryDropElementFromPoint(x, y, visual){
+    const el = elementFromPointIgnoringVisual(x, y, visual);
     return el && el.closest ? el.closest('[data-category-drop-target="true"]') : null;
+  }
+  function categoryDropPositionFromPoint(x, y, visual){
+    const direct = categoryDropElementFromPoint(x, y, visual);
+    if(direct && direct.dataset && direct.dataset.categoryDropSurface === 'true'){
+      const rect = direct.getBoundingClientRect ? direct.getBoundingClientRect() : null;
+      return { targetCat: direct.dataset.category || '', placeAfter: rect ? y > rect.top + rect.height / 2 : false };
+    }
+    const surfaces = visibleDragRects('[data-category-drop-surface="true"]').sort((a,b)=> a.rect.top - b.rect.top);
+    if(!surfaces.length) return null;
+    for(const entry of surfaces){
+      const targetCat = entry.el.dataset.category || '';
+      if(!targetCat) continue;
+      if(y < entry.rect.top) return { targetCat, placeAfter: false };
+      if(y <= entry.rect.bottom) return { targetCat, placeAfter: y > entry.rect.top + entry.rect.height / 2 };
+    }
+    const last = surfaces[surfaces.length - 1];
+    return { targetCat: last.el.dataset.category || '', placeAfter: true };
   }
   function isInteractiveDragTarget(target){
     return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
@@ -1304,7 +1333,7 @@
       if(e.pointerType === 'mouse' || e.button !== 0 || isInteractiveDragTarget(e.target)) return;
       const visual = dragClassEl || surfaceEl;
       if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
-      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, fromHandle: !!(e.target && e.target.closest && e.target.closest('.drag-handle')), holdTimer: null };
+      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
       touchCategoryDrag.holdTimer = setTimeout(()=>{
         if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) startCategoryTouchDrag(surfaceEl, touchCategoryDrag);
       }, TOUCH_DRAG_HOLD_MS);
@@ -1316,7 +1345,6 @@
       drag.y = e.clientY;
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
-      if(!drag.active && drag.fromHandle && Math.hypot(dx, dy) > TOUCH_DRAG_MOVE_THRESHOLD) startCategoryTouchDrag(surfaceEl, drag);
       if(drag.active){
         e.preventDefault();
         e.stopPropagation();
@@ -1328,12 +1356,9 @@
       const wasActive = !!drag.active;
       let moved = false;
       if(wasActive){
-        const targetEl = categoryDropElementFromPoint(e.clientX, e.clientY, drag.visual);
-        const targetCat = targetEl ? targetEl.dataset.category : '';
-        if(targetCat && targetCat !== drag.cat){
-          const rect = targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
-          const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
-          moved = moveCategoryNear(drag.cat, targetCat, placeAfter);
+        const drop = categoryDropPositionFromPoint(e.clientX, e.clientY, drag.visual);
+        if(drop && drop.targetCat && drop.targetCat !== drag.cat){
+          moved = moveCategoryNear(drag.cat, drop.targetCat, drop.placeAfter);
         }
       }
       clearCategoryDragState();
@@ -1378,6 +1403,7 @@
     if(!el) return;
     el.dataset.categoryDropTarget = 'true';
     el.dataset.category = targetCat;
+    if(el.matches && el.matches('.category-summary,.manage-category-row')) el.dataset.categoryDropSurface = 'true';
     el.addEventListener('dragover', e=>{
       const sourceCat = getDragCategoryName(e);
       if(!sourceCat || sourceCat === targetCat) return;
@@ -1404,15 +1430,9 @@
   function createCategorySummary(cat){
     const sum=document.createElement('summary');
     sum.className='category-summary';
-    const handle=document.createElement('span');
-    handle.className='drag-handle category-drag-handle';
-    handle.textContent='☰';
-    handle.title='Drag to reorder category';
-    handle.setAttribute('aria-label','Drag to reorder category');
     const title=document.createElement('span');
     title.className='category-title';
     title.textContent=cat;
-    sum.appendChild(handle);
     sum.appendChild(title);
     attachCategoryDrag(sum, cat, sum);
     attachCategoryDropTarget(sum, cat);
@@ -1429,10 +1449,64 @@
     document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
   }
   function itemDropElementFromPoint(x, y, visual){
-    if(visual) visual.style.pointerEvents = 'none';
-    const el = document.elementFromPoint(x, y);
-    if(visual) visual.style.pointerEvents = '';
+    const el = elementFromPointIgnoringVisual(x, y, visual);
     return el && el.closest ? el.closest('[data-item-drop-target="true"]') : null;
+  }
+  function itemDropForTarget(el, y){
+    const drop = el ? el.__groceryItemDropTarget : null;
+    if(!drop) return null;
+    let idx = typeof drop.targetIndexFn === 'function' ? drop.targetIndexFn() : drop.targetIndexFn;
+    if(drop.placeByHalf){
+      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      if(rect && y > rect.top + rect.height / 2) idx += 1;
+    }
+    return { targetCat: drop.targetCat, idx };
+  }
+  function itemDropPositionFromPoint(x, y, visual){
+    const direct = itemDropElementFromPoint(x, y, visual);
+    const directDrop = direct && !(direct.classList && direct.classList.contains('list')) ? itemDropForTarget(direct, y) : null;
+    if(directDrop) return directDrop;
+
+    const sections = Array.from(document.querySelectorAll('#manageList details')).map(sec=>{
+      const sum = sec.querySelector('summary[data-category-drop-target="true"]');
+      const list = sec.querySelector('.list');
+      const cat = sum ? sum.dataset.category : '';
+      const summaryRect = sum && sum.getBoundingClientRect ? sum.getBoundingClientRect() : null;
+      const listRect = list && list.getBoundingClientRect ? list.getBoundingClientRect() : null;
+      const rows = Array.from(sec.querySelectorAll('[data-item-drop-row="true"]')).map(row=>({
+        el: row,
+        rect: row.getBoundingClientRect ? row.getBoundingClientRect() : null,
+        drop: row.__groceryItemDropTarget
+      })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.drop);
+      return { sec, cat, summaryRect, listRect, rows };
+    }).filter(entry=> entry.cat && entry.summaryRect && entry.summaryRect.width > 0 && entry.summaryRect.height > 0);
+
+    let previousVisible = null;
+    for(const section of sections){
+      const firstRow = section.rows[0];
+      const top = section.summaryRect.top;
+      const bottom = section.listRect && section.listRect.height > 0 ? section.listRect.bottom : section.summaryRect.bottom;
+      if(y < top){
+        if(previousVisible){
+          const prevBottom = previousVisible.listRect && previousVisible.listRect.height > 0 ? previousVisible.listRect.bottom : previousVisible.summaryRect.bottom;
+          if(y - prevBottom < top - y) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).length };
+        }
+        return { targetCat: section.cat, idx: 0 };
+      }
+      if(y <= section.summaryRect.bottom) return { targetCat: section.cat, idx: itemsInCategory(section.cat).length };
+      if(firstRow && y < firstRow.rect.top) return { targetCat: section.cat, idx: 0 };
+      for(const row of section.rows){
+        if(y <= row.rect.bottom){
+          let idx = typeof row.drop.targetIndexFn === 'function' ? row.drop.targetIndexFn() : row.drop.targetIndexFn;
+          if(y > row.rect.top + row.rect.height / 2) idx += 1;
+          return { targetCat: section.cat, idx };
+        }
+      }
+      if(y <= bottom) return { targetCat: section.cat, idx: itemsInCategory(section.cat).length };
+      previousVisible = section;
+    }
+    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).length };
+    return null;
   }
   function startItemTouchDrag(surfaceEl, drag){
     if(!drag || drag.active) return;
@@ -1449,7 +1523,7 @@
       if(e.pointerType === 'mouse' || e.button !== 0 || (row && row.classList.contains('editing')) || (wrap && wrap.classList.contains('revealed')) || isInteractiveItemDragTarget(e.target)) return;
       const visual = dragClassEl || surfaceEl;
       if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
-      touchItemDrag = { itemId, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, fromHandle: !!(e.target && e.target.closest && e.target.closest('.drag-handle')), holdTimer: null };
+      touchItemDrag = { itemId, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
       touchItemDrag.holdTimer = setTimeout(()=>{
         if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) startItemTouchDrag(surfaceEl, touchItemDrag);
       }, TOUCH_DRAG_HOLD_MS);
@@ -1466,7 +1540,6 @@
         touchItemDrag = null;
         return;
       }
-      if(!drag.active && drag.fromHandle && Math.hypot(dx, dy) > TOUCH_DRAG_MOVE_THRESHOLD) startItemTouchDrag(surfaceEl, drag);
       if(drag.active){
         e.preventDefault();
         e.stopPropagation();
@@ -1478,11 +1551,9 @@
       const wasActive = !!drag.active;
       let moved = false;
       if(wasActive){
-        const targetEl = itemDropElementFromPoint(e.clientX, e.clientY, drag.visual);
-        const drop = targetEl ? targetEl.__groceryItemDropTarget : null;
+        const drop = itemDropPositionFromPoint(e.clientX, e.clientY, drag.visual);
         if(drop){
-          const idx = typeof drop.targetIndexFn === 'function' ? drop.targetIndexFn() : drop.targetIndexFn;
-          moved = moveItemToCategory(drag.itemId, drop.targetCat, idx);
+          moved = moveItemToCategory(drag.itemId, drop.targetCat, drop.idx);
         }
       }
       clearItemDragState();
@@ -1532,10 +1603,10 @@
       clearItemDragState();
     });
   }
-  function attachDropTarget(el, targetCat, targetIndexFn){
+  function attachDropTarget(el, targetCat, targetIndexFn, options){
     if(!el) return;
     el.dataset.itemDropTarget = 'true';
-    el.__groceryItemDropTarget = { targetCat, targetIndexFn };
+    el.__groceryItemDropTarget = { targetCat, targetIndexFn, placeByHalf: !!(options && options.placeByHalf) };
     el.addEventListener('dragover', e=>{
       const itemId = getDragItemId(e);
       if(!itemId) return;
@@ -1547,7 +1618,8 @@
       if(!itemId) return;
       e.preventDefault();
       e.stopPropagation();
-      const idx = typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn;
+      const drop = itemDropForTarget(el, e.clientY);
+      const idx = drop ? drop.idx : (typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn);
       if(moveItemToCategory(itemId, targetCat, idx)){
         draggedItemId = null;
         save();
@@ -1584,7 +1656,7 @@
     let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
     content.addEventListener('pointerdown', e=>{
       if(e.button !== undefined && e.button !== 0) return;
-      if(e.target && e.target.closest && e.target.closest('.drag-handle,button,input,select,textarea')) return;
+      if(e.target && e.target.closest && e.target.closest('button,input,select,textarea')) return;
       tracking=true; swiping=false;
       startX=e.clientX; startY=e.clientY; currentX=startX;
     });
@@ -2302,7 +2374,6 @@
         row.dataset.index=idx;
         const left=document.createElement('div'); left.className='left';
         const right=document.createElement('div'); right.className='right';
-        const handle=document.createElement('span'); handle.className='drag-handle'; handle.textContent='☰'; handle.title='Drag to move item';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
         const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.style.display='none';
 
@@ -2335,7 +2406,6 @@
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
 
         row.appendChild(left);
-        left.appendChild(handle);
         left.appendChild(name);
         left.appendChild(input);
         row.appendChild(right);
@@ -2400,7 +2470,8 @@
           renderInsights();
         };
 
-        attachDropTarget(shell.wrap, cat, () => idx);
+        shell.wrap.dataset.itemDropRow = 'true';
+        attachDropTarget(shell.wrap, cat, () => idx, { placeByHalf: true });
         list.appendChild(shell.wrap);
       });
 
@@ -2433,11 +2504,6 @@
       row.dataset.category=c;
 
       const left=document.createElement('div'); left.className='left';
-      const handle=document.createElement('span');
-      handle.className='drag-handle category-drag-handle';
-      handle.textContent='☰';
-      handle.title='Drag to reorder category';
-      handle.setAttribute('aria-label','Drag to reorder category');
       const right=document.createElement('div'); right.className='right';
       const label=document.createElement('div'); label.textContent=c; label.className='name';
       const input=document.createElement('input'); input.value=c; input.style.display='none';
@@ -2500,24 +2566,9 @@
         renderCats(); renderManage(); renderBuild(); renderShop();
       };
 
-      row.appendChild(left); left.appendChild(handle); left.appendChild(label); left.appendChild(input);
+      row.appendChild(left); left.appendChild(label); left.appendChild(input);
       row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
-      row.addEventListener('dragstart', e=>{
-        if(e.target && e.target.closest && e.target.closest('button,input,select,textarea,a,[contenteditable="true"]')){
-          e.preventDefault();
-          return;
-        }
-        draggedCategoryName = c;
-        row.classList.add('dragging');
-        try{
-          e.dataTransfer.effectAllowed='move';
-          e.dataTransfer.setData('application/x-grocery-category', c);
-          e.dataTransfer.setData('text/plain', '');
-        }catch(err){}
-      });
-      row.addEventListener('dragend', ()=> clearCategoryDragState());
-      attachCategoryTouchDrag(row, c, row);
-      attachCategoryDrag(handle, c, row);
+      attachCategoryDrag(row, c, row);
       attachCategoryDropTarget(row, c);
       cl.appendChild(row);
     });
