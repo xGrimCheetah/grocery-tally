@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.1"; // Mobile manage and insights polish
+  let APP_VERSION = "1.48.2"; // Manage Items mobile drag behavior fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1271,8 +1271,12 @@
   function rerenderCategoryOrderViews(){
     try{ renderCats(); renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
+  const TOUCH_DRAG_MOVE_THRESHOLD = 8;
+  const TOUCH_DRAG_HOLD_MS = 180;
   let touchCategoryDrag = null;
+  let touchItemDrag = null;
   function clearCategoryDragState(){
+    if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
     touchCategoryDrag = null;
     draggedCategoryName = null;
     document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
@@ -1284,57 +1288,80 @@
     if(visual) visual.style.pointerEvents = '';
     return el && el.closest ? el.closest('[data-category-drop-target="true"]') : null;
   }
-  function attachCategoryTouchDrag(handleEl, cat, dragClassEl){
-    if(!handleEl || typeof PointerEvent === 'undefined') return;
-    handleEl.addEventListener('pointerdown', e=>{
-      if(e.pointerType === 'mouse' || e.button !== 0) return;
-      const visual = dragClassEl || handleEl;
-      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, x: e.clientX, y: e.clientY };
-      draggedCategoryName = cat;
-      visual.classList.add('dragging');
-      try{ handleEl.setPointerCapture(e.pointerId); }catch(err){}
-      e.preventDefault();
-      e.stopPropagation();
+  function isInteractiveDragTarget(target){
+    return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
+  }
+  function startCategoryTouchDrag(surfaceEl, drag){
+    if(!drag || drag.active) return;
+    drag.active = true;
+    draggedCategoryName = drag.cat;
+    drag.visual.classList.add('dragging');
+    try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
+  }
+  function attachCategoryTouchDrag(surfaceEl, cat, dragClassEl){
+    if(!surfaceEl || typeof PointerEvent === 'undefined') return;
+    surfaceEl.addEventListener('pointerdown', e=>{
+      if(e.pointerType === 'mouse' || e.button !== 0 || isInteractiveDragTarget(e.target)) return;
+      const visual = dragClassEl || surfaceEl;
+      if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
+      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, fromHandle: !!(e.target && e.target.closest && e.target.closest('.drag-handle')), holdTimer: null };
+      touchCategoryDrag.holdTimer = setTimeout(()=>{
+        if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) startCategoryTouchDrag(surfaceEl, touchCategoryDrag);
+      }, TOUCH_DRAG_HOLD_MS);
     });
-    handleEl.addEventListener('pointermove', e=>{
-      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
-      touchCategoryDrag.x = e.clientX;
-      touchCategoryDrag.y = e.clientY;
-      e.preventDefault();
-      e.stopPropagation();
-    });
-    handleEl.addEventListener('pointerup', e=>{
+    surfaceEl.addEventListener('pointermove', e=>{
       if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
       const drag = touchCategoryDrag;
-      const targetEl = categoryDropElementFromPoint(e.clientX, e.clientY, drag.visual);
-      const targetCat = targetEl ? targetEl.dataset.category : '';
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if(!drag.active && drag.fromHandle && Math.hypot(dx, dy) > TOUCH_DRAG_MOVE_THRESHOLD) startCategoryTouchDrag(surfaceEl, drag);
+      if(drag.active){
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    surfaceEl.addEventListener('pointerup', e=>{
+      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
+      const drag = touchCategoryDrag;
+      const wasActive = !!drag.active;
       let moved = false;
-      if(targetCat && targetCat !== drag.cat){
-        const rect = targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
-        const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
-        moved = moveCategoryNear(drag.cat, targetCat, placeAfter);
+      if(wasActive){
+        const targetEl = categoryDropElementFromPoint(e.clientX, e.clientY, drag.visual);
+        const targetCat = targetEl ? targetEl.dataset.category : '';
+        if(targetCat && targetCat !== drag.cat){
+          const rect = targetEl.getBoundingClientRect ? targetEl.getBoundingClientRect() : null;
+          const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
+          moved = moveCategoryNear(drag.cat, targetCat, placeAfter);
+        }
       }
       clearCategoryDragState();
       if(moved){
         save();
         rerenderCategoryOrderViews();
       }
-      e.preventDefault();
-      e.stopPropagation();
+      if(wasActive){
+        e.preventDefault();
+        e.stopPropagation();
+      }
     });
-    handleEl.addEventListener('pointercancel', e=>{
+    surfaceEl.addEventListener('pointercancel', e=>{
       if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) clearCategoryDragState();
     });
   }
-  function attachCategoryDrag(handleEl, cat, dragClassEl){
-    if(!handleEl) return;
-    handleEl.draggable = true;
-    handleEl.dataset.category = cat;
-    handleEl.addEventListener('click', e=> e.stopPropagation());
-    attachCategoryTouchDrag(handleEl, cat, dragClassEl);
-    handleEl.addEventListener('dragstart', e=>{
+  function attachCategoryDrag(surfaceEl, cat, dragClassEl){
+    if(!surfaceEl) return;
+    surfaceEl.draggable = true;
+    surfaceEl.dataset.category = cat;
+    attachCategoryTouchDrag(surfaceEl, cat, dragClassEl);
+    surfaceEl.addEventListener('dragstart', e=>{
+      if(isInteractiveDragTarget(e.target)){
+        e.preventDefault();
+        return;
+      }
       draggedCategoryName = cat;
-      const visual = dragClassEl || handleEl;
+      const visual = dragClassEl || surfaceEl;
       visual.classList.add('dragging');
       try{
         e.dataTransfer.effectAllowed='move';
@@ -1343,7 +1370,7 @@
       }catch(err){}
       e.stopPropagation();
     });
-    handleEl.addEventListener('dragend', ()=>{
+    surfaceEl.addEventListener('dragend', ()=>{
       clearCategoryDragState();
     });
   }
@@ -1387,12 +1414,90 @@
     title.textContent=cat;
     sum.appendChild(handle);
     sum.appendChild(title);
-    attachCategoryDrag(handle, cat, sum);
+    attachCategoryDrag(sum, cat, sum);
     attachCategoryDropTarget(sum, cat);
     return sum;
   }
   function isInteractiveItemDragTarget(target){
-    return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
+    return isInteractiveDragTarget(target);
+  }
+  function clearItemDragState(){
+    if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
+    touchItemDrag = null;
+    draggedItemId = null;
+    document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
+    document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+  }
+  function itemDropElementFromPoint(x, y, visual){
+    if(visual) visual.style.pointerEvents = 'none';
+    const el = document.elementFromPoint(x, y);
+    if(visual) visual.style.pointerEvents = '';
+    return el && el.closest ? el.closest('[data-item-drop-target="true"]') : null;
+  }
+  function startItemTouchDrag(surfaceEl, drag){
+    if(!drag || drag.active) return;
+    drag.active = true;
+    draggedItemId = drag.itemId;
+    drag.visual.classList.add('dragging');
+    try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
+  }
+  function attachItemTouchDrag(surfaceEl, itemId, dragClassEl){
+    if(!surfaceEl || typeof PointerEvent === 'undefined') return;
+    surfaceEl.addEventListener('pointerdown', e=>{
+      const row = itemDragRowFor(dragClassEl, e.target);
+      const wrap = dragClassEl && dragClassEl.classList && dragClassEl.classList.contains('swipe-wrap') ? dragClassEl : null;
+      if(e.pointerType === 'mouse' || e.button !== 0 || (row && row.classList.contains('editing')) || (wrap && wrap.classList.contains('revealed')) || isInteractiveItemDragTarget(e.target)) return;
+      const visual = dragClassEl || surfaceEl;
+      if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
+      touchItemDrag = { itemId, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, fromHandle: !!(e.target && e.target.closest && e.target.closest('.drag-handle')), holdTimer: null };
+      touchItemDrag.holdTimer = setTimeout(()=>{
+        if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) startItemTouchDrag(surfaceEl, touchItemDrag);
+      }, TOUCH_DRAG_HOLD_MS);
+    });
+    surfaceEl.addEventListener('pointermove', e=>{
+      if(!touchItemDrag || touchItemDrag.pointerId !== e.pointerId) return;
+      const drag = touchItemDrag;
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if(!drag.active && Math.abs(dx) > TOUCH_DRAG_MOVE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.25){
+        if(drag.holdTimer) clearTimeout(drag.holdTimer);
+        touchItemDrag = null;
+        return;
+      }
+      if(!drag.active && drag.fromHandle && Math.hypot(dx, dy) > TOUCH_DRAG_MOVE_THRESHOLD) startItemTouchDrag(surfaceEl, drag);
+      if(drag.active){
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    surfaceEl.addEventListener('pointerup', e=>{
+      if(!touchItemDrag || touchItemDrag.pointerId !== e.pointerId) return;
+      const drag = touchItemDrag;
+      const wasActive = !!drag.active;
+      let moved = false;
+      if(wasActive){
+        const targetEl = itemDropElementFromPoint(e.clientX, e.clientY, drag.visual);
+        const drop = targetEl ? targetEl.__groceryItemDropTarget : null;
+        if(drop){
+          const idx = typeof drop.targetIndexFn === 'function' ? drop.targetIndexFn() : drop.targetIndexFn;
+          moved = moveItemToCategory(drag.itemId, drop.targetCat, idx);
+        }
+      }
+      clearItemDragState();
+      if(moved){
+        save();
+        rerenderItemViews();
+      }
+      if(wasActive){
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    });
+    surfaceEl.addEventListener('pointercancel', e=>{
+      if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
+    });
   }
   function itemDragRowFor(dragClassEl, eventTarget){
     if(dragClassEl && dragClassEl.querySelector){
@@ -1402,11 +1507,12 @@
     if(eventTarget && eventTarget.closest) return eventTarget.closest('.manage-item-row');
     return null;
   }
-  function attachItemDrag(handleEl, itemId, dragClassEl){
-    if(!handleEl) return;
-    handleEl.draggable = true;
-    handleEl.dataset.itemId = itemId;
-    handleEl.addEventListener('dragstart', e=>{
+  function attachItemDrag(surfaceEl, itemId, dragClassEl){
+    if(!surfaceEl) return;
+    surfaceEl.draggable = true;
+    surfaceEl.dataset.itemId = itemId;
+    attachItemTouchDrag(surfaceEl, itemId, dragClassEl);
+    surfaceEl.addEventListener('dragstart', e=>{
       const row = itemDragRowFor(dragClassEl, e.target);
       if((row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
         draggedItemId = null;
@@ -1414,7 +1520,7 @@
         return;
       }
       draggedItemId = itemId;
-      const visual = dragClassEl || handleEl;
+      const visual = dragClassEl || surfaceEl;
       visual.classList.add('dragging');
       try{
         e.dataTransfer.effectAllowed='move';
@@ -1422,14 +1528,14 @@
       }catch(err){}
       e.stopPropagation();
     });
-    handleEl.addEventListener('dragend', ()=>{
-      draggedItemId = null;
-      document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
-      document.querySelectorAll('.drop-target').forEach(el=>el.classList.remove('drop-target'));
+    surfaceEl.addEventListener('dragend', ()=>{
+      clearItemDragState();
     });
   }
   function attachDropTarget(el, targetCat, targetIndexFn){
     if(!el) return;
+    el.dataset.itemDropTarget = 'true';
+    el.__groceryItemDropTarget = { targetCat, targetIndexFn };
     el.addEventListener('dragover', e=>{
       const itemId = getDragItemId(e);
       if(!itemId) return;
@@ -2237,9 +2343,9 @@
         right.appendChild(edit);
         right.appendChild(saveBtn);
         right.appendChild(cancelBtn);
-        attachItemDrag(handle, it.id, shell.wrap);
+        attachItemDrag(row, it.id, shell.wrap);
         function setItemDragEnabled(enabled){
-          handle.draggable = !!enabled;
+          row.draggable = !!enabled;
         }
         setItemDragEnabled(true);
 
@@ -2410,6 +2516,7 @@
         }catch(err){}
       });
       row.addEventListener('dragend', ()=> clearCategoryDragState());
+      attachCategoryTouchDrag(row, c, row);
       attachCategoryDrag(handle, c, row);
       attachCategoryDropTarget(row, c);
       cl.appendChild(row);
