@@ -1018,7 +1018,7 @@
     if(!lastRun || !Array.isArray(lastRun.items)) return { hasRun:false, items:[] };
 
     const ids = new Set();
-    const namesWithoutIds = new Set();
+    const fallbackKeysWithoutIds = new Set();
     lastRun.items.forEach(rit=>{
       const itemId = cleanText((rit && (rit.itemId || rit.id)) || '');
       if(itemId){
@@ -1026,12 +1026,14 @@
         return;
       }
       const name = normalizeText(rit && rit.name);
-      if(name) namesWithoutIds.add(name);
+      const cat = normalizeText(rit && rit.cat);
+      if(name && cat) fallbackKeysWithoutIds.add(name + '|' + cat);
     });
 
     const items = allItems.filter(it=>{
       if(ids.has(cleanText(it && it.id))) return true;
-      return namesWithoutIds.has(normalizeText(it && it.name));
+      const fallbackKey = normalizeText(it && it.name) + '|' + normalizeText(it && it.cat);
+      return fallbackKeysWithoutIds.has(fallbackKey);
     });
     return { hasRun:true, items };
   }
