@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.48.4 — Mobile drag centerline and lift polish
+
+- Changed mobile management drag/drop placement to use dragged-row centerline positioning instead of finicky release targets.
+- Improved category and item reordering so drops land based on the dragged row’s projected centerline relative to other row centerlines.
+- Added a custom floating drag visual for mobile management rows so dragged rows keep their normal size and styling while moving.
+- Removed unnecessary drag fade behavior where the floating row visual replaces it.
+- Preserved Manage Items, Manage Categories, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.3 — Mobile drag drop-zone polish
 
 - Made mobile drag release/drop behavior more forgiving for management rows.
