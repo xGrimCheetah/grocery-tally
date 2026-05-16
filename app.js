@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.3"; // Mobile drag drop-zone polish
+  let APP_VERSION = "1.48.4"; // Mobile drag centerline and lift polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1213,7 +1213,7 @@
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
   function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
-  function moveItemToCategory(itemId, targetCat, targetIndex){
+  function moveItemToCategory(itemId, targetCat, targetIndex, indexExcludesDragged){
     const it = state.items.find(x=>x.id===itemId);
     if(!it || !state.categories.includes(targetCat)) return false;
     const oldCat = it.cat;
@@ -1221,7 +1221,7 @@
     const targetItems = itemsInCategory(targetCat).filter(x=>x.id!==itemId);
     let insertAt = Number(targetIndex);
     if(!Number.isFinite(insertAt)) insertAt = targetItems.length;
-    if(originalIndex >= 0 && originalIndex < insertAt) insertAt -= 1;
+    if(!indexExcludesDragged && originalIndex >= 0 && originalIndex < insertAt) insertAt -= 1;
     insertAt = Math.max(0, Math.min(insertAt, targetItems.length));
     it.cat = targetCat;
     targetItems.splice(insertAt, 0, it);
@@ -1277,8 +1277,47 @@
   const TOUCH_DRAG_HOLD_MS = 180;
   let touchCategoryDrag = null;
   let touchItemDrag = null;
+  function projectedDragCenterY(drag, fallbackY){
+    if(!drag) return fallbackY;
+    const y = Number.isFinite(drag.y) ? drag.y : fallbackY;
+    const offset = Number.isFinite(drag.centerOffsetY) ? drag.centerOffsetY : 0;
+    return y + offset;
+  }
+  function syncTouchDragClone(drag){
+    if(!drag || !drag.clone) return;
+    const x = Number.isFinite(drag.x) ? drag.x : drag.startX;
+    const y = Number.isFinite(drag.y) ? drag.y : drag.startY;
+    const left = x - (drag.grabOffsetX || 0);
+    const top = y - (drag.grabOffsetY || 0);
+    drag.clone.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+  }
+  function createTouchDragClone(drag){
+    if(!drag || drag.clone || !drag.visual || !drag.visual.getBoundingClientRect) return;
+    const rect = drag.visual.getBoundingClientRect();
+    const clone = drag.visual.cloneNode(true);
+    clone.classList.remove('dragging','drop-target','touch-drag-source');
+    clone.classList.add('touch-drag-clone');
+    clone.removeAttribute('id');
+    clone.style.width = `${rect.width}px`;
+    clone.style.height = `${rect.height}px`;
+    clone.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
+    clone.setAttribute('aria-hidden','true');
+    drag.rect = rect;
+    drag.grabOffsetX = drag.startX - rect.left;
+    drag.grabOffsetY = drag.startY - rect.top;
+    drag.centerOffsetY = rect.top + rect.height / 2 - drag.startY;
+    drag.clone = clone;
+    document.body.appendChild(clone);
+    drag.visual.classList.add('touch-drag-source');
+    syncTouchDragClone(drag);
+  }
+  function removeTouchDragClone(drag){
+    if(drag && drag.clone && drag.clone.parentNode) drag.clone.parentNode.removeChild(drag.clone);
+    if(drag && drag.visual) drag.visual.classList.remove('touch-drag-source');
+  }
   function clearCategoryDragState(){
     if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
+    removeTouchDragClone(touchCategoryDrag);
     touchCategoryDrag = null;
     draggedCategoryName = null;
     document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
@@ -1300,22 +1339,21 @@
     const el = elementFromPointIgnoringVisual(x, y, visual);
     return el && el.closest ? el.closest('[data-category-drop-target="true"]') : null;
   }
-  function categoryDropPositionFromPoint(x, y, visual){
-    const direct = categoryDropElementFromPoint(x, y, visual);
-    if(direct && direct.dataset && direct.dataset.categoryDropSurface === 'true'){
-      const rect = direct.getBoundingClientRect ? direct.getBoundingClientRect() : null;
-      return { targetCat: direct.dataset.category || '', placeAfter: rect ? y > rect.top + rect.height / 2 : false };
-    }
-    const surfaces = visibleDragRects('[data-category-drop-surface="true"]').sort((a,b)=> a.rect.top - b.rect.top);
+  function categoryDropPositionFromCenter(sourceCat, centerY){
+    const surfaces = visibleDragRects('[data-category-drop-surface="true"]').map(entry=>({
+      el: entry.el,
+      rect: entry.rect,
+      cat: entry.el.dataset.category || '',
+      center: entry.rect.top + entry.rect.height / 2
+    })).filter(entry=> entry.cat && entry.cat !== sourceCat).sort((a,b)=> a.center - b.center);
     if(!surfaces.length) return null;
     for(const entry of surfaces){
-      const targetCat = entry.el.dataset.category || '';
-      if(!targetCat) continue;
-      if(y < entry.rect.top) return { targetCat, placeAfter: false };
-      if(y <= entry.rect.bottom) return { targetCat, placeAfter: y > entry.rect.top + entry.rect.height / 2 };
+      if(centerY < entry.center) return { targetCat: entry.cat, placeAfter: false };
     }
-    const last = surfaces[surfaces.length - 1];
-    return { targetCat: last.el.dataset.category || '', placeAfter: true };
+    return { targetCat: surfaces[surfaces.length - 1].cat, placeAfter: true };
+  }
+  function categoryDropPositionFromPoint(x, y, visual, sourceCat){
+    return categoryDropPositionFromCenter(sourceCat || draggedCategoryName || '', y);
   }
   function isInteractiveDragTarget(target){
     return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
@@ -1325,6 +1363,7 @@
     drag.active = true;
     draggedCategoryName = drag.cat;
     drag.visual.classList.add('dragging');
+    createTouchDragClone(drag);
     try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
   }
   function attachCategoryTouchDrag(surfaceEl, cat, dragClassEl){
@@ -1346,6 +1385,7 @@
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
       if(drag.active){
+        syncTouchDragClone(drag);
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1356,8 +1396,8 @@
       const wasActive = !!drag.active;
       let moved = false;
       if(wasActive){
-        const drop = categoryDropPositionFromPoint(e.clientX, e.clientY, drag.visual);
-        if(drop && drop.targetCat && drop.targetCat !== drag.cat){
+        const drop = categoryDropPositionFromCenter(drag.cat, projectedDragCenterY(drag, e.clientY));
+        if(drop && drop.targetCat){
           moved = moveCategoryNear(drag.cat, drop.targetCat, drop.placeAfter);
         }
       }
@@ -1418,9 +1458,8 @@
       e.preventDefault();
       e.stopPropagation();
       el.classList.remove('drop-target');
-      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-      const placeAfter = rect ? (e.clientY > rect.top + rect.height / 2) : false;
-      if(moveCategoryNear(sourceCat, targetCat, placeAfter)){
+      const drop = categoryDropPositionFromCenter(sourceCat, e.clientY) || { targetCat, placeAfter: false };
+      if(moveCategoryNear(sourceCat, drop.targetCat, drop.placeAfter)){
         draggedCategoryName = null;
         save();
         rerenderCategoryOrderViews();
@@ -1443,6 +1482,7 @@
   }
   function clearItemDragState(){
     if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
+    removeTouchDragClone(touchItemDrag);
     touchItemDrag = null;
     draggedItemId = null;
     document.querySelectorAll('.dragging').forEach(el=>el.classList.remove('dragging'));
@@ -1462,11 +1502,7 @@
     }
     return { targetCat: drop.targetCat, idx };
   }
-  function itemDropPositionFromPoint(x, y, visual){
-    const direct = itemDropElementFromPoint(x, y, visual);
-    const directDrop = direct && !(direct.classList && direct.classList.contains('list')) ? itemDropForTarget(direct, y) : null;
-    if(directDrop) return directDrop;
-
+  function itemDropPositionFromCenter(itemId, centerY){
     const sections = Array.from(document.querySelectorAll('#manageList details')).map(sec=>{
       const sum = sec.querySelector('summary[data-category-drop-target="true"]');
       const list = sec.querySelector('.list');
@@ -1476,43 +1512,47 @@
       const rows = Array.from(sec.querySelectorAll('[data-item-drop-row="true"]')).map(row=>({
         el: row,
         rect: row.getBoundingClientRect ? row.getBoundingClientRect() : null,
-        drop: row.__groceryItemDropTarget
-      })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.drop);
+        drop: row.__groceryItemDropTarget,
+        itemId: row.dataset.itemId || ''
+      })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.drop && entry.itemId !== itemId)
+        .sort((a,b)=> (a.rect.top + a.rect.height / 2) - (b.rect.top + b.rect.height / 2));
       return { sec, cat, summaryRect, listRect, rows };
     }).filter(entry=> entry.cat && entry.summaryRect && entry.summaryRect.width > 0 && entry.summaryRect.height > 0);
 
     let previousVisible = null;
     for(const section of sections){
-      const firstRow = section.rows[0];
       const top = section.summaryRect.top;
       const bottom = section.listRect && section.listRect.height > 0 ? section.listRect.bottom : section.summaryRect.bottom;
-      if(y < top){
+      if(centerY < top){
         if(previousVisible){
           const prevBottom = previousVisible.listRect && previousVisible.listRect.height > 0 ? previousVisible.listRect.bottom : previousVisible.summaryRect.bottom;
-          if(y - prevBottom < top - y) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).length };
+          if(centerY - prevBottom < top - centerY) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).filter(it=>it.id !== itemId).length, fromCenterline: true };
         }
-        return { targetCat: section.cat, idx: 0 };
+        return { targetCat: section.cat, idx: 0, fromCenterline: true };
       }
-      if(y <= section.summaryRect.bottom) return { targetCat: section.cat, idx: itemsInCategory(section.cat).length };
-      if(firstRow && y < firstRow.rect.top) return { targetCat: section.cat, idx: 0 };
-      for(const row of section.rows){
-        if(y <= row.rect.bottom){
-          let idx = typeof row.drop.targetIndexFn === 'function' ? row.drop.targetIndexFn() : row.drop.targetIndexFn;
-          if(y > row.rect.top + row.rect.height / 2) idx += 1;
-          return { targetCat: section.cat, idx };
+      if(centerY <= bottom){
+        let idx = 0;
+        for(const row of section.rows){
+          const rowCenter = row.rect.top + row.rect.height / 2;
+          if(centerY < rowCenter) break;
+          idx += 1;
         }
+        return { targetCat: section.cat, idx, fromCenterline: true };
       }
-      if(y <= bottom) return { targetCat: section.cat, idx: itemsInCategory(section.cat).length };
       previousVisible = section;
     }
-    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).length };
+    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemsInCategory(previousVisible.cat).filter(it=>it.id !== itemId).length, fromCenterline: true };
     return null;
+  }
+  function itemDropPositionFromPoint(x, y, visual, itemId){
+    return itemDropPositionFromCenter(itemId || draggedItemId || '', y);
   }
   function startItemTouchDrag(surfaceEl, drag){
     if(!drag || drag.active) return;
     drag.active = true;
     draggedItemId = drag.itemId;
     drag.visual.classList.add('dragging');
+    createTouchDragClone(drag);
     try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
   }
   function attachItemTouchDrag(surfaceEl, itemId, dragClassEl){
@@ -1541,6 +1581,7 @@
         return;
       }
       if(drag.active){
+        syncTouchDragClone(drag);
         e.preventDefault();
         e.stopPropagation();
       }
@@ -1551,9 +1592,9 @@
       const wasActive = !!drag.active;
       let moved = false;
       if(wasActive){
-        const drop = itemDropPositionFromPoint(e.clientX, e.clientY, drag.visual);
+        const drop = itemDropPositionFromCenter(drag.itemId, projectedDragCenterY(drag, e.clientY));
         if(drop){
-          moved = moveItemToCategory(drag.itemId, drop.targetCat, drop.idx);
+          moved = moveItemToCategory(drag.itemId, drop.targetCat, drop.idx, true);
         }
       }
       clearItemDragState();
@@ -1618,9 +1659,10 @@
       if(!itemId) return;
       e.preventDefault();
       e.stopPropagation();
-      const drop = itemDropForTarget(el, e.clientY);
+      const drop = itemDropPositionFromCenter(itemId, e.clientY) || itemDropForTarget(el, e.clientY);
       const idx = drop ? drop.idx : (typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn);
-      if(moveItemToCategory(itemId, targetCat, idx)){
+      const cat = drop ? drop.targetCat : targetCat;
+      if(moveItemToCategory(itemId, cat, idx, !!(drop && drop.fromCenterline))){
         draggedItemId = null;
         save();
         rerenderItemViews();
