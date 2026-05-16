@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.47.0"; // Build List last-run browsing shortcut
+  let APP_VERSION = "1.48.0"; // Manage tab consolidation
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -21,6 +21,7 @@
   let buildClosedCats = getBuildClosedCats();
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
+  let manageView = 'items';
   let buildSearchQuery = '';
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
@@ -911,7 +912,7 @@
 
     const items = state.items.slice().sort(buildListSort);
     if(!items.length){
-      list.innerHTML = '<p class="muted">No items yet. Add items from Manage Items to see insights here.</p>';
+      list.innerHTML = '<p class="muted">No items yet. Add items from Manage to see insights here.</p>';
       return;
     }
 
@@ -1465,22 +1466,19 @@
   const tabShop=document.getElementById('tabShop');
   const tabManage=document.getElementById('tabManage');
   const tabInsights=document.getElementById('tabInsights');
-  const tabCats=document.getElementById('tabCats');
   const viewBuild=document.getElementById('viewBuild');
   const viewShop=document.getElementById('viewShop');
   const viewManage=document.getElementById('viewManage');
   const viewInsights=document.getElementById('viewInsights');
-  const viewCats=document.getElementById('viewCats');
 
   function setTab(which){
-    [tabBuild,tabShop,tabManage,tabInsights,tabCats].forEach(b=> b.classList.remove('active'));
-    [viewBuild,viewShop,viewManage,viewInsights,viewCats].forEach(v=> v.style.display='none');
+    [tabBuild,tabShop,tabManage,tabInsights].forEach(b=> b.classList.remove('active'));
+    [viewBuild,viewShop,viewManage,viewInsights].forEach(v=> v.style.display='none');
 
     if(which==='build'){ tabBuild.classList.add('active'); viewBuild.style.display='block' }
     if(which==='shop'){  tabShop.classList.add('active');  viewShop.style.display='block'  }
     if(which==='manage'){tabManage.classList.add('active'); viewManage.style.display='block'}
     if(which==='insights'){tabInsights.classList.add('active'); viewInsights.style.display='block'}
-    if(which==='cats'){  tabCats.classList.add('active');  viewCats.style.display='block'  }
 
     const footer = document.querySelector('.footer');
     if(footer){ footer.style.display = which === 'build' ? 'flex' : 'none'; }
@@ -1500,7 +1498,6 @@
   tabShop.onclick = ()=>{ /* disabled: must press Finished in Build */ };
   tabManage.onclick=()=>{ try{ renderManage(); }catch(e){ console.error(e) } setTab('manage') };
   tabInsights.onclick=()=>{ try{ renderInsights(); }catch(e){ console.error(e) } setTab('insights') };
-  tabCats.onclick=()=>{ try{ renderCats(); }catch(e){ console.error(e) } setTab('cats') };
 
   // ----- Build List -----
   function renderBuild(){
@@ -1585,7 +1582,7 @@
         return;
       }
       if(!allItems.length){
-        buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage Items.</p>';
+        buildList.innerHTML = '<p class="muted">No items yet. Add items from Manage.</p>';
         applyBuildLetterFocus();
         return;
       }
@@ -1873,8 +1870,29 @@
 
   // ----- Manage Items -----
   function renderManage(){
-    ensurePositions();
     viewManage.innerHTML = `
+      <div class="manage-view-toggle-row">
+        <div class="insights-view-toggle manage-view-toggle" role="group" aria-label="Manage view">
+          <button type="button" class="insights-view-btn${manageView === 'items' ? ' active' : ''}" data-manage-view="items" aria-pressed="${manageView === 'items' ? 'true' : 'false'}">Items</button>
+          <button type="button" class="insights-view-btn${manageView === 'categories' ? ' active' : ''}" data-manage-view="categories" aria-pressed="${manageView === 'categories' ? 'true' : 'false'}">Categories</button>
+        </div>
+      </div>
+      <div class="spacer"></div>
+      <div id="manageSubView"></div>`;
+    viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
+      btn.onclick = ()=>{
+        manageView = btn.dataset.manageView === 'categories' ? 'categories' : 'items';
+        renderManage();
+      };
+    });
+    const subView = document.getElementById('manageSubView');
+    if(manageView === 'categories') renderManageCategories(subView);
+    else renderManageItems(subView);
+  }
+
+  function renderManageItems(target){
+    ensurePositions();
+    (target || viewManage).innerHTML = `
       <div class="grid">
         <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
           <input id="newItemName" placeholder="Item name" style="flex:2" />
@@ -2229,8 +2247,20 @@
   }
 
   // ----- Manage Categories -----
+  function renderManageCategories(target){
+    (target || viewManage).innerHTML = `
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <input id="newCatName" placeholder="Category name" style="flex:2" />
+        <button class="btn-accent" id="btnAddCat">Add Category</button>
+      </div>
+      <div class="spacer"></div>
+      <div id="catList"></div>`;
+    renderCats();
+  }
+
   function renderCats(){
     const cl=document.getElementById('catList');
+    if(!cl) return;
     cl.innerHTML='';
     state.categories.forEach((c,i)=>{
       const row=document.createElement('div');
@@ -2327,7 +2357,9 @@
       });
     });
 
-    document.getElementById('btnAddCat').onclick = ()=>{
+    const addCatBtn = document.getElementById('btnAddCat');
+    if(!addCatBtn) return;
+    addCatBtn.onclick = ()=>{
       const name=cleanText(document.getElementById('newCatName').value);
       if(!name) return;
       const result = ensureCategory(name);
