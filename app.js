@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.5"; // Manage Items item drag stabilization
+  let APP_VERSION = "1.48.6"; // Item reorder mode
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -22,6 +22,7 @@
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let manageView = 'items';
+  let manageItemReorderMode = false;
   let buildSearchQuery = '';
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
@@ -1213,6 +1214,20 @@
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
   function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
+  function moveItemWithinCategory(itemId, direction){
+    const it = state.items.find(x=>x.id===itemId);
+    if(!it) return false;
+    const cat = it.cat;
+    const items = itemsInCategory(cat);
+    const from = items.findIndex(x=>x.id===itemId);
+    if(from < 0) return false;
+    const to = from + direction;
+    if(to < 0 || to >= items.length) return false;
+    const moved = items.splice(from, 1)[0];
+    items.splice(to, 0, moved);
+    items.forEach((x,i)=> x.pos=i);
+    return true;
+  }
   function moveItemToCategory(itemId, targetCat, targetIndex, indexExcludesDragged){
     const it = state.items.find(x=>x.id===itemId);
     if(!it || !state.categories.includes(targetCat)) return false;
@@ -1495,12 +1510,27 @@
   function isInteractiveItemDragTarget(target){
     return isInteractiveDragTarget(target);
   }
+  function cleanupManageItemDragArtifacts(){
+    document.body.classList.remove('item-touch-drag-active');
+    document.querySelectorAll('.touch-drag-clone').forEach(el=>{ if(el.parentNode) el.parentNode.removeChild(el); });
+    document.querySelectorAll('#manageList .manage-item-row, #manageList .swipe-wrap').forEach(el=>{
+      restoreTouchDragSource(el);
+      if(el.style){
+        el.style.removeProperty('visibility');
+        el.style.removeProperty('display');
+        el.style.removeProperty('opacity');
+        el.style.removeProperty('pointer-events');
+        el.style.removeProperty('touch-action');
+      }
+    });
+  }
   function clearItemDragState(){
     if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
     removeTouchDragClone(touchItemDrag);
     touchItemDrag = null;
     draggedItemId = null;
     clearTouchDragArtifacts();
+    cleanupManageItemDragArtifacts();
   }
   function itemDropElementFromPoint(x, y, visual){
     const el = elementFromPointIgnoringVisual(x, y, visual);
@@ -1693,7 +1723,15 @@
     if(!surfaceEl) return;
     surfaceEl.draggable = true;
     surfaceEl.dataset.itemId = itemId;
-    attachItemTouchDrag(surfaceEl, itemId, dragClassEl);
+    surfaceEl.addEventListener('pointerdown', e=>{
+      if(e.pointerType && e.pointerType !== 'mouse'){
+        surfaceEl.draggable = false;
+        draggedItemId = null;
+        cleanupManageItemDragArtifacts();
+        return;
+      }
+      surfaceEl.draggable = true;
+    });
     surfaceEl.addEventListener('dragstart', e=>{
       const row = itemDragRowFor(dragClassEl, e.target);
       if((row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
@@ -1768,6 +1806,7 @@
     let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
     content.addEventListener('pointerdown', e=>{
       if(e.button !== undefined && e.button !== 0) return;
+      if(manageItemReorderMode) return;
       if(e.target && e.target.closest && e.target.closest('button,input,select,textarea')) return;
       tracking=true; swiping=false;
       startX=e.clientX; startY=e.clientY; currentX=startX;
@@ -2230,6 +2269,7 @@
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
         manageView = btn.dataset.manageView === 'categories' ? 'categories' : 'items';
+        if(manageView !== 'items') manageItemReorderMode = false;
         renderManage();
       };
     });
@@ -2241,6 +2281,7 @@
 
   function renderManageItems(target){
     clearItemDragState();
+    cleanupManageItemDragArtifacts();
     ensurePositions();
     (target || viewManage).innerHTML = `
       <div class="grid">
@@ -2249,6 +2290,11 @@
           <select id="newItemCat" style="flex:1"></select>
           <button class="btn-accent" id="btnAddItem">Add Item</button>
         </div>
+      </div>
+      <div class="spacer"></div>
+      <div class="manage-reorder-toolbar">
+        <button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>
+        <span class="muted manage-reorder-help">${manageItemReorderMode ? 'Use arrows to move items within their current category.' : 'Use reorder mode for reliable mobile item sorting.'}</span>
       </div>
       <div class="spacer"></div>
       <section class="data-safety-panel" id="dataSafetyPanel" aria-labelledby="dataSafetyHeading">
@@ -2282,9 +2328,18 @@
         </div>
       </details>
       <div class="spacer"></div>
-      <div id="manageList"></div>`;
+      <div id="manageList" class="${manageItemReorderMode ? 'reorder-mode' : ''}"></div>`;
 
     refreshDataSafetyPanel();
+
+    const reorderToggle = document.getElementById('btnToggleItemReorder');
+    if(reorderToggle){
+      reorderToggle.onclick = ()=>{
+        clearItemDragState();
+        manageItemReorderMode = !manageItemReorderMode;
+        renderManage();
+      };
+    }
 
     const sel=document.getElementById('newItemCat');
     state.categories.forEach(c=>{
@@ -2519,20 +2574,45 @@
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
+        const moveUp=document.createElement('button'); moveUp.type='button'; moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.setAttribute('aria-label', `Move ${it.name} up`);
+        const moveDown=document.createElement('button'); moveDown.type='button'; moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.setAttribute('aria-label', `Move ${it.name} down`);
+        const isFirst = idx === 0;
+        const isLast = idx === items.length - 1;
+        moveUp.disabled = isFirst;
+        moveDown.disabled = isLast;
+        moveUp.onclick = ()=>{
+          if(moveItemWithinCategory(it.id, -1)){
+            save();
+            rerenderItemViews();
+          }
+        };
+        moveDown.onclick = ()=>{
+          if(moveItemWithinCategory(it.id, 1)){
+            save();
+            rerenderItemViews();
+          }
+        };
 
         row.appendChild(left);
         left.appendChild(name);
         left.appendChild(input);
         row.appendChild(right);
         right.appendChild(priceWrap);
-        right.appendChild(edit);
-        right.appendChild(saveBtn);
-        right.appendChild(cancelBtn);
-        attachItemDrag(row, it.id, shell.wrap);
-        function setItemDragEnabled(enabled){
-          row.draggable = !!enabled;
+        if(manageItemReorderMode){
+          row.classList.add('reordering');
+          shell.wrap.classList.add('reorder-mode');
+          right.appendChild(moveUp);
+          right.appendChild(moveDown);
+        } else {
+          right.appendChild(edit);
+          right.appendChild(saveBtn);
+          right.appendChild(cancelBtn);
         }
-        setItemDragEnabled(true);
+        if(!manageItemReorderMode) attachItemDrag(row, it.id, shell.wrap);
+        function setItemDragEnabled(enabled){
+          row.draggable = !!enabled && !manageItemReorderMode;
+        }
+        setItemDragEnabled(!manageItemReorderMode);
 
         function enterEdit(){
           row.classList.add('editing');
@@ -2585,14 +2665,17 @@
           renderInsights();
         };
 
-        shell.wrap.dataset.itemDropRow = 'true';
-        attachDropTarget(shell.wrap, cat, () => idx, { placeByHalf: true });
+        if(!manageItemReorderMode){
+          shell.wrap.dataset.itemDropRow = 'true';
+          attachDropTarget(shell.wrap, cat, () => idx, { placeByHalf: true });
+        }
         list.appendChild(shell.wrap);
       });
 
       sec.appendChild(list);
       ml.appendChild(sec);
     });
+    cleanupManageItemDragArtifacts();
   }
 
   // ----- Manage Categories -----

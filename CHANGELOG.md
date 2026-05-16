@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.48.6 — Item reorder mode
+
+- Replaced unstable mobile item-row long-press dragging with a dedicated Reorder Items mode.
+- Added up/down controls for reliable item reordering within each category.
+- Prevented item rows from disappearing after failed or canceled long-press interactions.
+- Preserved Manage Categories dragging, Manage Items category-header dragging, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.5 — Manage Items item drag stabilization
 
 - Stabilized Manage Items item-row dragging on iPhone PWA.
