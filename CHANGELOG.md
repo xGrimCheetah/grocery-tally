@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.48.7 — Category reorder mode
+
+- Removed long-press drag sorting from the Manage tabs.
+- Added a dedicated Reorder Categories mode with up/down controls in Manage Categories.
+- Added a category selector in item edit mode so existing items can still be moved between categories without drag/drop.
+- Kept item sorting in Manage Items handled by Reorder Items mode.
+- Made Manage Items category headers unsortable while preserving their normal open/collapse behavior.
+- Preserved Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.6 — Item reorder mode
 
 - Replaced unstable mobile item-row long-press dragging with a dedicated Reorder Items mode.

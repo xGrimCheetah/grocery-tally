@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.6"; // Item reorder mode
+  let APP_VERSION = "1.48.7"; // Category reorder mode
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -23,6 +23,7 @@
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let manageView = 'items';
   let manageItemReorderMode = false;
+  let manageCategoryReorderMode = false;
   let buildSearchQuery = '';
   let buildFocusLetter = '';
   let buildControlMode = 'alpha';
@@ -1256,79 +1257,18 @@
   function rerenderItemViews(){
     try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
-  let draggedItemId = null;
-  let draggedCategoryName = null;
-  function isCategoryDrag(e){
-    if(draggedCategoryName) return true;
-    try{
-      return Array.from(e.dataTransfer.types || []).includes('application/x-grocery-category');
-    }catch(err){
-      return false;
-    }
-  }
-  function getDragItemId(e){
-    if(isCategoryDrag(e)) return '';
-    try{ return e.dataTransfer.getData('text/plain') || draggedItemId; }catch(err){ return draggedItemId }
-  }
-  function getDragCategoryName(e){
-    try{ return e.dataTransfer.getData('application/x-grocery-category') || draggedCategoryName; }catch(err){ return draggedCategoryName }
-  }
-  function moveCategoryNear(sourceCat, targetCat, placeAfter){
-    if(!sourceCat || !targetCat || sourceCat === targetCat) return false;
-    const sourceIndex = state.categories.indexOf(sourceCat);
-    const targetIndex = state.categories.indexOf(targetCat);
-    if(sourceIndex < 0 || targetIndex < 0) return false;
-    const moved = state.categories.splice(sourceIndex, 1)[0];
-    let insertAt = state.categories.indexOf(targetCat);
-    if(placeAfter) insertAt += 1;
-    insertAt = Math.max(0, Math.min(insertAt, state.categories.length));
-    state.categories.splice(insertAt, 0, moved);
+  function moveCategoryWithinOrder(categoryName, direction){
+    const delta = direction < 0 ? -1 : 1;
+    const currentIndex = state.categories.indexOf(categoryName);
+    if(currentIndex < 0) return false;
+    const targetIndex = currentIndex + delta;
+    if(targetIndex < 0 || targetIndex >= state.categories.length) return false;
+    const moved = state.categories.splice(currentIndex, 1)[0];
+    state.categories.splice(targetIndex, 0, moved);
     return true;
   }
   function rerenderCategoryOrderViews(){
-    try{ renderCats(); renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
-  }
-  const TOUCH_DRAG_MOVE_THRESHOLD = 8;
-  const TOUCH_DRAG_HOLD_MS = 180;
-  let touchCategoryDrag = null;
-  let touchItemDrag = null;
-  function projectedDragCenterY(drag, fallbackY){
-    if(!drag) return fallbackY;
-    const y = Number.isFinite(drag.y) ? drag.y : fallbackY;
-    const offset = Number.isFinite(drag.centerOffsetY) ? drag.centerOffsetY : 0;
-    return y + offset;
-  }
-  function syncTouchDragClone(drag){
-    if(!drag || !drag.clone) return;
-    const x = Number.isFinite(drag.x) ? drag.x : drag.startX;
-    const y = Number.isFinite(drag.y) ? drag.y : drag.startY;
-    const left = x - (drag.grabOffsetX || 0);
-    const top = y - (drag.grabOffsetY || 0);
-    drag.clone.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
-  }
-  function createTouchDragClone(drag){
-    if(!drag || drag.clone || !drag.visual || !drag.visual.getBoundingClientRect) return;
-    const rect = drag.visual.getBoundingClientRect();
-    const clone = drag.visual.cloneNode(true);
-    clone.classList.remove('dragging','drop-target','touch-drag-source');
-    clone.classList.add('touch-drag-clone');
-    clone.removeAttribute('id');
-    clone.style.width = `${rect.width}px`;
-    clone.style.height = `${rect.height}px`;
-    clone.style.transform = `translate3d(${Math.round(rect.left)}px, ${Math.round(rect.top)}px, 0)`;
-    clone.setAttribute('aria-hidden','true');
-    drag.rect = rect;
-    drag.grabOffsetX = drag.startX - rect.left;
-    drag.grabOffsetY = drag.startY - rect.top;
-    drag.centerOffsetY = rect.top + rect.height / 2 - drag.startY;
-    drag.clone = clone;
-    document.body.appendChild(clone);
-    drag.visual.classList.add('touch-drag-source');
-    syncTouchDragClone(drag);
-  }
-  function removeTouchDragClone(drag){
-    if(drag && drag.clone && drag.clone.parentNode) drag.clone.parentNode.removeChild(drag.clone);
-    if(drag && drag.visual) drag.visual.classList.remove('touch-drag-source');
+    try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
   function restoreTouchDragSource(el){
     if(!el || !el.classList) return;
@@ -1346,155 +1286,15 @@
     document.querySelectorAll('.touch-drag-source,.dragging,.drop-target').forEach(restoreTouchDragSource);
     document.body.classList.remove('item-touch-drag-active');
   }
-  function clearCategoryDragState(){
-    if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
-    removeTouchDragClone(touchCategoryDrag);
-    touchCategoryDrag = null;
-    draggedCategoryName = null;
+  function cleanupManageItemDragArtifacts(){
     clearTouchDragArtifacts();
-  }
-  function elementFromPointIgnoringVisual(x, y, visual){
-    if(visual) visual.style.pointerEvents = 'none';
-    const el = document.elementFromPoint(x, y);
-    if(visual) visual.style.pointerEvents = '';
-    return el;
-  }
-  function visibleDragRects(selector){
-    return Array.from(document.querySelectorAll(selector)).map(el=>{
-      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-      return { el, rect };
-    }).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.rect.bottom >= 0 && entry.rect.top <= window.innerHeight);
-  }
-  function categoryDropElementFromPoint(x, y, visual){
-    const el = elementFromPointIgnoringVisual(x, y, visual);
-    return el && el.closest ? el.closest('[data-category-drop-target="true"]') : null;
-  }
-  function categoryDropPositionFromCenter(sourceCat, centerY){
-    const surfaces = visibleDragRects('[data-category-drop-surface="true"]').map(entry=>({
-      el: entry.el,
-      rect: entry.rect,
-      cat: entry.el.dataset.category || '',
-      center: entry.rect.top + entry.rect.height / 2
-    })).filter(entry=> entry.cat && entry.cat !== sourceCat).sort((a,b)=> a.center - b.center);
-    if(!surfaces.length) return null;
-    for(const entry of surfaces){
-      if(centerY < entry.center) return { targetCat: entry.cat, placeAfter: false };
-    }
-    return { targetCat: surfaces[surfaces.length - 1].cat, placeAfter: true };
-  }
-  function categoryDropPositionFromPoint(x, y, visual, sourceCat){
-    return categoryDropPositionFromCenter(sourceCat || draggedCategoryName || '', y);
-  }
-  function isInteractiveDragTarget(target){
-    return !!(target && target.closest && target.closest('button,input,select,textarea,a,[contenteditable="true"],.swipe-trash'));
-  }
-  function startCategoryTouchDrag(surfaceEl, drag){
-    if(!drag || drag.active) return;
-    drag.active = true;
-    draggedCategoryName = drag.cat;
-    drag.visual.classList.add('dragging');
-    createTouchDragClone(drag);
-    try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
-  }
-  function attachCategoryTouchDrag(surfaceEl, cat, dragClassEl){
-    if(!surfaceEl || typeof PointerEvent === 'undefined') return;
-    surfaceEl.addEventListener('pointerdown', e=>{
-      if(e.pointerType === 'mouse' || e.button !== 0 || isInteractiveDragTarget(e.target)) return;
-      const visual = dragClassEl || surfaceEl;
-      if(touchCategoryDrag && touchCategoryDrag.holdTimer) clearTimeout(touchCategoryDrag.holdTimer);
-      touchCategoryDrag = { cat, visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
-      touchCategoryDrag.holdTimer = setTimeout(()=>{
-        if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) startCategoryTouchDrag(surfaceEl, touchCategoryDrag);
-      }, TOUCH_DRAG_HOLD_MS);
-    });
-    surfaceEl.addEventListener('pointermove', e=>{
-      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
-      const drag = touchCategoryDrag;
-      drag.x = e.clientX;
-      drag.y = e.clientY;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      if(drag.active){
-        syncTouchDragClone(drag);
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    surfaceEl.addEventListener('pointerup', e=>{
-      if(!touchCategoryDrag || touchCategoryDrag.pointerId !== e.pointerId) return;
-      const drag = touchCategoryDrag;
-      const wasActive = !!drag.active;
-      let moved = false;
-      if(wasActive){
-        const drop = categoryDropPositionFromCenter(drag.cat, projectedDragCenterY(drag, e.clientY));
-        if(drop && drop.targetCat){
-          moved = moveCategoryNear(drag.cat, drop.targetCat, drop.placeAfter);
-        }
-      }
-      clearCategoryDragState();
-      if(moved){
-        save();
-        rerenderCategoryOrderViews();
-      }
-      if(wasActive){
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    surfaceEl.addEventListener('pointercancel', e=>{
-      if(touchCategoryDrag && touchCategoryDrag.pointerId === e.pointerId) clearCategoryDragState();
+    document.querySelectorAll('#manageList .manage-item-row, #manageList .swipe-wrap, #catList .manage-category-row').forEach(el=>{
+      restoreTouchDragSource(el);
     });
   }
-  function attachCategoryDrag(surfaceEl, cat, dragClassEl){
-    if(!surfaceEl) return;
-    surfaceEl.draggable = true;
-    surfaceEl.dataset.category = cat;
-    attachCategoryTouchDrag(surfaceEl, cat, dragClassEl);
-    surfaceEl.addEventListener('dragstart', e=>{
-      if(isInteractiveDragTarget(e.target)){
-        e.preventDefault();
-        return;
-      }
-      draggedCategoryName = cat;
-      const visual = dragClassEl || surfaceEl;
-      visual.classList.add('dragging');
-      try{
-        e.dataTransfer.effectAllowed='move';
-        e.dataTransfer.setData('application/x-grocery-category', cat);
-        e.dataTransfer.setData('text/plain', '');
-      }catch(err){}
-      e.stopPropagation();
-    });
-    surfaceEl.addEventListener('dragend', ()=>{
-      clearCategoryDragState();
-    });
-  }
-  function attachCategoryDropTarget(el, targetCat){
-    if(!el) return;
-    el.dataset.categoryDropTarget = 'true';
-    el.dataset.category = targetCat;
-    if(el.matches && el.matches('.category-summary,.manage-category-row')) el.dataset.categoryDropSurface = 'true';
-    el.addEventListener('dragover', e=>{
-      const sourceCat = getDragCategoryName(e);
-      if(!sourceCat || sourceCat === targetCat) return;
-      e.preventDefault();
-      el.classList.add('drop-target');
-      try{ e.dataTransfer.dropEffect='move'; }catch(err){}
-    });
-    el.addEventListener('dragleave', ()=> el.classList.remove('drop-target'));
-    el.addEventListener('drop', e=>{
-      const sourceCat = getDragCategoryName(e);
-      if(!sourceCat || sourceCat === targetCat) return;
-      e.preventDefault();
-      e.stopPropagation();
-      el.classList.remove('drop-target');
-      const drop = categoryDropPositionFromCenter(sourceCat, e.clientY) || { targetCat, placeAfter: false };
-      if(moveCategoryNear(sourceCat, drop.targetCat, drop.placeAfter)){
-        draggedCategoryName = null;
-        save();
-        rerenderCategoryOrderViews();
-      }
-    });
+  function clearItemDragState(){
+    clearTouchDragArtifacts();
+    cleanupManageItemDragArtifacts();
   }
   function createCategorySummary(cat){
     const sum=document.createElement('summary');
@@ -1503,279 +1303,7 @@
     title.className='category-title';
     title.textContent=cat;
     sum.appendChild(title);
-    attachCategoryDrag(sum, cat, sum);
-    attachCategoryDropTarget(sum, cat);
     return sum;
-  }
-  function isInteractiveItemDragTarget(target){
-    return isInteractiveDragTarget(target);
-  }
-  function cleanupManageItemDragArtifacts(){
-    document.body.classList.remove('item-touch-drag-active');
-    document.querySelectorAll('.touch-drag-clone').forEach(el=>{ if(el.parentNode) el.parentNode.removeChild(el); });
-    document.querySelectorAll('#manageList .manage-item-row, #manageList .swipe-wrap').forEach(el=>{
-      restoreTouchDragSource(el);
-      if(el.style){
-        el.style.removeProperty('visibility');
-        el.style.removeProperty('display');
-        el.style.removeProperty('opacity');
-        el.style.removeProperty('pointer-events');
-        el.style.removeProperty('touch-action');
-      }
-    });
-  }
-  function clearItemDragState(){
-    if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
-    removeTouchDragClone(touchItemDrag);
-    touchItemDrag = null;
-    draggedItemId = null;
-    clearTouchDragArtifacts();
-    cleanupManageItemDragArtifacts();
-  }
-  function itemDropElementFromPoint(x, y, visual){
-    const el = elementFromPointIgnoringVisual(x, y, visual);
-    return el && el.closest ? el.closest('[data-item-drop-target="true"]') : null;
-  }
-  function itemDropForTarget(el, y){
-    const drop = el ? el.__groceryItemDropTarget : null;
-    if(!drop) return null;
-    let idx = typeof drop.targetIndexFn === 'function' ? drop.targetIndexFn() : drop.targetIndexFn;
-    if(drop.placeByHalf){
-      const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
-      if(rect && y > rect.top + rect.height / 2) idx += 1;
-    }
-    return { targetCat: drop.targetCat, idx };
-  }
-  function itemDropCountExcludingDragged(cat, itemId){
-    return itemsInCategory(cat).filter(it=>it.id !== itemId).length;
-  }
-  function itemCategoryById(itemId){
-    const item = state.items.find(it=>it.id === itemId);
-    return item ? item.cat : '';
-  }
-  function itemDropPositionFromCenter(itemId, centerY){
-    const sections = Array.from(document.querySelectorAll('#manageList details')).map(sec=>{
-      const sum = sec.querySelector('summary[data-category-drop-target="true"]');
-      const list = sec.querySelector('.list');
-      const cat = sum ? sum.dataset.category : '';
-      const summaryRect = sum && sum.getBoundingClientRect ? sum.getBoundingClientRect() : null;
-      const listRect = list && list.getBoundingClientRect ? list.getBoundingClientRect() : null;
-      const rows = Array.from(sec.querySelectorAll('[data-item-drop-row="true"]')).map(row=>({
-        el: row,
-        rect: row.getBoundingClientRect ? row.getBoundingClientRect() : null,
-        drop: row.__groceryItemDropTarget,
-        itemId: row.dataset.itemId || ''
-      })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.drop && entry.itemId !== itemId)
-        .sort((a,b)=> (a.rect.top + a.rect.height / 2) - (b.rect.top + b.rect.height / 2));
-      return { sec, cat, summaryRect, listRect, rows, isOpen: !!sec.open };
-    }).filter(entry=> entry.cat && entry.summaryRect && entry.summaryRect.width > 0 && entry.summaryRect.height > 0);
-
-    let previousVisible = null;
-    for(const section of sections){
-      const top = section.summaryRect.top;
-      const bottom = section.listRect && section.listRect.height > 0 ? section.listRect.bottom : section.summaryRect.bottom;
-      if(centerY < top){
-        if(previousVisible){
-          const prevBottom = previousVisible.listRect && previousVisible.listRect.height > 0 ? previousVisible.listRect.bottom : previousVisible.summaryRect.bottom;
-          if(centerY - prevBottom < top - centerY) return { targetCat: previousVisible.cat, idx: itemDropCountExcludingDragged(previousVisible.cat, itemId), fromCenterline: true };
-        }
-        return { targetCat: section.cat, idx: 0, fromCenterline: true };
-      }
-      if(centerY <= section.summaryRect.bottom){
-        return { targetCat: section.cat, idx: section.isOpen ? 0 : itemDropCountExcludingDragged(section.cat, itemId), fromCenterline: true, fromCategoryHeader: true };
-      }
-      if(centerY <= bottom){
-        let idx = 0;
-        for(const row of section.rows){
-          const rowCenter = row.rect.top + row.rect.height / 2;
-          if(centerY < rowCenter) break;
-          idx += 1;
-        }
-        return { targetCat: section.cat, idx, fromCenterline: true };
-      }
-      previousVisible = section;
-    }
-    if(previousVisible) return { targetCat: previousVisible.cat, idx: itemDropCountExcludingDragged(previousVisible.cat, itemId), fromCenterline: true };
-    return null;
-  }
-  function itemDropPositionWithinCategory(itemId, sourceCat, centerY){
-    if(!itemId || !sourceCat || !Number.isFinite(centerY)) return null;
-    const sections = Array.from(document.querySelectorAll('#manageList details'));
-    const sec = sections.find(section=>{
-      const sum = section.querySelector('summary[data-category-drop-target="true"]');
-      return sum && sum.dataset.category === sourceCat;
-    });
-    if(!sec || !sec.open) return null;
-    const list = sec.querySelector('.list');
-    const listRect = list && list.getBoundingClientRect ? list.getBoundingClientRect() : null;
-    if(!listRect || listRect.width <= 0 || listRect.height <= 0) return null;
-    if(centerY < listRect.top || centerY > listRect.bottom) return null;
-    const rows = Array.from(sec.querySelectorAll('[data-item-drop-row="true"]')).map(row=>({
-      rect: row.getBoundingClientRect ? row.getBoundingClientRect() : null,
-      itemId: row.dataset.itemId || ''
-    })).filter(entry=> entry.rect && entry.rect.width > 0 && entry.rect.height > 0 && entry.itemId !== itemId)
-      .sort((a,b)=> (a.rect.top + a.rect.height / 2) - (b.rect.top + b.rect.height / 2));
-    let idx = 0;
-    for(const row of rows){
-      const rowCenter = row.rect.top + row.rect.height / 2;
-      if(centerY < rowCenter) break;
-      idx += 1;
-    }
-    return { targetCat: sourceCat, idx, fromCenterline: true };
-  }
-  function itemDropPositionFromPoint(x, y, visual, itemId){
-    return itemDropPositionFromCenter(itemId || draggedItemId || '', y);
-  }
-  function startItemTouchDrag(surfaceEl, drag){
-    if(!drag || drag.active) return;
-    drag.active = true;
-    draggedItemId = drag.itemId;
-    drag.visual.classList.add('dragging');
-    drag.visual.style.touchAction = 'none';
-    document.body.classList.add('item-touch-drag-active');
-    createTouchDragClone(drag);
-    try{ surfaceEl.setPointerCapture(drag.pointerId); }catch(err){}
-  }
-  function attachItemTouchDrag(surfaceEl, itemId, dragClassEl){
-    if(!surfaceEl || typeof PointerEvent === 'undefined') return;
-    surfaceEl.addEventListener('pointerdown', e=>{
-      const row = itemDragRowFor(dragClassEl, e.target);
-      const wrap = dragClassEl && dragClassEl.classList && dragClassEl.classList.contains('swipe-wrap') ? dragClassEl : null;
-      if(e.pointerType === 'mouse' || e.button !== 0 || (row && row.classList.contains('editing')) || (wrap && wrap.classList.contains('revealed')) || isInteractiveItemDragTarget(e.target)) return;
-      const visual = dragClassEl || surfaceEl;
-      if(touchItemDrag && touchItemDrag.holdTimer) clearTimeout(touchItemDrag.holdTimer);
-      touchItemDrag = { itemId, sourceCat: itemCategoryById(itemId), visual, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, active: false, holdTimer: null };
-      touchItemDrag.holdTimer = setTimeout(()=>{
-        if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) startItemTouchDrag(surfaceEl, touchItemDrag);
-      }, TOUCH_DRAG_HOLD_MS);
-    });
-    surfaceEl.addEventListener('pointermove', e=>{
-      if(!touchItemDrag || touchItemDrag.pointerId !== e.pointerId) return;
-      const drag = touchItemDrag;
-      drag.x = e.clientX;
-      drag.y = e.clientY;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      if(!drag.active && Math.abs(dx) > TOUCH_DRAG_MOVE_THRESHOLD && Math.abs(dx) > Math.abs(dy) * 1.25){
-        if(drag.holdTimer) clearTimeout(drag.holdTimer);
-        touchItemDrag = null;
-        return;
-      }
-      if(drag.active){
-        syncTouchDragClone(drag);
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    surfaceEl.addEventListener('pointerup', e=>{
-      if(!touchItemDrag || touchItemDrag.pointerId !== e.pointerId) return;
-      const drag = touchItemDrag;
-      const wasActive = !!drag.active;
-      let moved = false;
-      if(wasActive){
-        const drop = itemDropPositionWithinCategory(drag.itemId, drag.sourceCat, projectedDragCenterY(drag, e.clientY));
-        if(drop && drop.targetCat === drag.sourceCat){
-          moved = moveItemToCategory(drag.itemId, drop.targetCat, drop.idx, true);
-        }
-      }
-      clearItemDragState();
-      if(moved){
-        save();
-        rerenderItemViews();
-      }
-      if(wasActive){
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    });
-    surfaceEl.addEventListener('pointercancel', e=>{
-      if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
-    });
-  }
-  window.addEventListener('pointermove', e=>{
-    if(!touchItemDrag || !touchItemDrag.active || touchItemDrag.pointerId !== e.pointerId) return;
-    touchItemDrag.x = e.clientX;
-    touchItemDrag.y = e.clientY;
-    syncTouchDragClone(touchItemDrag);
-    e.preventDefault();
-  }, { capture: true });
-  window.addEventListener('pointerup', e=>{
-    if(!touchItemDrag || !touchItemDrag.active || touchItemDrag.pointerId !== e.pointerId) return;
-    setTimeout(()=>{
-      if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
-    }, 0);
-  }, { capture: true });
-  window.addEventListener('pointercancel', e=>{
-    if(touchItemDrag && touchItemDrag.pointerId === e.pointerId) clearItemDragState();
-  }, { capture: true });
-  window.addEventListener('scroll', ()=>{
-    if(touchItemDrag && touchItemDrag.active) clearItemDragState();
-  }, { capture: true, passive: true });
-  function itemDragRowFor(dragClassEl, eventTarget){
-    if(dragClassEl && dragClassEl.querySelector){
-      const row = dragClassEl.querySelector('.manage-item-row');
-      if(row) return row;
-    }
-    if(eventTarget && eventTarget.closest) return eventTarget.closest('.manage-item-row');
-    return null;
-  }
-  function attachItemDrag(surfaceEl, itemId, dragClassEl){
-    if(!surfaceEl) return;
-    surfaceEl.draggable = true;
-    surfaceEl.dataset.itemId = itemId;
-    surfaceEl.addEventListener('pointerdown', e=>{
-      if(e.pointerType && e.pointerType !== 'mouse'){
-        surfaceEl.draggable = false;
-        draggedItemId = null;
-        cleanupManageItemDragArtifacts();
-        return;
-      }
-      surfaceEl.draggable = true;
-    });
-    surfaceEl.addEventListener('dragstart', e=>{
-      const row = itemDragRowFor(dragClassEl, e.target);
-      if((row && row.classList.contains('editing')) || isInteractiveItemDragTarget(e.target)){
-        draggedItemId = null;
-        e.preventDefault();
-        return;
-      }
-      draggedItemId = itemId;
-      const visual = dragClassEl || surfaceEl;
-      visual.classList.add('dragging');
-      try{
-        e.dataTransfer.effectAllowed='move';
-        e.dataTransfer.setData('text/plain', itemId);
-      }catch(err){}
-      e.stopPropagation();
-    });
-    surfaceEl.addEventListener('dragend', ()=>{
-      clearItemDragState();
-    });
-  }
-  function attachDropTarget(el, targetCat, targetIndexFn, options){
-    if(!el) return;
-    el.dataset.itemDropTarget = 'true';
-    el.__groceryItemDropTarget = { targetCat, targetIndexFn, placeByHalf: !!(options && options.placeByHalf) };
-    el.addEventListener('dragover', e=>{
-      const itemId = getDragItemId(e);
-      if(!itemId) return;
-      e.preventDefault();
-      try{ e.dataTransfer.dropEffect='move'; }catch(err){}
-    });
-    el.addEventListener('drop', e=>{
-      const itemId = getDragItemId(e);
-      if(!itemId) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const drop = itemDropPositionFromCenter(itemId, e.clientY) || itemDropForTarget(el, e.clientY);
-      const idx = drop ? drop.idx : (typeof targetIndexFn === 'function' ? targetIndexFn() : targetIndexFn);
-      const cat = drop ? drop.targetCat : targetCat;
-      if(moveItemToCategory(itemId, cat, idx, !!(drop && drop.fromCenterline))){
-        draggedItemId = null;
-        save();
-        rerenderItemViews();
-      }
-    });
   }
   function createSwipeShell(itemId){
     const wrap=document.createElement('div');
@@ -2270,6 +1798,7 @@
       btn.onclick = ()=>{
         manageView = btn.dataset.manageView === 'categories' ? 'categories' : 'items';
         if(manageView !== 'items') manageItemReorderMode = false;
+        if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
       };
     });
@@ -2517,7 +2046,6 @@
       sec.open = !closedCats.has(cat);
       const sum=createCategorySummary(cat);
       sec.appendChild(sum);
-      attachCategoryDropTarget(sec, cat);
       sec.addEventListener('toggle', ()=>{
         if (sec.open) {
           const container = document.getElementById('manageList');
@@ -2534,8 +2062,6 @@
 
       const list=document.createElement('div');
       list.className='list';
-      attachDropTarget(sum, cat, () => itemsInCategory(cat).length);
-      attachDropTarget(list, cat, () => itemsInCategory(cat).length);
 
       items.forEach((it,idx)=>{
         const shell = createSwipeShell(it.id);
@@ -2571,6 +2097,25 @@
         priceWrap.appendChild(priceLabel);
         priceWrap.appendChild(priceInput);
 
+        const categoryWrap=document.createElement('div'); categoryWrap.className='price-wrap category-edit-wrap'; categoryWrap.style.display='none';
+        const categoryLabel=document.createElement('span'); categoryLabel.className='price-label'; categoryLabel.textContent='Category';
+        const categorySelect=document.createElement('select'); categorySelect.className='manage-category-select'; categorySelect.setAttribute('aria-label','Item category');
+        state.categories.forEach(categoryName=>{
+          const opt=document.createElement('option'); opt.value=categoryName; opt.textContent=categoryName; categorySelect.appendChild(opt);
+        });
+        categorySelect.value = it.cat;
+        categorySelect.addEventListener('keydown', (e)=>{
+          if(e.key==='Enter'){
+            e.preventDefault();
+            saveBtn.click();
+          } else if(e.key==='Escape'){
+            e.preventDefault();
+            cancelBtn.click();
+          }
+        });
+        categoryWrap.appendChild(categoryLabel);
+        categoryWrap.appendChild(categorySelect);
+
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
@@ -2598,6 +2143,7 @@
         left.appendChild(input);
         row.appendChild(right);
         right.appendChild(priceWrap);
+        right.appendChild(categoryWrap);
         if(manageItemReorderMode){
           row.classList.add('reordering');
           shell.wrap.classList.add('reorder-mode');
@@ -2608,11 +2154,10 @@
           right.appendChild(saveBtn);
           right.appendChild(cancelBtn);
         }
-        if(!manageItemReorderMode) attachItemDrag(row, it.id, shell.wrap);
         function setItemDragEnabled(enabled){
-          row.draggable = !!enabled && !manageItemReorderMode;
+          row.draggable = false;
         }
-        setItemDragEnabled(!manageItemReorderMode);
+        setItemDragEnabled(false);
 
         function enterEdit(){
           row.classList.add('editing');
@@ -2620,7 +2165,9 @@
           name.style.display='none';
           input.style.display='block';
           priceWrap.style.display='flex';
+          categoryWrap.style.display='flex';
           priceInput.value=formatPriceInput(it.avgPrice);
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='none';
           saveBtn.style.display='inline-block';
           cancelBtn.style.display='inline-block';
@@ -2633,7 +2180,9 @@
           name.style.display='block';
           input.style.display='none';
           priceWrap.style.display='none';
+          categoryWrap.style.display='none';
           priceInput.value = formatPriceInput(it.avgPrice);
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='inline-block';
           saveBtn.style.display='none';
           cancelBtn.style.display='none';
@@ -2654,21 +2203,28 @@
           const nv = input.value.trim();
           if(!nv){ alert('Item name cannot be empty.'); return }
           const parsedPrice = parsePriceInput(priceInput.value);
+          const selectedCat = state.categories.includes(categorySelect.value) ? categorySelect.value : it.cat;
+          const oldCat = it.cat;
+          const categoryChanged = selectedCat && selectedCat !== oldCat;
           it.name = nv;
           it.avgPrice = parsedPrice;
+          if(categoryChanged){
+            moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
+          }
           save();
           name.textContent = it.name;
           priceInput.value = formatPriceInput(it.avgPrice);
-          exitEdit();
+          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
+          if(categoryChanged){
+            renderManage();
+          } else {
+            exitEdit();
+          }
           renderBuild();
           renderShop();
           renderInsights();
         };
 
-        if(!manageItemReorderMode){
-          shell.wrap.dataset.itemDropRow = 'true';
-          attachDropTarget(shell.wrap, cat, () => idx, { placeByHalf: true });
-        }
         list.appendChild(shell.wrap);
       });
 
@@ -2682,11 +2238,24 @@
   function renderManageCategories(target){
     (target || viewManage).innerHTML = `
       <div class="row" style="gap:6px;flex-wrap:wrap">
-        <input id="newCatName" placeholder="Category name" style="flex:2" />
-        <button class="btn-accent" id="btnAddCat">Add Category</button>
+        <input id="newCatName" placeholder="Category name" style="flex:2" ${manageCategoryReorderMode ? 'disabled' : ''} />
+        <button class="btn-accent" id="btnAddCat" ${manageCategoryReorderMode ? 'disabled' : ''}>Add Category</button>
       </div>
       <div class="spacer"></div>
-      <div id="catList"></div>`;
+      <div class="manage-reorder-toolbar">
+        <button type="button" class="btn" id="btnToggleCategoryReorder" aria-pressed="${manageCategoryReorderMode ? 'true' : 'false'}">${manageCategoryReorderMode ? 'Done Reordering' : 'Reorder Categories'}</button>
+        <span class="muted manage-reorder-help">${manageCategoryReorderMode ? 'Use arrows to move categories. Order saves after each move.' : 'Use reorder mode for reliable category sorting.'}</span>
+      </div>
+      <div class="spacer"></div>
+      <div id="catList" class="${manageCategoryReorderMode ? 'reorder-mode' : ''}"></div>`;
+    const reorderToggle = document.getElementById('btnToggleCategoryReorder');
+    if(reorderToggle){
+      reorderToggle.onclick = ()=>{
+        clearTouchDragArtifacts();
+        manageCategoryReorderMode = !manageCategoryReorderMode;
+        renderManage();
+      };
+    }
     renderCats();
   }
 
@@ -2697,7 +2266,7 @@
     state.categories.forEach((c,i)=>{
       const row=document.createElement('div');
       row.className='item manage-category-row';
-      row.draggable=true;
+      row.draggable=false;
       row.dataset.index=i;
       row.dataset.category=c;
 
@@ -2765,9 +2334,30 @@
       };
 
       row.appendChild(left); left.appendChild(label); left.appendChild(input);
-      row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
-      attachCategoryDrag(row, c, row);
-      attachCategoryDropTarget(row, c);
+      row.appendChild(right);
+      if(manageCategoryReorderMode){
+        row.classList.add('reordering');
+        const moveUp=document.createElement('button'); moveUp.type='button'; moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.setAttribute('aria-label', `Move ${c} up`);
+        const moveDown=document.createElement('button'); moveDown.type='button'; moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.setAttribute('aria-label', `Move ${c} down`);
+        moveUp.disabled = i === 0;
+        moveDown.disabled = i === state.categories.length - 1;
+        moveUp.onclick = ()=>{
+          if(moveCategoryWithinOrder(c, -1)){
+            save();
+            rerenderCategoryOrderViews();
+          }
+        };
+        moveDown.onclick = ()=>{
+          if(moveCategoryWithinOrder(c, 1)){
+            save();
+            rerenderCategoryOrderViews();
+          }
+        };
+        right.appendChild(moveUp);
+        right.appendChild(moveDown);
+      } else {
+        right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+      }
       cl.appendChild(row);
     });
 
