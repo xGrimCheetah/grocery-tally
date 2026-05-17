@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.51.0"; // Item-first item editing model
+  let APP_VERSION = "1.52.0"; // Smart suggestions foundation
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1385,6 +1385,97 @@
     });
     return { hasRun:true, items };
   }
+  function fallbackRunItemKey(rit){
+    const name = normalizeText(rit && rit.name);
+    const cat = normalizeText(rit && rit.cat);
+    return name && cat ? name + '|' + cat : '';
+  }
+  function findCurrentItemForRunItem(rit, itemsById, itemsByFallback){
+    const itemId = cleanText((rit && (rit.itemId || rit.id)) || '');
+    if(itemId && itemsById.has(itemId)) return itemsById.get(itemId);
+    const fallbackKey = fallbackRunItemKey(rit);
+    return fallbackKey && itemsByFallback.has(fallbackKey) ? itemsByFallback.get(fallbackKey) : null;
+  }
+  function daysBetweenDates(a,b){
+    const earlier = Date.parse(a || '');
+    const later = Date.parse(b || '');
+    if(!Number.isFinite(earlier) || !Number.isFinite(later) || later <= earlier) return 0;
+    return (later - earlier) / 86400000;
+  }
+  function getSmartSuggestions(allItems){
+    const runs = (Array.isArray(state.runHistory) ? state.runHistory : [])
+      .filter(run => Array.isArray(run && run.items) && run.items.length)
+      .slice()
+      .sort((a,b)=>(Date.parse(b && b.committedAt) || 0) - (Date.parse(a && a.committedAt) || 0));
+    if(!runs.length || !Array.isArray(allItems) || !allItems.length) return [];
+
+    const itemsById = new Map();
+    const itemsByFallback = new Map();
+    allItems.forEach(it=>{
+      const itemId = cleanText(it && it.id);
+      if(itemId) itemsById.set(itemId, it);
+      const fallbackKey = normalizeText(it && it.name) + '|' + normalizeText(it && it.cat);
+      if(fallbackKey !== '|' && !itemsByFallback.has(fallbackKey)) itemsByFallback.set(fallbackKey, it);
+    });
+
+    const recentRunItemIds = new Set();
+    runs.slice(0, 3).forEach(run=>{
+      const seenThisRun = new Set();
+      run.items.forEach(rit=>{
+        const item = findCurrentItemForRunItem(rit, itemsById, itemsByFallback);
+        if(!item || seenThisRun.has(item.id)) return;
+        seenThisRun.add(item.id);
+        recentRunItemIds.add(item.id);
+      });
+    });
+
+    const statsByItemId = new Map();
+    runs.forEach(run=>{
+      const committedAt = cleanText(run && run.committedAt);
+      const seenThisRun = new Set();
+      run.items.forEach(rit=>{
+        const item = findCurrentItemForRunItem(rit, itemsById, itemsByFallback);
+        if(!item || seenThisRun.has(item.id)) return;
+        seenThisRun.add(item.id);
+        if(!statsByItemId.has(item.id)){
+          statsByItemId.set(item.id, { item, purchaseCount:0, dates:[] });
+        }
+        const stats = statsByItemId.get(item.id);
+        stats.purchaseCount += 1;
+        if(committedAt) stats.dates.push(committedAt);
+      });
+    });
+
+    const nowIso = new Date().toISOString();
+    return Array.from(statsByItemId.values()).map(stats=>{
+      const sortedDates = stats.dates.slice().sort((a,b)=>(Date.parse(a) || 0) - (Date.parse(b) || 0));
+      const gaps = [];
+      for(let i=1; i<sortedDates.length; i++){
+        const gap = daysBetweenDates(sortedDates[i - 1], sortedDates[i]);
+        if(gap > 0) gaps.push(gap);
+      }
+      const avgGap = gaps.length ? gaps.reduce((sum, gap)=>sum + gap, 0) / gaps.length : 0;
+      const lastPurchasedAt = sortedDates[sortedDates.length - 1] || '';
+      const daysSinceLast = lastPurchasedAt ? daysBetweenDates(lastPurchasedAt, nowIso) : 0;
+      const maybeDueSoon = stats.purchaseCount >= 3 && avgGap > 0 && daysSinceLast >= Math.max(1, avgGap * 0.85);
+      const oftenBought = stats.purchaseCount >= 3;
+      const recentlyBought = recentRunItemIds.has(stats.item.id);
+      let reason = '';
+      if(maybeDueSoon) reason = 'Maybe due soon';
+      else if(oftenBought) reason = 'Often bought';
+      else if(recentlyBought) reason = 'Recently bought';
+      return Object.assign({}, stats, { avgGap, lastPurchasedAt, daysSinceLast, reason });
+    }).filter(suggestion => suggestion.reason)
+      .sort((a,b)=>{
+        const reasonRank = { 'Maybe due soon':0, 'Often bought':1, 'Recently bought':2 };
+        const byReason = (reasonRank[a.reason] ?? 9) - (reasonRank[b.reason] ?? 9);
+        if(byReason !== 0) return byReason;
+        if(b.purchaseCount !== a.purchaseCount) return b.purchaseCount - a.purchaseCount;
+        const byDate = (Date.parse(b.lastPurchasedAt) || 0) - (Date.parse(a.lastPurchasedAt) || 0);
+        if(byDate !== 0) return byDate;
+        return buildListSort(a.item, b.item);
+      });
+  }
   function scrollToBuildTop(){
     clearBuildLetterFocus();
     try{
@@ -1759,6 +1850,40 @@
   tabInsights.onclick=()=>{ try{ renderInsights(); }catch(e){ console.error(e) } setTab('insights') };
 
   // ----- Build List -----
+  function appendBuildItemRow(buildList, it, options){
+    const opts = options || {};
+    const shell = createSwipeShell(it.id);
+    shell.wrap.dataset.letter = opts.letter || alphaKeyForItem(it);
+    if(opts.isFirstForLetter){
+      shell.wrap.id = 'build-letter-' + (shell.wrap.dataset.letter === '#' ? 'num' : shell.wrap.dataset.letter);
+    }
+    const row=shell.content;
+
+    const left=document.createElement('div'); left.className='left';
+    const right=document.createElement('div'); right.className='right';
+    const nameWrap=document.createElement('div'); nameWrap.className='build-item-text';
+    const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+    nameWrap.appendChild(name);
+    if(opts.reason){
+      const reason=document.createElement('div');
+      reason.className='cat suggestion-reason';
+      reason.textContent=opts.reason;
+      nameWrap.appendChild(reason);
+    }
+    left.appendChild(nameWrap);
+
+    const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
+    const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
+    const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; it.skipped=false; save(); renderBuild() };
+    const prev=document.createElement('div');
+    prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
+    prev.title='Previous run quantity';
+    prev.textContent=previousRunText(it);
+
+    right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
+    row.appendChild(left); row.appendChild(right);
+    buildList.appendChild(shell.wrap);
+  }
   function renderBuild(){
     ensurePositions();
     viewBuild.innerHTML = `
@@ -1770,6 +1895,7 @@
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
           <button type="button" class="insights-view-btn${buildListMode === 'all' ? ' active' : ''}" data-build-list-mode="all" aria-pressed="${buildListMode === 'all' ? 'true' : 'false'}">All items</button>
           <button type="button" class="insights-view-btn${buildListMode === 'lastRun' ? ' active' : ''}" data-build-list-mode="lastRun" aria-pressed="${buildListMode === 'lastRun' ? 'true' : 'false'}">Last run</button>
+          <button type="button" class="insights-view-btn${buildListMode === 'suggested' ? ' active' : ''}" data-build-list-mode="suggested" aria-pressed="${buildListMode === 'suggested' ? 'true' : 'false'}">Suggested</button>
         </div>
       </div>
       <div id="buildEstimate" class="estimate-sticky"></div>
@@ -1802,10 +1928,13 @@
       const query = normalizeText(buildSearchQuery);
       const allItems = state.items.slice().sort(buildListSort);
       const lastRunPool = buildListMode === 'lastRun' ? getLastRunItemPool(allItems) : { hasRun:true, items:allItems };
-      const itemPool = buildListMode === 'lastRun' ? lastRunPool.items : allItems;
-      const items = query ? itemPool.filter(it => matchesBuildSearch(it, query)).sort(buildSearchSort(query)) : itemPool;
+      const suggestionPool = buildListMode === 'suggested' ? getSmartSuggestions(allItems) : [];
+      const itemPool = buildListMode === 'lastRun' ? lastRunPool.items : (buildListMode === 'suggested' ? suggestionPool : allItems);
+      const items = query
+        ? itemPool.filter(entry => matchesBuildSearch(entry && entry.item ? entry.item : entry, query)).sort((a,b)=>buildSearchSort(query)(a && a.item ? a.item : a, b && b.item ? b.item : b))
+        : itemPool;
       const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
-      const activeLetters = new Set(items.map(alphaKeyForItem));
+      const activeLetters = new Set(items.map(entry => alphaKeyForItem(entry && entry.item ? entry.item : entry)));
       if(buildFocusLetter && !activeLetters.has(buildFocusLetter)) buildFocusLetter = '';
 
       alphaButtons.innerHTML = '';
@@ -1850,43 +1979,32 @@
         applyBuildLetterFocus();
         return;
       }
+      if(buildListMode === 'suggested' && !itemPool.length){
+        buildList.innerHTML = '<p class="muted">No smart suggestions yet. Commit a few shopping runs and suggestions will appear here.</p>';
+        applyBuildLetterFocus();
+        return;
+      }
       if(!items.length){
         buildList.innerHTML = buildListMode === 'lastRun' && query
           ? '<p class="muted">No last-run items match this search.</p>'
-          : '<p class="muted">No matching items. Clear the search to show the full Build List.</p>';
+          : (buildListMode === 'suggested' && query
+            ? '<p class="muted">No suggested items match this search.</p>'
+            : '<p class="muted">No matching items. Clear the search to show the full Build List.</p>');
         applyBuildLetterFocus();
         return;
       }
 
-      let currentLetter = '';
-      items.forEach(it=>{
+      const anchoredLetters = new Set();
+      items.forEach(entry=>{
+        const it = entry && entry.item ? entry.item : entry;
         const letter = alphaKeyForItem(it);
-        const isFirstForLetter = letter !== currentLetter;
-        if(isFirstForLetter) currentLetter = letter;
-
-        const shell = createSwipeShell(it.id);
-        shell.wrap.dataset.letter = letter;
-        if(isFirstForLetter){
-          shell.wrap.id = 'build-letter-' + (letter === '#' ? 'num' : letter);
-        }
-        const row=shell.content;
-
-        const left=document.createElement('div'); left.className='left';
-        const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        left.appendChild(name);
-
-        const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
-        const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
-        const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; it.skipped=false; save(); renderBuild() };
-        const prev=document.createElement('div');
-        prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
-        prev.title='Previous run quantity';
-        prev.textContent=previousRunText(it);
-
-        right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
-        row.appendChild(left); row.appendChild(right);
-        buildList.appendChild(shell.wrap);
+        const isFirstForLetter = !anchoredLetters.has(letter);
+        if(isFirstForLetter) anchoredLetters.add(letter);
+        appendBuildItemRow(buildList, it, {
+          letter,
+          isFirstForLetter,
+          reason: entry && entry.item ? entry.reason : ''
+        });
       });
       applyBuildLetterFocus();
     }
@@ -1904,7 +2022,7 @@
 
     buildModeButtons.forEach(btn=>{
       btn.onclick = ()=>{
-        const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : 'all';
+        const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : (btn.dataset.buildListMode === 'suggested' ? 'suggested' : 'all');
         if(buildListMode !== nextMode){
           buildListMode = nextMode;
           buildFocusLetter = '';

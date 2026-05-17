@@ -51,6 +51,8 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .build-flat-list .item{padding:6px 8px;min-height:44px}
 .build-flat-list .item .left{gap:8px;flex:1 1 0}
 .build-flat-list .name{line-height:1.15}
+.build-item-text{min-width:0}
+.suggestion-reason{font-weight:700;color:#93c5fd;opacity:1}
 .build-flat-list .cat{line-height:1.1}
 .build-flat-list .qty,.build-flat-list .prev-qty{padding:5px 8px}
 .build-flat-list button{padding:8px 10px}
