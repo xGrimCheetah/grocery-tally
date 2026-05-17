@@ -2137,8 +2137,13 @@
       btn.onclick = ()=>{
         const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : (btn.dataset.buildListMode === 'suggested' ? 'suggested' : 'all');
         if(buildListMode !== nextMode){
+          const leavingAllItemsMode = buildListMode === 'all' && nextMode !== 'all';
           buildListMode = nextMode;
           buildFocusLetter = '';
+          if(leavingAllItemsMode){
+            buildSearchQuery = '';
+            buildControlMode = 'alpha';
+          }
           renderBuild();
         }
       };
