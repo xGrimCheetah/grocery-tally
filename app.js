@@ -1049,11 +1049,14 @@
         if(!itemMatchesRunItem(item, rit)) return;
         const qty = Math.max(0, Number(rit.qty) || 0);
         if(qty <= 0) return;
+        const receiptTotal = runItemReceiptTotal(rit);
         const runAvgPrice = usableAvgPrice(rit && rit.avgPrice);
         const price = runAvgPrice || currentAvgPrice;
         totalQty += qty;
         runPurchasedQty += qty;
-        if(price > 0){
+        if(receiptTotal > 0){
+          estimatedSpend += receiptTotal;
+        } else if(price > 0){
           estimatedSpend += qty * price;
         } else {
           hasMissingPriceData = true;
