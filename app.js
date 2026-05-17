@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.8"; // Mobile item edit layout fix
+  let APP_VERSION = "1.48.9"; // Reorder arrow scroll-position fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -210,6 +210,25 @@
     }catch(e){
       setTimeout(runScroll, 0);
     }
+  }
+
+  function currentScrollY(){
+    return window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+  }
+
+  function restoreWindowScrollY(scrollY){
+    const top = Math.max(0, Number(scrollY) || 0);
+    const restore = ()=>{
+      try{
+        window.scrollTo({ left: 0, top, behavior: 'auto' });
+      }catch(e){
+        window.scrollTo(0, top);
+      }
+    };
+    restore();
+    try{ requestAnimationFrame(()=>{ restore(); setTimeout(restore, 0); }); }catch(e){ setTimeout(restore, 0); }
+    setTimeout(restore, 0);
+    setTimeout(restore, 50);
   }
 
   function scrollManageEditRowIntoView(target){
@@ -2126,15 +2145,19 @@
         moveUp.disabled = isFirst;
         moveDown.disabled = isLast;
         moveUp.onclick = ()=>{
+          const previousScrollY = currentScrollY();
           if(moveItemWithinCategory(it.id, -1)){
             save();
             rerenderItemViews();
+            restoreWindowScrollY(previousScrollY);
           }
         };
         moveDown.onclick = ()=>{
+          const previousScrollY = currentScrollY();
           if(moveItemWithinCategory(it.id, 1)){
             save();
             rerenderItemViews();
+            restoreWindowScrollY(previousScrollY);
           }
         };
 
@@ -2342,15 +2365,19 @@
         moveUp.disabled = i === 0;
         moveDown.disabled = i === state.categories.length - 1;
         moveUp.onclick = ()=>{
+          const previousScrollY = currentScrollY();
           if(moveCategoryWithinOrder(c, -1)){
             save();
             rerenderCategoryOrderViews();
+            restoreWindowScrollY(previousScrollY);
           }
         };
         moveDown.onclick = ()=>{
+          const previousScrollY = currentScrollY();
           if(moveCategoryWithinOrder(c, 1)){
             save();
             rerenderCategoryOrderViews();
+            restoreWindowScrollY(previousScrollY);
           }
         };
         right.appendChild(moveUp);

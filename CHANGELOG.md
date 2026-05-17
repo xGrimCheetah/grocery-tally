@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.48.9 — Reorder arrow scroll-position fix
+
+- Preserved scroll position when using Manage Items reorder arrows.
+- Prevented item reorder actions from autoscrolling back to the top of the category.
+- Preserved Reorder Items mode, Reorder Categories mode, item recategorizing, mobile item edit layout, Build List, Shopping Mode, Insights, Run History, localStorage keys, and JSON export/import compatibility.
+
 ## v1.48.8 — Mobile item edit layout fix
 
 - Improved the mobile Manage Items edit-row layout.
