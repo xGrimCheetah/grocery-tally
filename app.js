@@ -2092,7 +2092,7 @@
     };
 
     document.getElementById('btnWipe').onclick = ()=>{
-      const message = 'Wipe all grocery data stored in this browser?\n\nThis deletes your grocery list, categories, quantities, checked items, run history, and last backup timestamp on this device.\n\nExport backup JSON first unless you are absolutely sure. This cannot be undone.\n\nContinue?';
+      const message = 'Wipe all grocery data stored in this browser?\n\nThis deletes your grocery list, categories, stores, quantities, checked items, run history, and last backup timestamp on this device.\n\nExport backup JSON first unless you are absolutely sure. This cannot be undone.\n\nContinue?';
       if(confirm(message)){
         state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
         clearLastBackupAt();
