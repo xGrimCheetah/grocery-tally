@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.53.1"; // All Items search clear button
+  let APP_VERSION = "1.53.2"; // Receipt-only price estimates
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -530,7 +530,7 @@
     let missing = 0;
     active.forEach(it=>{
       const qty = Number(it.qty) || 0;
-      const price = Number(it.avgPrice) || 0;
+      const price = getReceiptEstimatePrice(it);
       if(qty <= 0) return;
       if(price > 0){
         total += qty * price;
@@ -583,7 +583,7 @@
     const sorted = checked.slice().sort(sortItems);
     const items = sorted.map(it=>{
       const qty = Math.max(0, Number(it.qty) || 0);
-      const avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+      const avgPrice = getReceiptEstimatePrice(it);
       const estimatedPrice = avgPrice > 0 ? Math.round(qty * avgPrice * 100) / 100 : 0;
       return {
         itemId: it.id || '',
@@ -681,6 +681,27 @@
   function validPriceEntries(item){
     return normalizePriceEntries(item && item.priceEntries, item).filter(entry => positiveMoney(entry.unitPrice) > 0 && positiveMoney(entry.totalPrice) > 0);
   }
+  function receiptAverageFromEntries(item){
+    const valid = validPriceEntries(item);
+    if(!valid.length) return 0;
+    valid.sort((a,b)=>{
+      const ad = Date.parse(a.committedAt || a.enteredAt || '') || 0;
+      const bd = Date.parse(b.committedAt || b.enteredAt || '') || 0;
+      if(bd !== ad) return bd - ad;
+      const ae = Date.parse(a.enteredAt || '') || 0;
+      const be = Date.parse(b.enteredAt || '') || 0;
+      return be - ae;
+    });
+    const recent = valid.slice(0, 5);
+    return roundMoney(recent.reduce((sum, entry)=> sum + positiveMoney(entry.unitPrice), 0) / recent.length);
+  }
+  function getReceiptEstimatePrice(item){
+    return receiptAverageFromEntries(item);
+  }
+  function receiptPriceSummaryText(item){
+    const receiptAverage = getReceiptEstimatePrice(item);
+    return receiptAverage > 0 ? `Receipt avg: ${formatMoney(receiptAverage)}` : 'No receipt price history yet';
+  }
   function recalcAvgPriceFromEntries(item){
     if(!item) return;
     item.priceEntries = normalizePriceEntries(item.priceEntries, item);
@@ -691,16 +712,7 @@
       delete item.receiptPreviousAvgPrice;
       return;
     }
-    valid.sort((a,b)=>{
-      const ad = Date.parse(a.committedAt || a.enteredAt || '') || 0;
-      const bd = Date.parse(b.committedAt || b.enteredAt || '') || 0;
-      if(bd !== ad) return bd - ad;
-      const ae = Date.parse(a.enteredAt || '') || 0;
-      const be = Date.parse(b.enteredAt || '') || 0;
-      return be - ae;
-    });
-    const recent = valid.slice(0, 5);
-    item.avgPrice = roundMoney(recent.reduce((sum, entry)=> sum + positiveMoney(entry.unitPrice), 0) / recent.length);
+    item.avgPrice = receiptAverageFromEntries(item);
   }
   function syncMasterPriceEntry(run, rit, index, enteredAt){
     const item = findMasterItemForRunItem(rit);
@@ -1036,13 +1048,9 @@
     const runCat = cleanText(runItem.cat || '');
     return !runCat || runCat === item.cat;
   }
-  function usableAvgPrice(value){
-    const price = Number(value);
-    return Number.isFinite(price) && price > 0 ? price : 0;
-  }
   function purchaseInsightsForItem(item, rangeKey){
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
-    const currentAvgPrice = usableAvgPrice(item && item.avgPrice);
+    const currentReceiptEstimate = getReceiptEstimatePrice(item);
     let purchaseCount = 0;
     let totalQty = 0;
     let estimatedSpend = 0;
@@ -1058,8 +1066,7 @@
         const qty = Math.max(0, Number(rit.qty) || 0);
         if(qty <= 0) return;
         const receiptTotal = runItemReceiptTotal(rit);
-        const runAvgPrice = usableAvgPrice(rit && rit.avgPrice);
-        const price = runAvgPrice || currentAvgPrice;
+        const price = currentReceiptEstimate;
         totalQty += qty;
         runPurchasedQty += qty;
         if(receiptTotal > 0){
@@ -1099,7 +1106,7 @@
     return an.localeCompare(bn, undefined, { sensitivity: 'base' });
   }
   function insightNeedsAvgPrice(item, insight){
-    return !!(insight && insight.hasMissingPriceData) || usableAvgPrice(item && item.avgPrice) <= 0;
+    return !!(insight && insight.hasMissingPriceData) || getReceiptEstimatePrice(item) <= 0;
   }
   function insightMatchesFilter(row, filterKey){
     if(filterKey === 'purchased') return Number(row && row.insight && row.insight.purchaseCount) > 0;
@@ -2705,19 +2712,15 @@
         categorySelect.value = it.cat;
         categoryField.appendChild(categoryLabel); categoryField.appendChild(categorySelect);
 
-        const priceField=document.createElement('label'); priceField.className='item-edit-field';
-        const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
-        const priceInput=document.createElement('input');
-        priceInput.className='price-input';
-        priceInput.type='number';
-        priceInput.min='0';
-        priceInput.step='0.01';
-        priceInput.inputMode='decimal';
-        priceInput.placeholder='0.00';
-        priceInput.value=formatPriceInput(it.avgPrice);
-        priceInput.title='Average price';
-        priceInput.setAttribute('aria-label','Average price');
-        priceField.appendChild(priceLabel); priceField.appendChild(priceInput);
+        const priceField=document.createElement('div'); priceField.className='item-edit-field item-edit-receipt-price';
+        const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Receipt price';
+        const receiptPriceText=document.createElement('div'); receiptPriceText.className='receipt-price-summary';
+        const receiptPriceHelp=document.createElement('p'); receiptPriceHelp.className='muted item-edit-help'; receiptPriceHelp.textContent='Receipt entries from Run History create price history.';
+        function updateReceiptPriceInfo(){
+          receiptPriceText.textContent = receiptPriceSummaryText(it);
+        }
+        updateReceiptPriceInfo();
+        priceField.appendChild(priceLabel); priceField.appendChild(receiptPriceText); priceField.appendChild(receiptPriceHelp);
 
         const storesField=document.createElement('fieldset'); storesField.className='item-edit-stores';
         const storesLegend=document.createElement('legend'); storesLegend.textContent='Stores';
@@ -2801,7 +2804,7 @@
           shell.wrap.classList.remove('revealed');
           setItemDragEnabled(false);
           input.value = it.name;
-          priceInput.value=formatPriceInput(it.avgPrice);
+          updateReceiptPriceInfo();
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           const activeStoreIds = new Set(Array.isArray(it.storeIds) ? it.storeIds : []);
           storesList.querySelectorAll('input[type="checkbox"]').forEach(checkbox=>{
@@ -2817,14 +2820,14 @@
           row.classList.remove('editing');
           setItemDragEnabled(true);
           editPanel.hidden=true;
-          priceInput.value = formatPriceInput(it.avgPrice);
+          updateReceiptPriceInfo();
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='inline-block';
           input.value = it.name;
         }
         edit.onclick = enterEdit;
         cancelBtn.onclick = exitEdit;
-        [input, priceInput, categorySelect].forEach(control=>{
+        [input, categorySelect].forEach(control=>{
           control.addEventListener('keydown', (e)=>{
             if(e.key==='Enter'){
               e.preventDefault();
@@ -2844,15 +2847,12 @@
         saveBtn.onclick = ()=>{
           const nv = input.value.trim();
           if(!nv){ alert('Item name cannot be empty.'); return }
-          const parsedPrice = parsePriceInput(priceInput.value);
           const selectedCat = state.categories.includes(categorySelect.value) ? categorySelect.value : it.cat;
           const oldCat = it.cat;
           const categoryChanged = selectedCat && selectedCat !== oldCat;
           const checkedStoreIds = Array.from(storesList.querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox.value);
           it.name = nv;
-          it.avgPrice = parsedPrice;
           it.storeIds = checkedStoreIds;
-          if(validPriceEntries(it).length > 0) it.receiptPreviousAvgPrice = parsedPrice;
           if(categoryChanged){
             moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
           }
@@ -2861,7 +2861,7 @@
           name.textContent = it.name;
           itemMeta.textContent = it.cat;
           editTitle.textContent = `Editing: ${it.name}`;
-          priceInput.value = formatPriceInput(it.avgPrice);
+          updateReceiptPriceInfo();
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           if(categoryChanged){
             renderManage();
