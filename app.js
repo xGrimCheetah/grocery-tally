@@ -1048,13 +1048,9 @@
     const runCat = cleanText(runItem.cat || '');
     return !runCat || runCat === item.cat;
   }
-  function usableAvgPrice(value){
-    const price = Number(value);
-    return Number.isFinite(price) && price > 0 ? price : 0;
-  }
   function purchaseInsightsForItem(item, rangeKey){
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
-    const currentAvgPrice = getReceiptEstimatePrice(item);
+    const currentReceiptEstimate = getReceiptEstimatePrice(item);
     let purchaseCount = 0;
     let totalQty = 0;
     let estimatedSpend = 0;
@@ -1070,8 +1066,7 @@
         const qty = Math.max(0, Number(rit.qty) || 0);
         if(qty <= 0) return;
         const receiptTotal = runItemReceiptTotal(rit);
-        const runAvgPrice = usableAvgPrice(rit && rit.avgPrice);
-        const price = runAvgPrice || currentAvgPrice;
+        const price = currentReceiptEstimate;
         totalQty += qty;
         runPurchasedQty += qty;
         if(receiptTotal > 0){
