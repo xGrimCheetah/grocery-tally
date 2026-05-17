@@ -1994,12 +1994,12 @@
         return;
       }
 
-      let currentLetter = '';
+      const anchoredLetters = new Set();
       items.forEach(entry=>{
         const it = entry && entry.item ? entry.item : entry;
         const letter = alphaKeyForItem(it);
-        const isFirstForLetter = letter !== currentLetter;
-        if(isFirstForLetter) currentLetter = letter;
+        const isFirstForLetter = !anchoredLetters.has(letter);
+        if(isFirstForLetter) anchoredLetters.add(letter);
         appendBuildItemRow(buildList, it, {
           letter,
           isFirstForLetter,
