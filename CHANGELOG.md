@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.53.2 — Receipt-only price estimates
+
+- Removed manual price editing from Manage Items.
+- Replaced the old editable Avg $ field with read-only receipt price information.
+- Updated active-list estimates to use receipt-derived price history only.
+- Treated items without receipt price history as missing price data instead of using manual fallback prices.
+- Kept receipt entry, priceEntries, rolling receipt averages, Run History, Insights, localStorage keys, and JSON backup compatibility intact.
+
 ## v1.53.1 — All Items search clear button
 
 - Added an explicit Clear button beside the Build List All items search field.
