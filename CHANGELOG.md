@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.53.3 — All Items estimate pill position fix
+
+- Fixed the Build List All items estimate pill position so it appears above search results.
+- Restored the intended top-right sticky estimate behavior for All items.
+- Preserved All items search, Clear button, quick-add, Current list, receipt-only estimates, Last run, Suggested, Shopping Mode, Insights, Manage, and JSON backup compatibility.
+
 ## v1.53.2 — Receipt-only price estimates
 
 - Removed manual price editing from Manage Items.

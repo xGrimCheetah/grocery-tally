@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.53.2"; // Receipt-only price estimates
+  let APP_VERSION = "1.53.3"; // All Items estimate pill position fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1914,9 +1914,9 @@
             <button class="btn build-all-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
           </div>
           <p id="buildAllHelper" class="muted build-all-helper"></p>
-          <div id="buildAllResults" class="build-flat-list build-all-results"></div>
         </div>` : ''}
       <div id="buildEstimate" class="estimate-sticky"></div>
+      ${isAllItemsMode ? '<div id="buildAllResults" class="build-flat-list build-all-results"></div>' : ''}
       ${isAllItemsMode ? '' : `
         <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
           <div id="buildAlphaView" class="build-alpha-view">
