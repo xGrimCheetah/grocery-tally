@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.50.0"; // Receipt price entry and rolling average price
+  let APP_VERSION = "1.51.0"; // Item-first item editing model
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -95,10 +95,18 @@
     state.stores.forEach((store, idx)=>{
       store.pos = Number.isFinite(Number(store.pos)) ? Number(store.pos) : idx;
     });
+    const validStoreIds = new Set(state.stores.map(store => cleanText(store && store.id)).filter(Boolean));
     state.items.forEach((it, idx)=>{
       if(!it.id) it.id = id();
       it.name = cleanText(it.name || 'Untitled item');
       if(!it.cat || !state.categories.includes(it.cat)) it.cat = state.categories[0] || 'Other';
+      const itemStoreIds = Array.isArray(it.storeIds) ? it.storeIds : [];
+      const seenItemStoreIds = new Set();
+      it.storeIds = itemStoreIds.map(storeId => cleanText(storeId)).filter(storeId=>{
+        if(!storeId || !validStoreIds.has(storeId) || seenItemStoreIds.has(storeId)) return false;
+        seenItemStoreIds.add(storeId);
+        return true;
+      });
       it.qty = Math.max(0, Number(it.qty) || 0);
       it.prevQty = Math.max(0, Number(it.prevQty) || 0);
       it.checked = !!it.checked;
@@ -2413,9 +2421,34 @@
         const left=document.createElement('div'); left.className='left';
         const right=document.createElement('div'); right.className='right';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.style.display='none';
+        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat;
 
-        const priceWrap=document.createElement('div'); priceWrap.className='price-wrap'; priceWrap.style.display='none';
+        const editPanel=document.createElement('div');
+        editPanel.className='item-edit-card';
+        editPanel.hidden=true;
+        editPanel.setAttribute('aria-label', `Edit ${it.name}`);
+
+        const editHeading=document.createElement('div'); editHeading.className='item-edit-heading';
+        const editTitle=document.createElement('strong'); editTitle.textContent=`Editing: ${it.name}`;
+        const editHelp=document.createElement('p'); editHelp.className='muted item-edit-help'; editHelp.textContent='Update the item details, then save.';
+        editHeading.appendChild(editTitle); editHeading.appendChild(editHelp);
+
+        const editGrid=document.createElement('div'); editGrid.className='item-edit-grid';
+        const nameField=document.createElement('label'); nameField.className='item-edit-field item-edit-name-field';
+        const nameLabel=document.createElement('span'); nameLabel.className='price-label'; nameLabel.textContent='Item name';
+        const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.autocomplete='off';
+        nameField.appendChild(nameLabel); nameField.appendChild(input);
+
+        const categoryField=document.createElement('label'); categoryField.className='item-edit-field';
+        const categoryLabel=document.createElement('span'); categoryLabel.className='price-label'; categoryLabel.textContent='Category';
+        const categorySelect=document.createElement('select'); categorySelect.className='manage-category-select'; categorySelect.setAttribute('aria-label','Item category');
+        state.categories.forEach(categoryName=>{
+          const opt=document.createElement('option'); opt.value=categoryName; opt.textContent=categoryName; categorySelect.appendChild(opt);
+        });
+        categorySelect.value = it.cat;
+        categoryField.appendChild(categoryLabel); categoryField.appendChild(categorySelect);
+
+        const priceField=document.createElement('label'); priceField.className='item-edit-field';
         const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Avg $';
         const priceInput=document.createElement('input');
         priceInput.className='price-input';
@@ -2427,40 +2460,45 @@
         priceInput.value=formatPriceInput(it.avgPrice);
         priceInput.title='Average price';
         priceInput.setAttribute('aria-label','Average price');
-        priceInput.addEventListener('keydown', (e)=>{
-          if(e.key==='Enter'){
-            e.preventDefault();
-            saveBtn.click();
-          } else if(e.key==='Escape'){
-            e.preventDefault();
-            cancelBtn.click();
-          }
-        });
-        priceWrap.appendChild(priceLabel);
-        priceWrap.appendChild(priceInput);
+        priceField.appendChild(priceLabel); priceField.appendChild(priceInput);
 
-        const categoryWrap=document.createElement('div'); categoryWrap.className='price-wrap category-edit-wrap'; categoryWrap.style.display='none';
-        const categoryLabel=document.createElement('span'); categoryLabel.className='price-label'; categoryLabel.textContent='Category';
-        const categorySelect=document.createElement('select'); categorySelect.className='manage-category-select'; categorySelect.setAttribute('aria-label','Item category');
-        state.categories.forEach(categoryName=>{
-          const opt=document.createElement('option'); opt.value=categoryName; opt.textContent=categoryName; categorySelect.appendChild(opt);
-        });
-        categorySelect.value = it.cat;
-        categorySelect.addEventListener('keydown', (e)=>{
-          if(e.key==='Enter'){
-            e.preventDefault();
-            saveBtn.click();
-          } else if(e.key==='Escape'){
-            e.preventDefault();
-            cancelBtn.click();
-          }
-        });
-        categoryWrap.appendChild(categoryLabel);
-        categoryWrap.appendChild(categorySelect);
+        const storesField=document.createElement('fieldset'); storesField.className='item-edit-stores';
+        const storesLegend=document.createElement('legend'); storesLegend.textContent='Stores';
+        const storesList=document.createElement('div'); storesList.className='item-edit-store-list';
+        const availableStores=sortedStores();
+        const selectedStoreIds=new Set(Array.isArray(it.storeIds) ? it.storeIds : []);
+        if(availableStores.length){
+          availableStores.forEach(store=>{
+            const storeLabel=document.createElement('label'); storeLabel.className='item-edit-store-option';
+            const storeCheckbox=document.createElement('input');
+            storeCheckbox.type='checkbox';
+            storeCheckbox.value=store.id;
+            storeCheckbox.checked=selectedStoreIds.has(store.id);
+            const storeName=document.createElement('span'); storeName.textContent=store.name;
+            storeLabel.appendChild(storeCheckbox);
+            storeLabel.appendChild(storeName);
+            storesList.appendChild(storeLabel);
+          });
+        } else {
+          const noStores=document.createElement('p'); noStores.className='muted item-edit-help'; noStores.textContent='No stores yet. Add stores in Manage → Stores to assign them here.';
+          storesList.appendChild(noStores);
+        }
+        storesField.appendChild(storesLegend); storesField.appendChild(storesList);
+
+        editGrid.appendChild(nameField);
+        editGrid.appendChild(categoryField);
+        editGrid.appendChild(priceField);
+        editGrid.appendChild(storesField);
+
+        const editActions=document.createElement('div'); editActions.className='item-edit-actions';
+        const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save';
+        const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
+        editActions.appendChild(saveBtn); editActions.appendChild(cancelBtn);
+        editPanel.appendChild(editHeading);
+        editPanel.appendChild(editGrid);
+        editPanel.appendChild(editActions);
 
         const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
-        const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
-        const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
         const moveUp=document.createElement('button'); moveUp.type='button'; moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.setAttribute('aria-label', `Move ${it.name} up`);
         const moveDown=document.createElement('button'); moveDown.type='button'; moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.setAttribute('aria-label', `Move ${it.name} down`);
         const isFirst = idx === 0;
@@ -2486,10 +2524,8 @@
 
         row.appendChild(left);
         left.appendChild(name);
-        left.appendChild(input);
+        left.appendChild(itemMeta);
         row.appendChild(right);
-        right.appendChild(priceWrap);
-        right.appendChild(categoryWrap);
         if(manageItemReorderMode){
           row.classList.add('reordering');
           shell.wrap.classList.add('reorder-mode');
@@ -2497,8 +2533,6 @@
           right.appendChild(moveDown);
         } else {
           right.appendChild(edit);
-          right.appendChild(saveBtn);
-          right.appendChild(cancelBtn);
         }
         function setItemDragEnabled(enabled){
           row.draggable = false;
@@ -2507,40 +2541,45 @@
 
         function enterEdit(){
           row.classList.add('editing');
+          shell.wrap.classList.remove('revealed');
           setItemDragEnabled(false);
-          name.style.display='none';
-          input.style.display='block';
-          priceWrap.style.display='flex';
-          categoryWrap.style.display='flex';
+          input.value = it.name;
           priceInput.value=formatPriceInput(it.avgPrice);
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
+          const activeStoreIds = new Set(Array.isArray(it.storeIds) ? it.storeIds : []);
+          storesList.querySelectorAll('input[type="checkbox"]').forEach(checkbox=>{
+            checkbox.checked = activeStoreIds.has(checkbox.value);
+          });
+          editTitle.textContent=`Editing: ${it.name}`;
+          editPanel.hidden=false;
           edit.style.display='none';
-          saveBtn.style.display='inline-block';
-          cancelBtn.style.display='inline-block';
           input.focus(); input.select();
-          scrollManageEditRowIntoView(row);
+          scrollManageEditRowIntoView(editPanel);
         }
         function exitEdit(){
           row.classList.remove('editing');
           setItemDragEnabled(true);
-          name.style.display='block';
-          input.style.display='none';
-          priceWrap.style.display='none';
-          categoryWrap.style.display='none';
+          editPanel.hidden=true;
           priceInput.value = formatPriceInput(it.avgPrice);
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           edit.style.display='inline-block';
-          saveBtn.style.display='none';
-          cancelBtn.style.display='none';
           input.value = it.name;
         }
         edit.onclick = enterEdit;
         cancelBtn.onclick = exitEdit;
-        input.addEventListener('keydown', (e)=>{
-          if(e.key==='Enter'){
-            e.preventDefault();
-            saveBtn.click();
-          } else if(e.key==='Escape'){
+        [input, priceInput, categorySelect].forEach(control=>{
+          control.addEventListener('keydown', (e)=>{
+            if(e.key==='Enter'){
+              e.preventDefault();
+              saveBtn.click();
+            } else if(e.key==='Escape'){
+              e.preventDefault();
+              cancelBtn.click();
+            }
+          });
+        });
+        storesList.addEventListener('keydown', (e)=>{
+          if(e.key==='Escape'){
             e.preventDefault();
             cancelBtn.click();
           }
@@ -2552,14 +2591,19 @@
           const selectedCat = state.categories.includes(categorySelect.value) ? categorySelect.value : it.cat;
           const oldCat = it.cat;
           const categoryChanged = selectedCat && selectedCat !== oldCat;
+          const checkedStoreIds = Array.from(storesList.querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox.value);
           it.name = nv;
           it.avgPrice = parsedPrice;
+          it.storeIds = checkedStoreIds;
           if(validPriceEntries(it).length > 0) it.receiptPreviousAvgPrice = parsedPrice;
           if(categoryChanged){
             moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
           }
+          normalizeStateShape();
           save();
           name.textContent = it.name;
+          itemMeta.textContent = it.cat;
+          editTitle.textContent = `Editing: ${it.name}`;
           priceInput.value = formatPriceInput(it.avgPrice);
           categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
           if(categoryChanged){
@@ -2573,6 +2617,7 @@
         };
 
         list.appendChild(shell.wrap);
+        list.appendChild(editPanel);
       });
 
       sec.appendChild(list);
@@ -2677,6 +2722,9 @@
     del.onclick = ()=>{
       if(!confirm('Delete this store? This cannot be undone.')) return;
       state.stores = (state.stores || []).filter(candidate => candidate.id !== store.id);
+      state.items.forEach(item=>{
+        if(Array.isArray(item.storeIds)) item.storeIds = item.storeIds.filter(storeId => storeId !== store.id);
+      });
       save();
       renderManage();
     };
