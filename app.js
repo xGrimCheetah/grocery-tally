@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.52.0"; // Smart suggestions foundation
+  let APP_VERSION = "1.53.0"; // Build List search-first All Items workflow
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1854,6 +1854,7 @@
     const opts = options || {};
     const shell = createSwipeShell(it.id);
     shell.wrap.dataset.letter = opts.letter || alphaKeyForItem(it);
+    if(opts.className) shell.wrap.classList.add(opts.className);
     if(opts.isFirstForLetter){
       shell.wrap.id = 'build-letter-' + (shell.wrap.dataset.letter === '#' ? 'num' : shell.wrap.dataset.letter);
     }
@@ -1886,6 +1887,7 @@
   }
   function renderBuild(){
     ensurePositions();
+    const isAllItemsMode = buildListMode === 'all';
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
@@ -1898,18 +1900,25 @@
           <button type="button" class="insights-view-btn${buildListMode === 'suggested' ? ' active' : ''}" data-build-list-mode="suggested" aria-pressed="${buildListMode === 'suggested' ? 'true' : 'false'}">Suggested</button>
         </div>
       </div>
+      ${isAllItemsMode ? `
+        <div class="build-all-search-card" aria-label="All items search-first add flow">
+          <input id="buildSearchInput" class="build-search-input build-all-search-input" type="search" placeholder="Search or add an item" autocomplete="off" aria-label="Search or add an item">
+          <p id="buildAllHelper" class="muted build-all-helper"></p>
+          <div id="buildAllResults" class="build-flat-list build-all-results"></div>
+        </div>` : ''}
       <div id="buildEstimate" class="estimate-sticky"></div>
-      <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
-        <div id="buildAlphaView" class="build-alpha-view">
-          <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
-        </div>
-        <div id="buildSearchView" class="build-search-row" hidden>
-          <input id="buildSearchInput" class="build-search-input" type="search" placeholder="Search Build List" autocomplete="off" aria-label="Search Build List">
-          <button class="btn build-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
-          <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
-        </div>
-      </div>
-      <div id="buildList" class="build-flat-list"></div>`;
+      ${isAllItemsMode ? '' : `
+        <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
+          <div id="buildAlphaView" class="build-alpha-view">
+            <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
+          </div>
+          <div id="buildSearchView" class="build-search-row" hidden>
+            <input id="buildSearchInput" class="build-search-input" type="search" placeholder="Search Build List" autocomplete="off" aria-label="Search Build List">
+            <button class="btn build-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
+            <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
+          </div>
+        </div>`}
+      <div id="buildList" class="build-flat-list${isAllItemsMode ? ' build-current-list' : ''}"></div>`;
 
     const buildEstimate = document.getElementById('buildEstimate');
     const buildList = document.getElementById('buildList');
@@ -1920,11 +1929,110 @@
     const clearBtn = document.getElementById('btnBuildSearchClear');
     const showAlphaBtn = document.getElementById('btnBuildShowAlpha');
     const buildModeButtons = viewBuild.querySelectorAll('[data-build-list-mode]');
+    const buildAllHelper = document.getElementById('buildAllHelper');
+    const buildAllResults = document.getElementById('buildAllResults');
 
     renderEstimatePill(buildEstimate, { includeSkipped: true });
-    searchInput.value = buildSearchQuery;
+    if(searchInput) searchInput.value = buildSearchQuery;
 
-    function drawBuildList(){
+    function findBuildQuickAddDuplicate(name){
+      const target = normalizeText(name);
+      if(!target) return null;
+      return state.items.find(it => normalizeText(it && it.name) === target) || null;
+    }
+
+    function defaultQuickAddCategory(){
+      const other = findCategoryByName('Other');
+      if(other) return other;
+      if(state.categories && state.categories.length) return state.categories[0];
+      const result = ensureCategory('Other');
+      return result.name || 'Other';
+    }
+
+    function createBuildQuickAddItem(name){
+      const itemName = cleanText(name);
+      if(!itemName) return null;
+      const duplicate = findBuildQuickAddDuplicate(itemName);
+      if(duplicate) return duplicate;
+      const cat = defaultQuickAddCategory();
+      const item = { id:id(), name:itemName, cat, qty:1, prevQty:0, pos: nextPos(cat), checked:false, skipped:false, avgPrice:0 };
+      state.items.push(item);
+      save();
+      return item;
+    }
+
+    function appendBuildCategoryHeader(container, cat){
+      const header = document.createElement('div');
+      header.className = 'build-current-cat';
+      header.textContent = cat || 'Other';
+      container.appendChild(header);
+    }
+
+    function drawAllItemsBuildList(){
+      const query = normalizeText(buildSearchQuery);
+      const allItems = state.items.slice().sort(buildListSort);
+      const draftItems = nonZero().sort(sortItems);
+      if(buildAllHelper){
+        buildAllHelper.textContent = draftItems.length ? 'Type to add more items' : 'Type to start adding items';
+      }
+      if(buildAllResults){
+        buildAllResults.innerHTML = '';
+        if(query){
+          const matches = allItems
+            .filter(it => matchesBuildSearch(it, query))
+            .sort(buildSearchSort(query))
+            .slice(0, 5);
+          matches.forEach(it=> appendBuildItemRow(buildAllResults, it));
+
+          const proposedName = cleanText(buildSearchQuery);
+          const exactDuplicate = findBuildQuickAddDuplicate(proposedName);
+          if(proposedName && !exactDuplicate){
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'build-quick-add-option';
+            addBtn.textContent = `+ Add “${proposedName}”`;
+            addBtn.onclick = ()=>{
+              const created = createBuildQuickAddItem(proposedName);
+              if(created){
+                buildSearchQuery = created.name;
+                renderBuild();
+                try{
+                  const nextSearch = document.getElementById('buildSearchInput');
+                  if(nextSearch){ nextSearch.focus(); nextSearch.select(); }
+                }catch(e){}
+              }
+            };
+            buildAllResults.appendChild(addBtn);
+          }
+          if(!matches.length && exactDuplicate){
+            buildAllResults.innerHTML = '<p class="muted build-all-empty">That item already exists. Keep typing to find it above.</p>';
+          }
+        }
+      }
+
+      buildList.innerHTML = '';
+      const divider = document.createElement('div');
+      divider.className = 'build-current-divider';
+      divider.innerHTML = '<span>Current list</span>';
+      buildList.appendChild(divider);
+      if(!draftItems.length){
+        const empty = document.createElement('p');
+        empty.className = 'muted build-current-empty';
+        empty.textContent = 'No items selected yet.';
+        buildList.appendChild(empty);
+        return;
+      }
+      let currentCat = null;
+      draftItems.forEach(it=>{
+        if(it.cat !== currentCat){
+          currentCat = it.cat;
+          appendBuildCategoryHeader(buildList, currentCat);
+        }
+        appendBuildItemRow(buildList, it, { className:'build-current-item' });
+      });
+    }
+
+    function drawBrowseBuildList(){
       const query = normalizeText(buildSearchQuery);
       const allItems = state.items.slice().sort(buildListSort);
       const lastRunPool = buildListMode === 'lastRun' ? getLastRunItemPool(allItems) : { hasRun:true, items:allItems };
@@ -2009,8 +2117,13 @@
       applyBuildLetterFocus();
     }
 
+    function drawBuildList(){
+      if(isAllItemsMode) drawAllItemsBuildList();
+      else drawBrowseBuildList();
+    }
 
     function setBuildControlMode(mode, focusSearch){
+      if(isAllItemsMode) return;
       buildControlMode = mode === 'search' ? 'search' : 'alpha';
       alphaView.hidden = buildControlMode !== 'alpha';
       searchView.hidden = buildControlMode !== 'search';
@@ -2024,47 +2137,58 @@
       btn.onclick = ()=>{
         const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : (btn.dataset.buildListMode === 'suggested' ? 'suggested' : 'all');
         if(buildListMode !== nextMode){
+          const leavingAllItemsMode = buildListMode === 'all' && nextMode !== 'all';
           buildListMode = nextMode;
           buildFocusLetter = '';
+          if(leavingAllItemsMode){
+            buildSearchQuery = '';
+            buildControlMode = 'alpha';
+          }
           renderBuild();
         }
       };
     });
 
-    searchInput.addEventListener('input', ()=>{
-      buildSearchQuery = searchInput.value;
-      buildFocusLetter = '';
-      drawBuildList();
-      updateBuildBottomControlLayout();
-      scrollToBuildResultsStart();
-    });
-    searchInput.addEventListener('keydown', (e)=>{
-      if(e.key === 'Escape'){
-        e.preventDefault();
+    if(searchInput){
+      searchInput.addEventListener('input', ()=>{
+        buildSearchQuery = searchInput.value;
+        buildFocusLetter = '';
+        drawBuildList();
+        updateBuildBottomControlLayout();
+        if(!isAllItemsMode) scrollToBuildResultsStart();
+      });
+      searchInput.addEventListener('keydown', (e)=>{
+        if(e.key === 'Escape'){
+          e.preventDefault();
+          buildSearchQuery = '';
+          buildFocusLetter = '';
+          searchInput.value = '';
+          drawBuildList();
+          updateBuildBottomControlLayout();
+          if(!isAllItemsMode) scrollToBuildResultsStart();
+        }
+      });
+    }
+    if(clearBtn){
+      clearBtn.onclick = ()=>{
         buildSearchQuery = '';
         buildFocusLetter = '';
         searchInput.value = '';
         drawBuildList();
         updateBuildBottomControlLayout();
         scrollToBuildResultsStart();
-      }
-    });
-    clearBtn.onclick = ()=>{
-      buildSearchQuery = '';
-      buildFocusLetter = '';
-      searchInput.value = '';
-      drawBuildList();
-      updateBuildBottomControlLayout();
-      scrollToBuildResultsStart();
-      searchInput.focus();
-    };
-    showAlphaBtn.onclick = ()=>{
-      buildSearchQuery = '';
-      buildFocusLetter = '';
-      searchInput.value = '';
-      drawBuildList();
-      setBuildControlMode('alpha');
-    };
+        searchInput.focus();
+      };
+    }
+    if(showAlphaBtn){
+      showAlphaBtn.onclick = ()=>{
+        buildSearchQuery = '';
+        buildFocusLetter = '';
+        searchInput.value = '';
+        drawBuildList();
+        setBuildControlMode('alpha');
+      };
+    }
 
     drawBuildList();
     setBuildControlMode(buildControlMode);
@@ -2072,13 +2196,17 @@
     try{
       window.removeEventListener('scroll', updateBuildBottomControlLayout);
       window.removeEventListener('resize', updateBuildBottomControlLayout);
-      window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
-      window.addEventListener('resize', updateBuildBottomControlLayout);
+      if(!isAllItemsMode){
+        window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
+        window.addEventListener('resize', updateBuildBottomControlLayout);
+      }
       if(window.visualViewport){
         window.visualViewport.removeEventListener('resize', updateBuildBottomControlLayout);
         window.visualViewport.removeEventListener('scroll', updateBuildBottomControlLayout);
-        window.visualViewport.addEventListener('resize', updateBuildBottomControlLayout);
-        window.visualViewport.addEventListener('scroll', updateBuildBottomControlLayout);
+        if(!isAllItemsMode){
+          window.visualViewport.addEventListener('resize', updateBuildBottomControlLayout);
+          window.visualViewport.addEventListener('scroll', updateBuildBottomControlLayout);
+        }
       }
       setTimeout(updateBuildBottomControlLayout, 0);
     }catch(e){}

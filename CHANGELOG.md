@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.53.0 — Build List search-first All Items workflow
+
+- Redesigned Build List All items mode into a search-first list-building workflow.
+- Removed the All items A-Z quick-scroll area and replaced it with a top search field under the Build List mode toggle.
+- Added helper text for starting or continuing the current grocery list.
+- Limited All items search results to the top matching items while typing.
+- Added safe quick-add behavior for new items when no normalized match exists.
+- Added a muted Current list divider and draft-list section showing all items with selected quantities.
+- Preserved Last run and Suggested mode sticky A-Z/search behavior.
+- Preserved Shopping Mode, Insights, Run History, Manage Items, Manage Categories, Manage Stores, receipt pricing, localStorage keys, and JSON backup compatibility.
+
 ## v1.52.0 — Smart suggestions foundation
 
 - Added a Suggested mode to Build List using committed run history.
