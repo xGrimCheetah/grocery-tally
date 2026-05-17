@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.49.0"; // Dedicated stores foundation
+  let APP_VERSION = "1.50.0"; // Receipt price entry and rolling average price
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -35,10 +35,41 @@
   let insightsViewMode = 'items';
   let runHistoryShowAll = false;
   const runHistoryExpandedIds = new Set();
+  let runHistoryReceiptEditId = '';
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
   function load(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)); }catch(e){ return null } }
+  function roundMoney(value){
+    const amount = Number(value);
+    return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+  }
+  function positiveMoney(value){
+    const rounded = roundMoney(value);
+    return rounded > 0 ? rounded : 0;
+  }
+  function normalizePriceEntries(entries, item){
+    if(!Array.isArray(entries)) return [];
+    return entries.map(entry=>{
+      const unitPrice = positiveMoney(entry && entry.unitPrice);
+      const totalPrice = positiveMoney(entry && entry.totalPrice);
+      const qty = Math.max(0, Number(entry && entry.qty) || 0);
+      if(!(unitPrice > 0) || !(totalPrice > 0)) return null;
+      return {
+        id: cleanText(entry && entry.id) || ('price_' + id()),
+        runId: cleanText(entry && entry.runId),
+        runItemKey: cleanText(entry && entry.runItemKey),
+        itemId: cleanText((entry && entry.itemId) || (item && item.id) || ''),
+        name: cleanText((entry && entry.name) || (item && item.name) || 'Untitled item'),
+        cat: cleanText((entry && entry.cat) || (item && item.cat) || ''),
+        committedAt: cleanText(entry && entry.committedAt),
+        enteredAt: cleanText(entry && entry.enteredAt),
+        qty,
+        unitPrice,
+        totalPrice
+      };
+    }).filter(Boolean);
+  }
 
   function normalizeStateShape(){
     if(!state || !Array.isArray(state.categories)) state = { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
@@ -74,6 +105,7 @@
       it.skipped = !!it.skipped;
       if(it.checked) it.skipped = false;
       it.avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+      it.priceEntries = normalizePriceEntries(it.priceEntries, it);
       if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
     });
     if(!Array.isArray(state.runHistory)) state.runHistory = [];
@@ -82,8 +114,10 @@
       const items = rawItems.map(rit=>{
         const qty = Math.max(0, Number(rit && rit.qty) || 0);
         const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
-        const estimatedPrice = Math.round((Number(rit && rit.estimatedPrice) || (qty * avgPrice)) * 100) / 100;
-        return {
+        const estimatedPrice = roundMoney(Number(rit && rit.estimatedPrice) || (qty * avgPrice));
+        const receiptTotal = positiveMoney(rit && rit.receiptTotal);
+        const receiptUnitPrice = receiptTotal > 0 && qty > 0 ? roundMoney(receiptTotal / qty) : positiveMoney(rit && rit.receiptUnitPrice);
+        const normalized = {
           itemId: cleanText((rit && (rit.itemId || rit.id)) || ''),
           name: cleanText((rit && rit.name) || 'Untitled item'),
           cat: cleanText((rit && rit.cat) || ''),
@@ -91,10 +125,16 @@
           avgPrice,
           estimatedPrice
         };
+        if(receiptTotal > 0){
+          normalized.receiptTotal = receiptTotal;
+          normalized.receiptUnitPrice = receiptUnitPrice;
+          normalized.receiptEnteredAt = cleanText(rit && rit.receiptEnteredAt) || new Date().toISOString();
+        }
+        return normalized;
       }).filter(rit => rit.name && rit.qty > 0);
       const totalQty = Math.max(0, Number(run && run.totalQty) || items.reduce((sum, rit)=> sum + (Number(rit.qty) || 0), 0));
-      const estimatedTotal = Math.round((Number(run && run.estimatedTotal) || items.reduce((sum, rit)=> sum + (Number(rit.estimatedPrice) || 0), 0)) * 100) / 100;
-      const missingPriceCount = Math.max(0, Number(run && run.missingPriceCount) || items.filter(rit => Number(rit.qty) > 0 && !(Number(rit.avgPrice) > 0)).length);
+      const estimatedTotal = calculateRunEstimatedTotal({ items });
+      const missingPriceCount = calculateRunMissingPriceCount({ items });
       return {
         id: cleanText((run && run.id) || '') || ('run_' + idx + '_' + id()),
         committedAt: cleanText((run && (run.committedAt || run.date)) || '') || new Date().toISOString(),
@@ -556,23 +596,37 @@
       items
     };
   }
-  function runEstimatedTotal(run){
-    const storedTotal = Number(run && run.estimatedTotal);
-    if(Number.isFinite(storedTotal) && storedTotal > 0) return Math.round(storedTotal * 100) / 100;
+  function runItemReceiptTotal(rit){
+    return positiveMoney(rit && rit.receiptTotal);
+  }
+  function runItemReceiptUnitPrice(rit){
+    const total = runItemReceiptTotal(rit);
+    const qty = Math.max(0, Number(rit && rit.qty) || 0);
+    if(total > 0 && qty > 0) return roundMoney(total / qty);
+    return positiveMoney(rit && rit.receiptUnitPrice);
+  }
+  function runItemEstimatedPrice(rit){
+    const receiptTotal = runItemReceiptTotal(rit);
+    if(receiptTotal > 0) return receiptTotal;
+    const storedPrice = positiveMoney(rit && rit.estimatedPrice);
+    if(storedPrice > 0) return storedPrice;
+    const qty = Math.max(0, Number(rit && rit.qty) || 0);
+    const avgPrice = positiveMoney(rit && rit.avgPrice);
+    return avgPrice > 0 && qty > 0 ? roundMoney(qty * avgPrice) : 0;
+  }
+  function calculateRunEstimatedTotal(run){
     const runItems = Array.isArray(run && run.items) ? run.items : [];
-    return Math.round(runItems.reduce((sum, rit)=>{
-      const storedPrice = Number(rit && rit.estimatedPrice);
-      if(Number.isFinite(storedPrice) && storedPrice > 0) return sum + storedPrice;
-      const qty = Math.max(0, Number(rit && rit.qty) || 0);
-      const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
-      return avgPrice > 0 ? sum + (qty * avgPrice) : sum;
-    }, 0) * 100) / 100;
+    return roundMoney(runItems.reduce((sum, rit)=> sum + runItemEstimatedPrice(rit), 0));
+  }
+  function calculateRunMissingPriceCount(run){
+    const runItems = Array.isArray(run && run.items) ? run.items : [];
+    return runItems.filter(rit => Number(rit && rit.qty) > 0 && !(runItemEstimatedPrice(rit) > 0)).length;
+  }
+  function runEstimatedTotal(run){
+    return calculateRunEstimatedTotal(run);
   }
   function runMissingPriceCount(run){
-    const storedMissing = Number(run && run.missingPriceCount);
-    if(Number.isFinite(storedMissing) && storedMissing > 0) return Math.max(0, storedMissing);
-    const runItems = Array.isArray(run && run.items) ? run.items : [];
-    return runItems.filter(rit => Number(rit && rit.qty) > 0 && !(Number(rit && rit.avgPrice) > 0) && !(Number(rit && rit.estimatedPrice) > 0)).length;
+    return calculateRunMissingPriceCount(run);
   }
   function runTotalQty(run){
     const storedQty = Number(run && run.totalQty);
@@ -580,6 +634,128 @@
     const runItems = Array.isArray(run && run.items) ? run.items : [];
     return runItems.reduce((sum, rit)=> sum + (Number(rit && rit.qty) || 0), 0);
   }
+  function receiptRunItemKey(rit, index){
+    const itemId = cleanText(rit && rit.itemId);
+    if(itemId) return 'item:' + itemId;
+    return ['fallback', normalizeText(rit && rit.name), normalizeText(rit && rit.cat), String(index)].join('|');
+  }
+  function findMasterItemForRunItem(rit){
+    const itemId = cleanText(rit && rit.itemId);
+    if(itemId){
+      const byId = state.items.find(it => cleanText(it && it.id) === itemId);
+      if(byId) return byId;
+    }
+    const name = normalizeText(rit && rit.name);
+    const cat = normalizeText(rit && rit.cat);
+    if(!name) return null;
+    return state.items.find(it => normalizeText(it && it.name) === name && normalizeText(it && it.cat) === cat) || null;
+  }
+  function parseReceiptTotalInput(value){
+    const raw = String(value || '').replace(/[$,\s]/g, '');
+    if(!raw) return { blank:true, value:0 };
+    if(raw.startsWith('-')) return { error:'Receipt totals cannot be negative.' };
+    if(!/^\d+(?:\.\d{0,2})?$|^\.\d{1,2}$/.test(raw)) return { error:'Enter receipt totals as positive currency amounts, such as 1, 1.40, or 1.47.' };
+    const amount = Number(raw);
+    if(!Number.isFinite(amount) || amount < 0) return { error:'Receipt totals cannot be negative.' };
+    return { blank:false, value:roundMoney(amount) };
+  }
+  function isSamePriceEntry(entry, runId, runItemKey, rit, masterItem){
+    if(cleanText(entry && entry.runId) !== runId) return false;
+    if(cleanText(entry && entry.runItemKey) && cleanText(entry && entry.runItemKey) === runItemKey) return true;
+    const entryItemId = cleanText(entry && entry.itemId);
+    const masterId = cleanText(masterItem && masterItem.id);
+    if(entryItemId && masterId && entryItemId === masterId) return true;
+    return normalizeText(entry && entry.name) === normalizeText(rit && rit.name) && normalizeText(entry && entry.cat) === normalizeText(rit && rit.cat);
+  }
+  function recalcAvgPriceFromEntries(item){
+    if(!item) return;
+    item.priceEntries = normalizePriceEntries(item.priceEntries, item);
+    const valid = item.priceEntries.filter(entry => positiveMoney(entry.unitPrice) > 0 && positiveMoney(entry.totalPrice) > 0);
+    if(!valid.length) return;
+    valid.sort((a,b)=>{
+      const ad = Date.parse(a.committedAt || a.enteredAt || '') || 0;
+      const bd = Date.parse(b.committedAt || b.enteredAt || '') || 0;
+      if(bd !== ad) return bd - ad;
+      const ae = Date.parse(a.enteredAt || '') || 0;
+      const be = Date.parse(b.enteredAt || '') || 0;
+      return be - ae;
+    });
+    const recent = valid.slice(0, 5);
+    item.avgPrice = roundMoney(recent.reduce((sum, entry)=> sum + positiveMoney(entry.unitPrice), 0) / recent.length);
+  }
+  function syncMasterPriceEntry(run, rit, index, enteredAt){
+    const item = findMasterItemForRunItem(rit);
+    if(!item) return null;
+    if(!Array.isArray(item.priceEntries)) item.priceEntries = [];
+    item.priceEntries = normalizePriceEntries(item.priceEntries, item);
+    const runId = cleanText(run && run.id);
+    const runItemKey = receiptRunItemKey(rit, index);
+    let existing = null;
+    item.priceEntries = item.priceEntries.filter(entry=>{
+      const same = isSamePriceEntry(entry, runId, runItemKey, rit, item);
+      if(same && !existing) existing = entry;
+      return !same;
+    });
+    const receiptTotal = runItemReceiptTotal(rit);
+    const unitPrice = runItemReceiptUnitPrice(rit);
+    if(receiptTotal > 0 && unitPrice > 0){
+      item.priceEntries.push({
+        id: cleanText(existing && existing.id) || ('price_' + id()),
+        runId,
+        runItemKey,
+        itemId: cleanText(item.id),
+        name: cleanText(rit && rit.name) || cleanText(item.name),
+        cat: cleanText(rit && rit.cat) || cleanText(item.cat),
+        committedAt: cleanText(run && run.committedAt),
+        enteredAt,
+        qty: Math.max(0, Number(rit && rit.qty) || 0),
+        unitPrice,
+        totalPrice: receiptTotal
+      });
+    }
+    recalcAvgPriceFromEntries(item);
+    return item;
+  }
+  function saveReceiptPrices(runId, form){
+    const run = (Array.isArray(state.runHistory) ? state.runHistory : []).find(candidate => cleanText(candidate && candidate.id) === runId);
+    if(!run || !Array.isArray(run.items)) return;
+    const parsed = [];
+    for(let index = 0; index < run.items.length; index++){
+      const input = form && form.querySelector(`[data-receipt-index="${index}"]`);
+      const result = parseReceiptTotalInput(input ? input.value : '');
+      if(result.error){
+        alert(result.error);
+        if(input) input.focus();
+        return;
+      }
+      parsed.push(result);
+    }
+    const enteredAt = new Date().toISOString();
+    const affectedItems = new Set();
+    run.items.forEach((rit, index)=>{
+      const result = parsed[index];
+      if(!result || result.blank || !(result.value > 0)){
+        delete rit.receiptTotal;
+        delete rit.receiptUnitPrice;
+        delete rit.receiptEnteredAt;
+      } else {
+        const qty = Math.max(0, Number(rit && rit.qty) || 0);
+        rit.receiptTotal = result.value;
+        rit.receiptUnitPrice = qty > 0 ? roundMoney(result.value / qty) : 0;
+        rit.receiptEnteredAt = enteredAt;
+      }
+      const synced = syncMasterPriceEntry(run, rit, index, enteredAt);
+      if(synced) affectedItems.add(synced.id);
+    });
+    run.estimatedTotal = runEstimatedTotal(run);
+    run.missingPriceCount = runMissingPriceCount(run);
+    runHistoryReceiptEditId = '';
+    save();
+    renderRunHistory(document.getElementById('runHistoryList'));
+    renderManage();
+    renderBuild();
+  }
+
   function renderRunHistory(container){
     if(!container) return;
     const runs = Array.isArray(state.runHistory) ? state.runHistory : [];
@@ -620,11 +796,11 @@
 
       const meta = document.createElement('div');
       meta.className = 'muted run-history-meta';
-      meta.textContent = `${run.itemCount || runItems.length || 0} item${(run.itemCount || runItems.length) === 1 ? '' : 's'} · Total qty ${totalQty || 0} · Est. ${formatMoney(estimatedTotal)}${plus}`;
+      meta.textContent = `${run.itemCount || runItems.length || 0} item${(run.itemCount || runItems.length) === 1 ? '' : 's'} · Total qty ${totalQty || 0} · Est./receipt ${formatMoney(estimatedTotal)}${plus}`;
 
       const missing = document.createElement('div');
       missing.className = 'muted run-history-missing';
-      missing.textContent = missingCount > 0 ? `${missingCount} item${missingCount === 1 ? '' : 's'} missing Avg $ at commit time.` : 'All committed items had Avg $ values.';
+      missing.textContent = missingCount > 0 ? `${missingCount} item${missingCount === 1 ? '' : 's'} missing price data.` : 'All committed items have price data.';
 
       heading.appendChild(title);
       heading.appendChild(meta);
@@ -647,39 +823,124 @@
       if(expanded){
         const detail = document.createElement('div');
         detail.className = 'run-history-detail';
+        const editingReceipt = runHistoryReceiptEditId === runId;
 
         const summary = document.createElement('div');
         summary.className = 'run-history-summary';
-        summary.textContent = `Run total quantity: ${totalQty || 0} · Estimated run total: ${formatMoney(estimatedTotal)}${plus} · Missing Avg $: ${missingCount}`;
+        summary.textContent = `Run total quantity: ${totalQty || 0} · Estimated/receipt total: ${formatMoney(estimatedTotal)}${plus} · Missing price: ${missingCount}`;
         detail.appendChild(summary);
 
         if(runItems.length){
-          const list = document.createElement('div');
-          list.className = 'run-history-items';
-          runItems.forEach(rit=>{
-            const qty = Math.max(0, Number(rit && rit.qty) || 0);
-            const avgPrice = Math.max(0, Number(rit && rit.avgPrice) || 0);
-            const estimatedPrice = Number(rit && rit.estimatedPrice) > 0 ? Math.round(Number(rit.estimatedPrice) * 100) / 100 : (avgPrice > 0 ? Math.round(qty * avgPrice * 100) / 100 : 0);
-            const row = document.createElement('div');
-            row.className = 'run-history-item-row';
-            const itemName = document.createElement('div');
-            itemName.className = 'run-history-item-name';
-            itemName.textContent = cleanText(rit && rit.name) || 'Untitled item';
-            const itemMeta = document.createElement('div');
-            itemMeta.className = 'muted run-history-item-meta';
-            const catText = cleanText(rit && rit.cat);
-            let priceText = 'Missing Avg $';
-            if(avgPrice > 0){
-              priceText = `Avg ${formatMoney(avgPrice)} · Est. ${formatMoney(estimatedPrice)}`;
-            } else if(estimatedPrice > 0){
-              priceText = `Committed est. ${formatMoney(estimatedPrice)}`;
-            }
-            itemMeta.textContent = `${catText ? catText + ' · ' : ''}Qty ${qty} · ${priceText}`;
-            row.appendChild(itemName);
-            row.appendChild(itemMeta);
-            list.appendChild(row);
-          });
-          detail.appendChild(list);
+          if(editingReceipt){
+            const form = document.createElement('form');
+            form.className = 'receipt-price-form';
+            form.noValidate = true;
+            const note = document.createElement('p');
+            note.className = 'muted receipt-price-note';
+            note.textContent = 'Enter receipt line totals. Blank fields leave or clear receipt prices for that item.';
+            form.appendChild(note);
+            runItems.forEach((rit, receiptIndex)=>{
+              const qty = Math.max(0, Number(rit && rit.qty) || 0);
+              const row = document.createElement('label');
+              row.className = 'run-history-item-row receipt-price-row';
+              const info = document.createElement('div');
+              info.className = 'receipt-price-info';
+              const itemName = document.createElement('div');
+              itemName.className = 'run-history-item-name';
+              itemName.textContent = cleanText(rit && rit.name) || 'Untitled item';
+              const itemMeta = document.createElement('div');
+              itemMeta.className = 'muted run-history-item-meta';
+              const catText = cleanText(rit && rit.cat);
+              itemMeta.textContent = `${catText ? catText + ' · ' : ''}Qty ${qty}`;
+              info.appendChild(itemName);
+              info.appendChild(itemMeta);
+
+              const inputWrap = document.createElement('div');
+              inputWrap.className = 'receipt-price-input-wrap';
+              const inputLabel = document.createElement('span');
+              inputLabel.className = 'price-label';
+              inputLabel.textContent = 'Receipt total $';
+              const input = document.createElement('input');
+              input.type = 'text';
+              input.inputMode = 'decimal';
+              input.className = 'price-input receipt-price-input';
+              input.dataset.receiptIndex = String(receiptIndex);
+              input.value = formatPriceInput(runItemReceiptTotal(rit));
+              input.setAttribute('aria-label', `Receipt total for ${cleanText(rit && rit.name) || 'item'}`);
+              inputWrap.appendChild(inputLabel);
+              inputWrap.appendChild(input);
+
+              row.appendChild(info);
+              row.appendChild(inputWrap);
+              form.appendChild(row);
+            });
+            const controls = document.createElement('div');
+            controls.className = 'controls receipt-price-controls';
+            const saveBtn = document.createElement('button');
+            saveBtn.type = 'submit';
+            saveBtn.className = 'btn primary';
+            saveBtn.textContent = 'Save receipt prices';
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'btn';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = ()=>{
+              runHistoryReceiptEditId = '';
+              renderRunHistory(container);
+            };
+            controls.appendChild(saveBtn);
+            controls.appendChild(cancelBtn);
+            form.appendChild(controls);
+            form.onsubmit = (e)=>{
+              e.preventDefault();
+              saveReceiptPrices(runId, form);
+            };
+            detail.appendChild(form);
+          } else {
+            const controls = document.createElement('div');
+            controls.className = 'controls run-history-receipt-actions';
+            const editReceiptBtn = document.createElement('button');
+            editReceiptBtn.type = 'button';
+            editReceiptBtn.className = 'btn';
+            editReceiptBtn.textContent = 'Edit receipt prices';
+            editReceiptBtn.onclick = ()=>{
+              runHistoryReceiptEditId = runId;
+              renderRunHistory(container);
+            };
+            controls.appendChild(editReceiptBtn);
+            detail.appendChild(controls);
+
+            const list = document.createElement('div');
+            list.className = 'run-history-items';
+            runItems.forEach(rit=>{
+              const qty = Math.max(0, Number(rit && rit.qty) || 0);
+              const avgPrice = positiveMoney(rit && rit.avgPrice);
+              const estimatedPrice = runItemEstimatedPrice(rit);
+              const receiptTotal = runItemReceiptTotal(rit);
+              const receiptUnit = runItemReceiptUnitPrice(rit);
+              const row = document.createElement('div');
+              row.className = 'run-history-item-row';
+              const itemName = document.createElement('div');
+              itemName.className = 'run-history-item-name';
+              itemName.textContent = cleanText(rit && rit.name) || 'Untitled item';
+              const itemMeta = document.createElement('div');
+              itemMeta.className = 'muted run-history-item-meta';
+              const catText = cleanText(rit && rit.cat);
+              let priceText = 'Missing price';
+              if(receiptTotal > 0){
+                priceText = `Receipt ${formatMoney(receiptTotal)} · Unit ${formatMoney(receiptUnit)}`;
+              } else if(avgPrice > 0){
+                priceText = `Avg ${formatMoney(avgPrice)} · Est. ${formatMoney(estimatedPrice)}`;
+              } else if(estimatedPrice > 0){
+                priceText = `Committed est. ${formatMoney(estimatedPrice)}`;
+              }
+              itemMeta.textContent = `${catText ? catText + ' · ' : ''}Qty ${qty} · ${priceText}`;
+              row.appendChild(itemName);
+              row.appendChild(itemMeta);
+              list.appendChild(row);
+            });
+            detail.appendChild(list);
+          }
         } else {
           const emptyDetail = document.createElement('p');
           emptyDetail.className = 'muted';

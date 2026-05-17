@@ -146,6 +146,14 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .run-history-item-name{font-weight:700;overflow-wrap:anywhere}
 .run-history-more{align-items:center;justify-content:space-between}
 .run-history-more .muted{margin:0}
+.receipt-price-form{display:flex;flex-direction:column;gap:8px}
+.receipt-price-note{margin:0}
+.receipt-price-row{display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:default}
+.receipt-price-info{min-width:0}
+.receipt-price-input-wrap{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.receipt-price-input{width:96px;min-width:96px}
+.receipt-price-controls,.run-history-receipt-actions{margin-top:2px}
+@media(max-width:520px){.receipt-price-row{align-items:stretch;flex-direction:column}.receipt-price-input-wrap{justify-content:space-between}.receipt-price-input{flex:0 0 120px;width:120px;min-width:120px}}
 .list{display:flex;flex-direction:column;gap:8px}
 details{background:#0b1220;border:1px solid #243042;border-radius:14px;padding:8px}
 summary{cursor:pointer;font-weight:700;color:#cbd5e1}

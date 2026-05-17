@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.50.0 — Receipt price entry and rolling average price
+
+- Added receipt price entry from expanded Run History entries.
+- Added receipt total and unit price tracking for committed run items.
+- Added item price entry history for receipt-derived prices.
+- Updated item Avg $ from the most recent 5 receipt price entries.
+- Updated Run History totals and missing-price indicators to account for receipt-entered prices.
+- Preserved existing Build List, Shopping Mode, Insights, Run History, Manage Items, Manage Categories, Manage Stores, localStorage behavior, and JSON import/export compatibility.
+
 ## v1.49.0 — Dedicated stores foundation
 
 - Added a dedicated Stores section inside the Manage tab.
