@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.51.0 — Item-first item editing model
+
+- Reworked Manage → Items editing into a clearer item-centered edit panel.
+- Kept item name, category, and manual Avg $ editing available from the item edit flow.
+- Added basic store assignment for grocery items using existing Manage → Stores data.
+- Preserved item IDs, categories, stores, run history, receipt price entries, localStorage keys, and JSON backup compatibility.
+- Preserved Build List, Shopping Mode, Insights, Run History, Data Safety / Backup, Reorder Items, and Reorder Categories behavior.
+
 ## v1.50.0 — Receipt price entry and rolling average price
 
 - Added receipt price entry from expanded Run History entries.
