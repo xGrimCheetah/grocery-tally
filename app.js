@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.53.0"; // Build List search-first All Items workflow
+  let APP_VERSION = "1.53.1"; // All Items search clear button
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1902,7 +1902,10 @@
       </div>
       ${isAllItemsMode ? `
         <div class="build-all-search-card" aria-label="All items search-first add flow">
-          <input id="buildSearchInput" class="build-search-input build-all-search-input" type="search" placeholder="Search or add an item" autocomplete="off" aria-label="Search or add an item">
+          <div class="build-all-search-row">
+            <input id="buildSearchInput" class="build-search-input build-all-search-input" type="search" placeholder="Search or add an item" autocomplete="off" aria-label="Search or add an item">
+            <button class="btn build-all-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
+          </div>
           <p id="buildAllHelper" class="muted build-all-helper"></p>
           <div id="buildAllResults" class="build-flat-list build-all-results"></div>
         </div>` : ''}
@@ -1974,6 +1977,9 @@
       const draftItems = nonZero().sort(sortItems);
       if(buildAllHelper){
         buildAllHelper.textContent = draftItems.length ? 'Type to add more items' : 'Type to start adding items';
+      }
+      if(isAllItemsMode && clearBtn){
+        clearBtn.disabled = !buildSearchQuery;
       }
       if(buildAllResults){
         buildAllResults.innerHTML = '';
@@ -2170,13 +2176,18 @@
       });
     }
     if(clearBtn){
+      if(isAllItemsMode){
+        clearBtn.addEventListener('pointerdown', (e)=>{
+          e.preventDefault();
+        });
+      }
       clearBtn.onclick = ()=>{
         buildSearchQuery = '';
         buildFocusLetter = '';
         searchInput.value = '';
         drawBuildList();
         updateBuildBottomControlLayout();
-        scrollToBuildResultsStart();
+        if(!isAllItemsMode) scrollToBuildResultsStart();
         searchInput.focus();
       };
     }

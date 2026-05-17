@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.53.1 — All Items search clear button
+
+- Added an explicit Clear button beside the Build List All items search field.
+- Made clearing the All items search field easier on desktop and iPhone.
+- Kept focus in the search field after clearing.
+- Preserved Last run and Suggested mode search/A-Z behavior.
+- Preserved Shopping Mode, Insights, Run History, Manage, localStorage keys, and JSON backup compatibility.
+
 ## v1.53.0 — Build List search-first All Items workflow
 
 - Redesigned Build List All items mode into a search-first list-building workflow.
