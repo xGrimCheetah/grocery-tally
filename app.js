@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.48.9"; // Reorder arrow scroll-position fix
+  let APP_VERSION = "1.49.0"; // Dedicated stores foundation
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -14,7 +14,7 @@
   const LAST_BACKUP_KEY = 'grocery_tally_last_backup_at';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
-  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
+  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
   normalizeStateShape();
 
   let closedCats = getClosedCats();
@@ -46,6 +46,24 @@
     if(!state.title) state.title = "Grocery Tally";
     state.categories = state.categories.map(c => cleanText(c)).filter(Boolean);
     if(!state.categories.length) state.categories = DEFAULT_CATS.slice();
+    if(!Array.isArray(state.stores)) state.stores = [];
+    const seenStores = new Set();
+    state.stores = state.stores.map((store, idx)=>{
+      const name = cleanText(store && store.name);
+      if(!name) return null;
+      const normalizedName = normalizeText(name);
+      if(seenStores.has(normalizedName)) return null;
+      seenStores.add(normalizedName);
+      const pos = Number(store && store.pos);
+      return {
+        id: cleanText(store && store.id) || ('store_' + id()),
+        name,
+        pos: Number.isFinite(pos) ? pos : idx
+      };
+    }).filter(Boolean).sort(compareStores);
+    state.stores.forEach((store, idx)=>{
+      store.pos = Number.isFinite(Number(store.pos)) ? Number(store.pos) : idx;
+    });
     state.items.forEach((it, idx)=>{
       if(!it.id) it.id = id();
       it.name = cleanText(it.name || 'Untitled item');
@@ -99,6 +117,7 @@
     return {
       itemCount: Array.isArray(data.items) ? data.items.length : 0,
       categoryCount: Array.isArray(data.categories) ? data.categories.length : 0,
+      storeCount: Array.isArray(data.stores) ? data.stores.length : 0,
       committedRunCount: countCommittedRuns(data)
     };
   }
@@ -129,11 +148,13 @@
     const appVersionEl = panel.querySelector('[data-backup-stat="version"]');
     const itemCountEl = panel.querySelector('[data-backup-stat="items"]');
     const categoryCountEl = panel.querySelector('[data-backup-stat="categories"]');
+    const storeCountEl = panel.querySelector('[data-backup-stat="stores"]');
     const runCountEl = panel.querySelector('[data-backup-stat="runs"]');
     const lastBackupEl = panel.querySelector('[data-backup-stat="last-backup"]');
     if(appVersionEl) appVersionEl.textContent = `v${APP_VERSION}`;
     if(itemCountEl) itemCountEl.textContent = String(stats.itemCount);
     if(categoryCountEl) categoryCountEl.textContent = String(stats.categoryCount);
+    if(storeCountEl) storeCountEl.textContent = String(stats.storeCount);
     if(runCountEl) runCountEl.textContent = String(stats.committedRunCount);
     if(lastBackupEl) lastBackupEl.textContent = formatBackupTimestamp(getLastBackupAt());
   }
@@ -158,11 +179,13 @@
       `- Version: ${getBackupFileVersion(data)}`,
       `- Items: ${backupStats.itemCount}`,
       `- Categories: ${backupStats.categoryCount}`,
+      `- Stores: ${backupStats.storeCount}`,
       `- Committed runs: ${backupStats.committedRunCount}`,
       '',
       'Current data:',
       `- Items: ${currentStats.itemCount}`,
       `- Categories: ${currentStats.categoryCount}`,
+      `- Stores: ${currentStats.storeCount}`,
       `- Committed runs: ${currentStats.committedRunCount}`,
       '',
       'Replacing data cannot be undone unless you exported a backup first. Continue?'
@@ -390,6 +413,22 @@
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
   function cleanText(str){ return (str || '').trim().replace(/\s+/g, ' ') }
   function normalizeText(str){ return cleanText(str).toLowerCase() }
+  function compareStores(a,b){
+    const ap = Number.isFinite(Number(a && a.pos)) ? Number(a.pos) : 1e9;
+    const bp = Number.isFinite(Number(b && b.pos)) ? Number(b.pos) : 1e9;
+    if(ap !== bp) return ap - bp;
+    return cleanText(a && a.name).localeCompare(cleanText(b && b.name));
+  }
+  function sortedStores(){ return (Array.isArray(state.stores) ? state.stores : []).slice().sort(compareStores) }
+  function findStoreByName(name, excludeId){
+    const target = normalizeText(name);
+    if(!target) return null;
+    return (Array.isArray(state.stores) ? state.stores : []).find(store => store.id !== excludeId && normalizeText(store.name) === target) || null;
+  }
+  function nextStorePos(){
+    const stores = Array.isArray(state.stores) ? state.stores : [];
+    return stores.reduce((max, store)=> Math.max(max, Number.isFinite(Number(store && store.pos)) ? Number(store.pos) : -1), -1) + 1;
+  }
   function findCategoryByName(name){
     const target = normalizeText(name);
     if(!target) return '';
@@ -1809,13 +1848,14 @@
         <div class="insights-view-toggle manage-view-toggle" role="group" aria-label="Manage view">
           <button type="button" class="insights-view-btn${manageView === 'items' ? ' active' : ''}" data-manage-view="items" aria-pressed="${manageView === 'items' ? 'true' : 'false'}">Items</button>
           <button type="button" class="insights-view-btn${manageView === 'categories' ? ' active' : ''}" data-manage-view="categories" aria-pressed="${manageView === 'categories' ? 'true' : 'false'}">Categories</button>
+          <button type="button" class="insights-view-btn${manageView === 'stores' ? ' active' : ''}" data-manage-view="stores" aria-pressed="${manageView === 'stores' ? 'true' : 'false'}">Stores</button>
         </div>
       </div>
       <div class="spacer"></div>
       <div id="manageSubView"></div>`;
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
-        manageView = btn.dataset.manageView === 'categories' ? 'categories' : 'items';
+        manageView = ['items','categories','stores'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
         if(manageView !== 'items') manageItemReorderMode = false;
         if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
@@ -1823,6 +1863,7 @@
     });
     const subView = document.getElementById('manageSubView');
     if(manageView === 'categories') renderManageCategories(subView);
+    else if(manageView === 'stores') renderManageStores(subView);
     else renderManageItems(subView);
     clearTouchDragArtifacts();
   }
@@ -1855,6 +1896,7 @@
           <div><span>App version</span><strong data-backup-stat="version"></strong></div>
           <div><span>Items</span><strong data-backup-stat="items"></strong></div>
           <div><span>Categories</span><strong data-backup-stat="categories"></strong></div>
+          <div><span>Stores</span><strong data-backup-stat="stores"></strong></div>
           <div><span>Committed runs</span><strong data-backup-stat="runs"></strong></div>
           <div class="data-safety-last"><span>Last backup</span><strong data-backup-stat="last-backup"></strong></div>
         </div>
@@ -1945,10 +1987,12 @@
           exportedAt,
           itemCount: stats.itemCount,
           categoryCount: stats.categoryCount,
+          storeCount: stats.storeCount,
           committedRunCount: stats.committedRunCount
         },
         title: state.title,
         categories: state.categories,
+        stores: state.stores || [],
         items: state.items,
         runHistory: state.runHistory || []
       };
@@ -1976,7 +2020,7 @@
           fileInput.value='';
           return;
         }
-        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] };
+        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, stores: Array.isArray(data.stores) ? data.stores : [], items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] };
         normalizeStateShape();
         ensurePositions();
         save();
@@ -2050,7 +2094,7 @@
     document.getElementById('btnWipe').onclick = ()=>{
       const message = 'Wipe all grocery data stored in this browser?\n\nThis deletes your grocery list, categories, quantities, checked items, run history, and last backup timestamp on this device.\n\nExport backup JSON first unless you are absolutely sure. This cannot be undone.\n\nContinue?';
       if(confirm(message)){
-        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], runHistory: [] };
+        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
         clearLastBackupAt();
         save();
         renderAll();
@@ -2255,6 +2299,111 @@
       ml.appendChild(sec);
     });
     cleanupManageItemDragArtifacts();
+  }
+
+  // ----- Manage Stores -----
+  function renderManageStores(target){
+    normalizeStateShape();
+    const stores = sortedStores();
+    (target || viewManage).innerHTML = `
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <input id="newStoreName" placeholder="Store name" style="flex:2" />
+        <button class="btn-accent" id="btnAddStore">Add store</button>
+      </div>
+      <p class="muted store-help">Stores are a foundation for future item locations, store maps, and route planning.</p>
+      <div class="spacer"></div>
+      <div id="storeList" class="list"></div>`;
+
+    const storeList = document.getElementById('storeList');
+    if(!stores.length){
+      const empty = document.createElement('div');
+      empty.className = 'item store-empty';
+      empty.textContent = 'No stores yet. Add stores now so future updates can connect items, prices, and store layouts.';
+      storeList.appendChild(empty);
+    } else {
+      stores.forEach(store=> renderStoreRow(storeList, store));
+    }
+
+    const addBtn = document.getElementById('btnAddStore');
+    const input = document.getElementById('newStoreName');
+    addBtn.onclick = ()=>{
+      const name = cleanText(input.value);
+      if(!name){ alert('Store name cannot be empty.'); return; }
+      if(findStoreByName(name)){ alert('That store already exists.'); return; }
+      state.stores.push({ id: 'store_' + id(), name, pos: nextStorePos() });
+      save();
+      renderManage();
+    };
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        addBtn.click();
+      }
+    });
+  }
+
+  function renderStoreRow(container, store){
+    const row=document.createElement('div');
+    row.className='item manage-store-row';
+    row.draggable=false;
+
+    const left=document.createElement('div'); left.className='left';
+    const right=document.createElement('div'); right.className='right';
+    const label=document.createElement('div'); label.textContent=store.name; label.className='name';
+    const input=document.createElement('input'); input.value=store.name; input.placeholder='Store name'; input.style.display='none';
+    const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
+    const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save'; saveBtn.style.display='none';
+    const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel'; cancelBtn.style.display='none';
+    const del=document.createElement('button'); del.className='btn-danger'; del.textContent='Delete';
+
+    function enterEdit(){
+      label.style.display='none';
+      input.style.display='block';
+      edit.style.display='none';
+      del.style.display='none';
+      saveBtn.style.display='inline-block';
+      cancelBtn.style.display='inline-block';
+      input.focus(); input.select();
+    }
+    function exitEdit(){
+      label.style.display='block';
+      input.style.display='none';
+      edit.style.display='inline-block';
+      del.style.display='inline-block';
+      saveBtn.style.display='none';
+      cancelBtn.style.display='none';
+      input.value = store.name;
+    }
+
+    edit.onclick = enterEdit;
+    cancelBtn.onclick = exitEdit;
+    input.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        saveBtn.click();
+      } else if(e.key === 'Escape'){
+        e.preventDefault();
+        cancelBtn.click();
+      }
+    });
+    saveBtn.onclick = ()=>{
+      const newName = cleanText(input.value);
+      if(!newName){ alert('Store name cannot be empty.'); return; }
+      if(findStoreByName(newName, store.id)){ alert('That store already exists.'); return; }
+      store.name = newName;
+      save();
+      renderManage();
+    };
+    del.onclick = ()=>{
+      if(!confirm('Delete this store? This cannot be undone.')) return;
+      state.stores = (state.stores || []).filter(candidate => candidate.id !== store.id);
+      save();
+      renderManage();
+    };
+
+    row.appendChild(left); left.appendChild(label); left.appendChild(input);
+    row.appendChild(right); right.appendChild(edit); right.appendChild(saveBtn); right.appendChild(cancelBtn); right.appendChild(del);
+    container.appendChild(row);
   }
 
   // ----- Manage Categories -----

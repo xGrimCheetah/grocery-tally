@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.49.0 — Dedicated stores foundation
+
+- Added a dedicated Stores section inside the Manage tab.
+- Added simple store creation and editing.
+- Added store data to the app state for future item-to-store, store map, and route planning features.
+- Added store count support to backup/data safety views where applicable.
+- Preserved existing Build List, Shopping Mode, Insights, Run History, Manage Items, Manage Categories, localStorage behavior, and JSON import/export compatibility.
+
 ## v1.48.9 — Reorder arrow scroll-position fix
 
 - Preserved scroll position when using Manage Items reorder arrows.
