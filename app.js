@@ -105,6 +105,9 @@
       it.skipped = !!it.skipped;
       if(it.checked) it.skipped = false;
       it.avgPrice = Math.max(0, Number(it.avgPrice) || 0);
+      const receiptPreviousAvgPrice = Number(it.receiptPreviousAvgPrice);
+      if(Number.isFinite(receiptPreviousAvgPrice) && receiptPreviousAvgPrice >= 0) it.receiptPreviousAvgPrice = roundMoney(receiptPreviousAvgPrice);
+      else delete it.receiptPreviousAvgPrice;
       it.priceEntries = normalizePriceEntries(it.priceEntries, it);
       if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
     });
@@ -667,11 +670,19 @@
     if(entryItemId && masterId && entryItemId === masterId) return true;
     return normalizeText(entry && entry.name) === normalizeText(rit && rit.name) && normalizeText(entry && entry.cat) === normalizeText(rit && rit.cat);
   }
+  function validPriceEntries(item){
+    return normalizePriceEntries(item && item.priceEntries, item).filter(entry => positiveMoney(entry.unitPrice) > 0 && positiveMoney(entry.totalPrice) > 0);
+  }
   function recalcAvgPriceFromEntries(item){
     if(!item) return;
     item.priceEntries = normalizePriceEntries(item.priceEntries, item);
-    const valid = item.priceEntries.filter(entry => positiveMoney(entry.unitPrice) > 0 && positiveMoney(entry.totalPrice) > 0);
-    if(!valid.length) return;
+    const valid = validPriceEntries(item);
+    if(!valid.length){
+      const previousAvgPrice = Number(item.receiptPreviousAvgPrice);
+      item.avgPrice = Number.isFinite(previousAvgPrice) && previousAvgPrice >= 0 ? roundMoney(previousAvgPrice) : 0;
+      delete item.receiptPreviousAvgPrice;
+      return;
+    }
     valid.sort((a,b)=>{
       const ad = Date.parse(a.committedAt || a.enteredAt || '') || 0;
       const bd = Date.parse(b.committedAt || b.enteredAt || '') || 0;
@@ -688,6 +699,7 @@
     if(!item) return null;
     if(!Array.isArray(item.priceEntries)) item.priceEntries = [];
     item.priceEntries = normalizePriceEntries(item.priceEntries, item);
+    const hadValidEntriesBeforeSync = validPriceEntries(item).length > 0;
     const runId = cleanText(run && run.id);
     const runItemKey = receiptRunItemKey(rit, index);
     let existing = null;
@@ -699,6 +711,9 @@
     const receiptTotal = runItemReceiptTotal(rit);
     const unitPrice = runItemReceiptUnitPrice(rit);
     if(receiptTotal > 0 && unitPrice > 0){
+      if(!hadValidEntriesBeforeSync && !Number.isFinite(Number(item.receiptPreviousAvgPrice))){
+        item.receiptPreviousAvgPrice = roundMoney(item.avgPrice);
+      }
       item.priceEntries.push({
         id: cleanText(existing && existing.id) || ('price_' + id()),
         runId,
@@ -2536,6 +2551,7 @@
           const categoryChanged = selectedCat && selectedCat !== oldCat;
           it.name = nv;
           it.avgPrice = parsedPrice;
+          if(validPriceEntries(it).length > 0) it.receiptPreviousAvgPrice = parsedPrice;
           if(categoryChanged){
             moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
           }
