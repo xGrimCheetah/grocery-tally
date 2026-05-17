@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.52.0 — Smart suggestions foundation
+
+- Added a Suggested mode to Build List using committed run history.
+- Added simple suggestion reasons such as often bought, recently bought, and maybe due soon.
+- Kept suggestions user-controlled with no automatic quantity changes.
+- Matched Suggested mode quantity controls to the existing Build List controls for consistency.
+- Preserved Build List All items and Last run modes, Shopping Mode, Insights, Run History, Manage Items, Manage Categories, Manage Stores, receipt pricing, localStorage keys, and JSON backup compatibility.
+
 ## v1.51.0 — Item-first item editing model
 
 - Reworked Manage → Items editing into a clearer item-centered edit panel.
