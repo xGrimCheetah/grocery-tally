@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.53.3"; // All Items estimate pill position fix
+  let APP_VERSION = "1.54.0"; // All Items estimate pill position fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -22,6 +22,7 @@
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let manageView = 'items';
+  let manageItemsQuery = '';
   let manageItemReorderMode = false;
   let manageCategoryReorderMode = false;
   let buildSearchQuery = '';
@@ -99,7 +100,8 @@
     state.items.forEach((it, idx)=>{
       if(!it.id) it.id = id();
       it.name = cleanText(it.name || 'Untitled item');
-      if(!it.cat || !state.categories.includes(it.cat)) it.cat = state.categories[0] || 'Other';
+      if(cleanText(it.cat) && !state.categories.includes(it.cat)) it.cat = state.categories[0] || 'Other';
+      if(!cleanText(it.cat)) it.cat = '';
       const itemStoreIds = Array.isArray(it.storeIds) ? it.storeIds : [];
       const seenItemStoreIds = new Set();
       it.storeIds = itemStoreIds.map(storeId => cleanText(storeId)).filter(storeId=>{
@@ -464,6 +466,10 @@
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
   function cleanText(str){ return (str || '').trim().replace(/\s+/g, ' ') }
   function normalizeText(str){ return cleanText(str).toLowerCase() }
+  function categoryDisplayName(cat){
+    const label = cleanText(cat || '');
+    return label || 'No category';
+  }
   function compareStores(a,b){
     const ap = Number.isFinite(Number(a && a.pos)) ? Number(a.pos) : 1e9;
     const bp = Number.isFinite(Number(b && b.pos)) ? Number(b.pos) : 1e9;
@@ -1656,6 +1662,11 @@
   function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name)) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name))}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
+  function nextItemPosForCategory(cat){
+    const normalizedCat = cleanText(cat || '');
+    const list = state.items.filter(i => cleanText(i && i.cat) === normalizedCat);
+    return list.length ? Math.max(...list.map(i => Number(i && i.pos) || 0)) + 1 : 0;
+  }
   function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
   function moveItemWithinCategory(itemId, direction){
@@ -1883,12 +1894,14 @@
     const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
     const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
     const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; it.skipped=false; save(); renderBuild() };
-    const prev=document.createElement('div');
-    prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
-    prev.title='Previous run quantity';
-    prev.textContent=previousRunText(it);
-
-    right.appendChild(qty); right.appendChild(minus); right.appendChild(plus); right.appendChild(prev);
+    right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
+    if(!opts.compact){
+      const prev=document.createElement('div');
+      prev.className='prev-qty' + (previousRunValue(it) ? '' : ' empty');
+      prev.title='Previous run quantity';
+      prev.textContent=previousRunText(it);
+      right.appendChild(prev);
+    }
     row.appendChild(left); row.appendChild(right);
     buildList.appendChild(shell.wrap);
   }
@@ -1974,7 +1987,7 @@
     function appendBuildCategoryHeader(container, cat){
       const header = document.createElement('div');
       header.className = 'build-current-cat';
-      header.textContent = cat || 'Other';
+      header.textContent = categoryDisplayName(cat);
       container.appendChild(header);
     }
 
@@ -1995,7 +2008,7 @@
             .filter(it => matchesBuildSearch(it, query))
             .sort(buildSearchSort(query))
             .slice(0, 5);
-          matches.forEach(it=> appendBuildItemRow(buildAllResults, it));
+          matches.forEach(it=> appendBuildItemRow(buildAllResults, it, { compact:true }));
 
           const proposedName = cleanText(buildSearchQuery);
           const exactDuplicate = findBuildQuickAddDuplicate(proposedName);
@@ -2041,7 +2054,7 @@
           currentCat = it.cat;
           appendBuildCategoryHeader(buildList, currentCat);
         }
-        appendBuildItemRow(buildList, it, { className:'build-current-item' });
+        appendBuildItemRow(buildList, it, { className:'build-current-item', compact:true });
       });
     }
 
@@ -2275,7 +2288,7 @@
 
       const heading=document.createElement('div');
       heading.className='shop-cat-heading';
-      heading.textContent=cat;
+      heading.textContent=categoryDisplayName(cat);
       block.appendChild(heading);
 
       const list=document.createElement('div');
@@ -2400,13 +2413,14 @@
           <button type="button" class="insights-view-btn${manageView === 'items' ? ' active' : ''}" data-manage-view="items" aria-pressed="${manageView === 'items' ? 'true' : 'false'}">Items</button>
           <button type="button" class="insights-view-btn${manageView === 'categories' ? ' active' : ''}" data-manage-view="categories" aria-pressed="${manageView === 'categories' ? 'true' : 'false'}">Categories</button>
           <button type="button" class="insights-view-btn${manageView === 'stores' ? ' active' : ''}" data-manage-view="stores" aria-pressed="${manageView === 'stores' ? 'true' : 'false'}">Stores</button>
+          <button type="button" class="insights-view-btn${manageView === 'backup' ? ' active' : ''}" data-manage-view="backup" aria-pressed="${manageView === 'backup' ? 'true' : 'false'}">Backup</button>
         </div>
       </div>
       <div class="spacer"></div>
       <div id="manageSubView"></div>`;
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
-        manageView = ['items','categories','stores'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
+        manageView = ['items','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
         if(manageView !== 'items') manageItemReorderMode = false;
         if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
@@ -2415,6 +2429,7 @@
     const subView = document.getElementById('manageSubView');
     if(manageView === 'categories') renderManageCategories(subView);
     else if(manageView === 'stores') renderManageStores(subView);
+    else if(manageView === 'backup') renderManageBackup(subView);
     else renderManageItems(subView);
     clearTouchDragArtifacts();
   }
@@ -2423,44 +2438,29 @@
     clearItemDragState();
     cleanupManageItemDragArtifacts();
     ensurePositions();
-    (target || viewManage).innerHTML = `
+    const root = (target || viewManage);
+    const selectedCategoryValue = (manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) ? manageSelectedCat : '__ALL__';
+    const hasSearchQuery = !!normalizeText(manageItemsQuery || '');
+    const isSpecificCategorySelected = selectedCategoryValue !== '__ALL__' && selectedCategoryValue !== '__NONE__' && state.categories.includes(selectedCategoryValue);
+    const canUseReorderForCurrentView = isSpecificCategorySelected && !hasSearchQuery;
+    if(manageItemReorderMode && !canUseReorderForCurrentView) manageItemReorderMode = false;
+    root.innerHTML = `
       <div class="grid">
         <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
-          <input id="newItemName" placeholder="Item name" style="flex:2" />
+          <input id="newItemName" class="manage-items-search-input" placeholder="Search or add an item" style="flex:2" />
           <select id="newItemCat" style="flex:1"></select>
-          <button class="btn-accent" id="btnAddItem">Add Item</button>
         </div>
       </div>
       <div class="spacer"></div>
       <div class="manage-reorder-toolbar">
-        <button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>
-        <span class="muted manage-reorder-help">${manageItemReorderMode ? 'Use arrows to move items within their current category.' : 'Use reorder mode for reliable mobile item sorting.'}</span>
+        ${isSpecificCategorySelected ? `<button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>` : ''}
+        <span class="muted manage-reorder-help">${!isSpecificCategorySelected ? 'Select a category to reorder items.' : (hasSearchQuery ? 'Clear search to reorder this category.' : (manageItemReorderMode ? 'Use arrows to move items within this category.' : 'Use reorder mode for reliable mobile item sorting.'))}</span>
       </div>
       <div class="spacer"></div>
-      <section class="data-safety-panel" id="dataSafetyPanel" aria-labelledby="dataSafetyHeading">
-        <div class="data-safety-heading">
-          <h3 id="dataSafetyHeading">Data Safety / Backup</h3>
-          <span class="pill">Local only</span>
-        </div>
-        <p class="muted data-safety-help">Export backup JSON before major changes, imports, or wiping this browser. This is the safe backup action for your grocery data.</p>
-        <div class="data-safety-stats" aria-label="Backup and data summary">
-          <div><span>App version</span><strong data-backup-stat="version"></strong></div>
-          <div><span>Items</span><strong data-backup-stat="items"></strong></div>
-          <div><span>Categories</span><strong data-backup-stat="categories"></strong></div>
-          <div><span>Stores</span><strong data-backup-stat="stores"></strong></div>
-          <div><span>Committed runs</span><strong data-backup-stat="runs"></strong></div>
-          <div class="data-safety-last"><span>Last backup</span><strong data-backup-stat="last-backup"></strong></div>
-        </div>
-        <div class="controls data-safety-actions">
-          <button class="btn" id="btnExport">Export backup JSON</button>
-          <input type="file" id="fileImport" accept="application/json" style="display:none" />
-          <button class="btn" id="btnImport">Import JSON</button>
-          <button class="btn-danger right-controls" id="btnWipe">Wipe all data</button>
-        </div>
-      </section>
+      <div id="manageItemQuickAdd"></div>
       <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
-        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category above.</p>
+        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category when one is filtered, otherwise the app default category.</p>
         <textarea id="bulkSetupText" placeholder="Produce:\nBananas\nApples\n\nDairy:\nMilk\nYogurt"></textarea>
         <div class="spacer"></div>
         <div class="controls">
@@ -2471,117 +2471,82 @@
       <div class="spacer"></div>
       <div id="manageList" class="${manageItemReorderMode ? 'reorder-mode' : ''}"></div>`;
 
-    refreshDataSafetyPanel();
-
     const reorderToggle = document.getElementById('btnToggleItemReorder');
-    if(reorderToggle){
-      reorderToggle.onclick = ()=>{
-        clearItemDragState();
-        manageItemReorderMode = !manageItemReorderMode;
-        renderManage();
-      };
-    }
+    if(reorderToggle) reorderToggle.onclick = ()=>{ if(canUseReorderForCurrentView){ manageItemReorderMode = !manageItemReorderMode; renderManageItems(target); } };
 
     const sel=document.getElementById('newItemCat');
-    state.categories.forEach(c=>{
-      const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt);
-    });
-    if(manageSelectedCat && state.categories.includes(manageSelectedCat)){
-      sel.value = manageSelectedCat;
-    } else if(state.categories.length){
-      manageSelectedCat = state.categories[0];
-      sel.value = manageSelectedCat;
-    }
-    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat) };
-    document.getElementById('btnAddItem').onclick = ()=>{
-      const name=document.getElementById('newItemName').value.trim();
-      const cat=sel.value;
-      if(!name) return;
-      const normalizedName = normalizeText(name);
-      const duplicate = state.items.find(i => i.cat === cat && normalizeText(i.name) === normalizedName );
-      if(duplicate){
-        duplicate.qty = (Number(duplicate.qty)||0) + 1;
-        duplicate.checked = false;
-        duplicate.skipped = false;
-        save();
-        try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
-        const nameInput = document.getElementById('newItemName');
-        if(nameInput){ nameInput.value = ''; nameInput.focus(); }
-        return;
-      }
-      manageSelectedCat = cat;
-      localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
-      state.items.push({ id:id(), name, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
-      save();
-      try{ renderManage(); renderBuild(); }catch(e){ console.error(e); }
-      const nameInput = document.getElementById('newItemName');
-      if(nameInput){ nameInput.focus(); nameInput.select(); }
-    };
+    sel.innerHTML = '<option value="__ALL__">All categories</option><option value="__NONE__">No category</option>';
+    state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
+    if(manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) sel.value = manageSelectedCat;
+    else sel.value='__ALL__';
+    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); if(manageItemReorderMode){ manageItemReorderMode = false; } renderManageItems(target); };
 
-    const nameInput = document.getElementById('newItemName');
-    if(nameInput){
-      nameInput.addEventListener('keydown', (e)=>{
-        if(e.key === 'Enter'){
-          e.preventDefault();
-          document.getElementById('btnAddItem').click();
+    const input = document.getElementById('newItemName');
+    input.value = manageItemsQuery;
+    input.oninput = ()=>{ manageItemsQuery = input.value || ''; drawManageItemsList(); };
+    input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){
+      const btn = document.getElementById('manageQuickAddBtn');
+      if(btn){ e.preventDefault(); btn.click(); }
+    }});
+
+    function drawManageItemsList(){
+      const quickWrap = document.getElementById('manageItemQuickAdd');
+      const ml = document.getElementById('manageList');
+      if(!quickWrap || !ml) return;
+      quickWrap.replaceChildren();
+      ml.replaceChildren();
+      const queryNorm = normalizeText(manageItemsQuery || '');
+      const addName = cleanText(manageItemsQuery || '');
+      const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
+      if(addName && !duplicate){
+        const quick = document.createElement('button');
+        quick.id = 'manageQuickAddBtn';
+        quick.type = 'button';
+        quick.className = 'build-quick-add-option';
+        quick.textContent = `Add “${addName}”`;
+        quick.onclick = ()=>{
+          const selected = sel.value;
+          const newCat = selected === '__ALL__' ? '' : (selected === '__NONE__' ? '' : selected);
+          const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, storeIds:[] };
+          state.items.push(item);
+          save();
+          manageItemsQuery = '';
+          input.value = '';
+          drawManageItemsList();
+          renderBuild();
+          openItemDetailsModal(item.id, true);
+        };
+        quickWrap.appendChild(quick);
+      }
+      let filtered = state.items.slice();
+      if(queryNorm) filtered = filtered.filter(it=> normalizeText(it.name).includes(queryNorm));
+      const selected = sel.value;
+      if(selected === '__NONE__') filtered = filtered.filter(it=> !cleanText(it.cat));
+      else if(selected !== '__ALL__') filtered = filtered.filter(it=> it.cat === selected);
+      filtered.sort((a,b)=> (Number(a.pos)||0) - (Number(b.pos)||0));
+      filtered.forEach((it, idx)=>{
+        const shell = createSwipeShell(it.id);
+        const row=shell.content;
+        row.classList.add('manage-item-row');
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat || 'No category';
+        left.appendChild(name); left.appendChild(itemMeta);
+        const details=document.createElement('button'); details.className='btn'; details.textContent='Details';
+        details.onclick=()=> openItemDetailsModal(it.id, false);
+        right.appendChild(details);
+        if(manageItemReorderMode && canUseReorderForCurrentView){
+          const moveUp=document.createElement('button'); moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.disabled = idx===0;
+          const moveDown=document.createElement('button'); moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.disabled = idx===filtered.length-1;
+          moveUp.onclick=()=>{ if(moveItemWithinCategory(it.id,-1)){ save(); drawManageItemsList(); } };
+          moveDown.onclick=()=>{ if(moveItemWithinCategory(it.id,1)){ save(); drawManageItemsList(); } };
+          right.prepend(moveDown); right.prepend(moveUp);
         }
+        row.appendChild(left); row.appendChild(right); ml.appendChild(shell.wrap);
       });
     }
-
-    document.getElementById('btnExport').onclick = ()=>{
-      const stats = getDataSafetyStats(state);
-      const exportedAt = new Date().toISOString();
-      const dataOut = {
-        appVersion: APP_VERSION,
-        exportMetadata: {
-          appVersion: APP_VERSION,
-          exportedAt,
-          itemCount: stats.itemCount,
-          categoryCount: stats.categoryCount,
-          storeCount: stats.storeCount,
-          committedRunCount: stats.committedRunCount
-        },
-        title: state.title,
-        categories: state.categories,
-        stores: state.stores || [],
-        items: state.items,
-        runHistory: state.runHistory || []
-      };
-      const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `grocery-tally-backup-v${APP_VERSION}-${backupDateStamp(new Date(exportedAt))}.json`;
-      a.click();
-      setTimeout(()=> URL.revokeObjectURL(a.href), 0);
-      setLastBackupAt(exportedAt);
-      refreshDataSafetyPanel();
-    };
-
-    const fileInput = document.getElementById('fileImport');
-    document.getElementById('btnImport').onclick = ()=> fileInput.click();
-    fileInput.onchange = async (e)=>{
-      const file=e.target.files[0];
-      if(!file) return;
-      try{
-        const text=await file.text();
-        const data = JSON.parse(text);
-        if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
-        const confirmed = confirm(makeImportPreview(data));
-        if(!confirmed){
-          fileInput.value='';
-          return;
-        }
-        state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, stores: Array.isArray(data.stores) ? data.stores : [], items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] };
-        normalizeStateShape();
-        ensurePositions();
-        save();
-        renderAll();
-        alert('Import complete!');
-      }catch(err){
-        alert('Import failed: '+err.message);
-      }
-      fileInput.value='';
-    };
+    drawManageItemsList();
 
     document.getElementById('btnBulkSetup').onclick = ()=>{
       const box = document.getElementById('bulkSetupText');
@@ -2591,296 +2556,195 @@
         alert('Paste one or more items first.');
         return;
       }
-      let currentCat = sel.value || state.categories[0] || 'Other';
-      const startingCat = ensureCategory(currentCat);
-      currentCat = startingCat.name || 'Other';
-      let addedCats = startingCat.created ? 1 : 0;
+      const selectedFilter = sel.value;
+      let currentCat = selectedFilter !== '__ALL__' && selectedFilter !== '__NONE__' ? selectedFilter : '';
+      if(!currentCat){
+        const defaultCat = findCategoryByName('Other') || state.categories[0] || ensureCategory('Other').name || '';
+        currentCat = defaultCat;
+      }
+      if(currentCat) ensureCategory(currentCat);
+      let addedCats = 0;
       let addedItems = 0;
       let skippedItems = 0;
       const batchKeys = new Set();
-
       raw.split(/\r?\n/).forEach(line=>{
         let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, ''));
         if(!cleaned) return;
         if(cleaned.endsWith(':')){
           const catName = cleanText(cleaned.slice(0, -1));
           const result = ensureCategory(catName);
-          if(result.name){
-            currentCat = result.name;
-            if(result.created) addedCats++;
-          }
+          if(result.created) addedCats++;
+          if(result.name) currentCat = result.name;
           return;
         }
-        const catResult = ensureCategory(currentCat || 'Other');
-        const cat = catResult.name || 'Other';
-        if(catResult.created) addedCats++;
         const itemName = cleaned;
+        const cat = currentCat || '';
         const key = normalizeText(cat) + '|' + normalizeText(itemName);
-        if(batchKeys.has(key) || findItemInCategory(itemName, cat)){
+        const exists = state.items.find(i=> normalizeText(i.name)===normalizeText(itemName) && normalizeText(i.cat)===normalizeText(cat));
+        if(batchKeys.has(key) || exists){
           skippedItems++;
           return;
         }
-        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextPos(cat), checked:false, avgPrice:0 });
+        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextItemPosForCategory(cat), checked:false, avgPrice:0, storeIds:[] });
         batchKeys.add(key);
         addedItems++;
       });
-
       if(!addedCats && !addedItems && skippedItems){
         alert(`No new items added.\nSkipped ${skippedItems} duplicate item(s).`);
         return;
       }
-      manageSelectedCat = currentCat;
-      localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat);
-      ensurePositions();
       save();
-      renderAll();
+      drawManageItemsList();
+      renderBuild();
       alert(`Bulk setup complete.\nAdded categories: ${addedCats}\nAdded items: ${addedItems}\nSkipped duplicate items: ${skippedItems}`);
     };
-
     document.getElementById('btnBulkClear').onclick = ()=>{
       const box = document.getElementById('bulkSetupText');
-      if(box){ box.value = ''; box.focus(); }
+      if(box){ box.value=''; box.focus(); }
     };
+    cleanupManageItemDragArtifacts();
+  }
 
-    document.getElementById('btnWipe').onclick = ()=>{
-      const message = 'Wipe all grocery data stored in this browser?\n\nThis deletes your grocery list, categories, stores, quantities, checked items, run history, and last backup timestamp on this device.\n\nExport backup JSON first unless you are absolutely sure. This cannot be undone.\n\nContinue?';
-      if(confirm(message)){
-        state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
-        clearLastBackupAt();
-        save();
-        renderAll();
-      }
+  function renderManageBackup(target){
+    (target || viewManage).innerHTML = `
+      <section class="data-safety-panel" id="dataSafetyPanel" aria-labelledby="dataSafetyHeading">
+        <div class="data-safety-heading"><h3 id="dataSafetyHeading">Data Safety / Backup</h3><span class="pill">Local only</span></div>
+        <p class="muted data-safety-help">Export backup JSON before major changes, imports, or wiping this browser.</p>
+        <div class="data-safety-stats" aria-label="Backup and data summary">
+          <div><span>App version</span><strong data-backup-stat="version"></strong></div><div><span>Items</span><strong data-backup-stat="items"></strong></div>
+          <div><span>Categories</span><strong data-backup-stat="categories"></strong></div><div><span>Stores</span><strong data-backup-stat="stores"></strong></div>
+          <div><span>Committed runs</span><strong data-backup-stat="runs"></strong></div><div class="data-safety-last"><span>Last backup</span><strong data-backup-stat="last-backup"></strong></div>
+        </div>
+        <div class="controls data-safety-actions"><button class="btn" id="btnExport">Export backup JSON</button><input type="file" id="fileImport" accept="application/json" style="display:none" /><button class="btn" id="btnImport">Import JSON</button><button class="btn-danger right-controls" id="btnWipe">Wipe all data</button></div>
+      </section>`;
+    refreshDataSafetyPanel();
+    document.getElementById('btnExport').onclick = ()=>{
+      const stats = getDataSafetyStats(state); const exportedAt = new Date().toISOString();
+      const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [] };
+      const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grocery-tally-backup-v${APP_VERSION}-${backupDateStamp(new Date(exportedAt))}.json`; a.click(); setTimeout(()=> URL.revokeObjectURL(a.href), 0); setLastBackupAt(exportedAt); refreshDataSafetyPanel();
     };
+    const fileInput = document.getElementById('fileImport'); document.getElementById('btnImport').onclick = ()=> fileInput.click();
+    fileInput.onchange = async (e)=>{ const file=e.target.files[0]; if(!file) return; try{ const text=await file.text(); const data = JSON.parse(text); if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format'); if(!confirm(makeImportPreview(data))){ fileInput.value=''; return; } state = { title: data.title || state.title || 'Grocery Tally', categories: data.categories, stores: Array.isArray(data.stores) ? data.stores : [], items: data.items, runHistory: Array.isArray(data.runHistory) ? data.runHistory : [] }; normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!'); }catch(err){ alert('Import failed: '+err.message); } fileInput.value=''; };
+    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearLastBackupAt(); save(); renderAll(); } };
+  }
 
-    const ml = document.getElementById('manageList');
-    state.categories.forEach(cat=>{
-      const items = state.items.filter(i=>i.cat===cat).sort((a,b)=> a.pos-b.pos);
-      if(!items.length) return;
-      const sec=document.createElement('details');
-      sec.open = !closedCats.has(cat);
-      const sum=createCategorySummary(cat);
-      sec.appendChild(sum);
-      sec.addEventListener('toggle', ()=>{
-        if (sec.open) {
-          const container = document.getElementById('manageList');
-          const all = container ? Array.from(container.querySelectorAll('details')) : [];
-          all.forEach(d => { if (d !== sec && d.open) d.open = false; });
-          closedCats = new Set(state.categories);
-          closedCats.delete(cat);
-          scrollOpenedCategoryIntoView(sec);
-        } else {
-          closedCats.add(cat);
-        }
-        setClosedCats(closedCats);
+  function getItemPurchaseStats(item){
+    let purchaseCount = 0, totalQty = 0, estimatedSpend = 0, lastPurchased = '';
+    const runs = [];
+    (state.runHistory || []).forEach(run=>{
+      (run.items || []).forEach(rit=>{
+        if(cleanText(rit.itemId) !== cleanText(item.id)) return;
+        const qty = Math.max(0, Number(rit.qty) || 0);
+        if(qty <= 0) return;
+        purchaseCount += 1; totalQty += qty;
+        estimatedSpend += runItemEstimatedPrice(rit) || 0;
+        if(!lastPurchased || new Date(run.committedAt) > new Date(lastPurchased)) lastPurchased = run.committedAt;
+        runs.push({ run, rit });
       });
-
-      const list=document.createElement('div');
-      list.className='list';
-
-      items.forEach((it,idx)=>{
-        const shell = createSwipeShell(it.id);
-        const row=shell.content;
-        row.classList.add('manage-item-row');
-        row.dataset.index=idx;
-        const left=document.createElement('div'); left.className='left';
-        const right=document.createElement('div'); right.className='right';
-        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat;
-
-        const editPanel=document.createElement('div');
-        editPanel.className='item-edit-card';
-        editPanel.hidden=true;
-        editPanel.setAttribute('aria-label', `Edit ${it.name}`);
-
-        const editHeading=document.createElement('div'); editHeading.className='item-edit-heading';
-        const editTitle=document.createElement('strong'); editTitle.textContent=`Editing: ${it.name}`;
-        const editHelp=document.createElement('p'); editHelp.className='muted item-edit-help'; editHelp.textContent='Update the item details, then save.';
-        editHeading.appendChild(editTitle); editHeading.appendChild(editHelp);
-
-        const editGrid=document.createElement('div'); editGrid.className='item-edit-grid';
-        const nameField=document.createElement('label'); nameField.className='item-edit-field item-edit-name-field';
-        const nameLabel=document.createElement('span'); nameLabel.className='price-label'; nameLabel.textContent='Item name';
-        const input=document.createElement('input'); input.className='manage-name-input'; input.value=it.name; input.autocomplete='off';
-        nameField.appendChild(nameLabel); nameField.appendChild(input);
-
-        const categoryField=document.createElement('label'); categoryField.className='item-edit-field';
-        const categoryLabel=document.createElement('span'); categoryLabel.className='price-label'; categoryLabel.textContent='Category';
-        const categorySelect=document.createElement('select'); categorySelect.className='manage-category-select'; categorySelect.setAttribute('aria-label','Item category');
-        state.categories.forEach(categoryName=>{
-          const opt=document.createElement('option'); opt.value=categoryName; opt.textContent=categoryName; categorySelect.appendChild(opt);
-        });
-        categorySelect.value = it.cat;
-        categoryField.appendChild(categoryLabel); categoryField.appendChild(categorySelect);
-
-        const priceField=document.createElement('div'); priceField.className='item-edit-field item-edit-receipt-price';
-        const priceLabel=document.createElement('span'); priceLabel.className='price-label'; priceLabel.textContent='Receipt price';
-        const receiptPriceText=document.createElement('div'); receiptPriceText.className='receipt-price-summary';
-        const receiptPriceHelp=document.createElement('p'); receiptPriceHelp.className='muted item-edit-help'; receiptPriceHelp.textContent='Receipt entries from Run History create price history.';
-        function updateReceiptPriceInfo(){
-          receiptPriceText.textContent = receiptPriceSummaryText(it);
-        }
-        updateReceiptPriceInfo();
-        priceField.appendChild(priceLabel); priceField.appendChild(receiptPriceText); priceField.appendChild(receiptPriceHelp);
-
-        const storesField=document.createElement('fieldset'); storesField.className='item-edit-stores';
-        const storesLegend=document.createElement('legend'); storesLegend.textContent='Stores';
+    });
+    runs.sort((a,b)=> new Date(b.run.committedAt) - new Date(a.run.committedAt));
+    return { purchaseCount, totalQty, estimatedSpend: roundMoney(estimatedSpend), lastPurchased, recent: runs.slice(0,5) };
+  }
+  function openItemDetailsModal(itemId, startEdit){
+    const item = state.items.find(i=> cleanText(i.id) === cleanText(itemId));
+    if(!item) return;
+    const existing = document.getElementById('itemDetailsModal'); if(existing) existing.remove();
+    const stats = getItemPurchaseStats(item);
+    let editing = !!startEdit;
+    const modal = document.createElement('div');
+    modal.id = 'itemDetailsModal';
+    modal.className = 'item-details-modal';
+    function render(){
+      const stores = sortedStores();
+      const receiptAvg = getReceiptEstimatePrice(item);
+      modal.replaceChildren();
+      const backdrop = document.createElement('div');
+      backdrop.className = 'item-details-backdrop';
+      backdrop.onclick = ()=> modal.remove();
+      const card = document.createElement('div');
+      card.className = 'item-details-card';
+      const head = document.createElement('div'); head.className='item-details-head';
+      const title = document.createElement('strong'); title.textContent = item.name;
+      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> modal.remove();
+      head.appendChild(title); head.appendChild(closeBtn); card.appendChild(head);
+      modal.appendChild(backdrop); modal.appendChild(card);
+      if(editing){
+        const grid = document.createElement('div'); grid.className='item-edit-grid';
+        const nameLabel = document.createElement('label'); nameLabel.className='item-edit-field';
+        const ns = document.createElement('span'); ns.className='price-label'; ns.textContent='Item name';
+        const nameInput = document.createElement('input'); nameInput.id='detailsName'; nameInput.value=item.name;
+        nameLabel.appendChild(ns); nameLabel.appendChild(nameInput);
+        const catLabel = document.createElement('label'); catLabel.className='item-edit-field';
+        const cs = document.createElement('span'); cs.className='price-label'; cs.textContent='Category';
+        const catSelect = document.createElement('select'); catSelect.id='detailsCat';
+        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='No category'; catSelect.appendChild(noneOpt);
+        state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; if(item.cat===c) opt.selected=true; catSelect.appendChild(opt); });
+        catLabel.appendChild(cs); catLabel.appendChild(catSelect); grid.appendChild(nameLabel); grid.appendChild(catLabel); card.appendChild(grid);
+        const storesField = document.createElement('fieldset'); storesField.className='item-edit-stores';
+        const legend=document.createElement('legend'); legend.textContent='Stores'; storesField.appendChild(legend);
         const storesList=document.createElement('div'); storesList.className='item-edit-store-list';
-        const availableStores=sortedStores();
-        const selectedStoreIds=new Set(Array.isArray(it.storeIds) ? it.storeIds : []);
-        if(availableStores.length){
-          availableStores.forEach(store=>{
-            const storeLabel=document.createElement('label'); storeLabel.className='item-edit-store-option';
-            const storeCheckbox=document.createElement('input');
-            storeCheckbox.type='checkbox';
-            storeCheckbox.value=store.id;
-            storeCheckbox.checked=selectedStoreIds.has(store.id);
-            const storeName=document.createElement('span'); storeName.textContent=store.name;
-            storeLabel.appendChild(storeCheckbox);
-            storeLabel.appendChild(storeName);
-            storesList.appendChild(storeLabel);
-          });
-        } else {
-          const noStores=document.createElement('p'); noStores.className='muted item-edit-help'; noStores.textContent='No stores yet. Add stores in Manage → Stores to assign them here.';
-          storesList.appendChild(noStores);
-        }
-        storesField.appendChild(storesLegend); storesField.appendChild(storesList);
-
-        editGrid.appendChild(nameField);
-        editGrid.appendChild(categoryField);
-        editGrid.appendChild(priceField);
-        editGrid.appendChild(storesField);
-
-        const editActions=document.createElement('div'); editActions.className='item-edit-actions';
+        if(stores.length){
+          stores.forEach(st=>{ const label=document.createElement('label'); label.className='item-edit-store-option'; const c=document.createElement('input'); c.type='checkbox'; c.value=st.id; c.checked=(item.storeIds||[]).includes(st.id); const sp=document.createElement('span'); sp.textContent=st.name; label.appendChild(c); label.appendChild(sp); storesList.appendChild(label); });
+        } else { const p=document.createElement('p'); p.className='muted'; p.textContent='No stores assigned'; storesList.appendChild(p); }
+        storesField.appendChild(storesList); card.appendChild(storesField);
+        const actions=document.createElement('div'); actions.className='item-edit-actions';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
-        editActions.appendChild(saveBtn); editActions.appendChild(cancelBtn);
-        editPanel.appendChild(editHeading);
-        editPanel.appendChild(editGrid);
-        editPanel.appendChild(editActions);
-
-        const edit=document.createElement('button'); edit.className='btn'; edit.textContent='Edit';
-        const moveUp=document.createElement('button'); moveUp.type='button'; moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.setAttribute('aria-label', `Move ${it.name} up`);
-        const moveDown=document.createElement('button'); moveDown.type='button'; moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.setAttribute('aria-label', `Move ${it.name} down`);
-        const isFirst = idx === 0;
-        const isLast = idx === items.length - 1;
-        moveUp.disabled = isFirst;
-        moveDown.disabled = isLast;
-        moveUp.onclick = ()=>{
-          const previousScrollY = currentScrollY();
-          if(moveItemWithinCategory(it.id, -1)){
-            save();
-            rerenderItemViews();
-            restoreWindowScrollY(previousScrollY);
-          }
-        };
-        moveDown.onclick = ()=>{
-          const previousScrollY = currentScrollY();
-          if(moveItemWithinCategory(it.id, 1)){
-            save();
-            rerenderItemViews();
-            restoreWindowScrollY(previousScrollY);
-          }
-        };
-
-        row.appendChild(left);
-        left.appendChild(name);
-        left.appendChild(itemMeta);
-        row.appendChild(right);
-        if(manageItemReorderMode){
-          row.classList.add('reordering');
-          shell.wrap.classList.add('reorder-mode');
-          right.appendChild(moveUp);
-          right.appendChild(moveDown);
-        } else {
-          right.appendChild(edit);
-        }
-        function setItemDragEnabled(enabled){
-          row.draggable = false;
-        }
-        setItemDragEnabled(false);
-
-        function enterEdit(){
-          row.classList.add('editing');
-          shell.wrap.classList.remove('revealed');
-          setItemDragEnabled(false);
-          input.value = it.name;
-          updateReceiptPriceInfo();
-          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
-          const activeStoreIds = new Set(Array.isArray(it.storeIds) ? it.storeIds : []);
-          storesList.querySelectorAll('input[type="checkbox"]').forEach(checkbox=>{
-            checkbox.checked = activeStoreIds.has(checkbox.value);
-          });
-          editTitle.textContent=`Editing: ${it.name}`;
-          editPanel.hidden=false;
-          edit.style.display='none';
-          input.focus(); input.select();
-          scrollManageEditRowIntoView(editPanel);
-        }
-        function exitEdit(){
-          row.classList.remove('editing');
-          setItemDragEnabled(true);
-          editPanel.hidden=true;
-          updateReceiptPriceInfo();
-          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
-          edit.style.display='inline-block';
-          input.value = it.name;
-        }
-        edit.onclick = enterEdit;
-        cancelBtn.onclick = exitEdit;
-        [input, categorySelect].forEach(control=>{
-          control.addEventListener('keydown', (e)=>{
-            if(e.key==='Enter'){
-              e.preventDefault();
-              saveBtn.click();
-            } else if(e.key==='Escape'){
-              e.preventDefault();
-              cancelBtn.click();
-            }
-          });
-        });
-        storesList.addEventListener('keydown', (e)=>{
-          if(e.key==='Escape'){
-            e.preventDefault();
-            cancelBtn.click();
-          }
-        });
+        actions.appendChild(saveBtn); actions.appendChild(cancelBtn); card.appendChild(actions);
+        cancelBtn.onclick = ()=>{ editing = false; render(); };
         saveBtn.onclick = ()=>{
-          const nv = input.value.trim();
-          if(!nv){ alert('Item name cannot be empty.'); return }
-          const selectedCat = state.categories.includes(categorySelect.value) ? categorySelect.value : it.cat;
-          const oldCat = it.cat;
-          const categoryChanged = selectedCat && selectedCat !== oldCat;
-          const checkedStoreIds = Array.from(storesList.querySelectorAll('input[type="checkbox"]:checked')).map(checkbox => checkbox.value);
-          it.name = nv;
-          it.storeIds = checkedStoreIds;
-          if(categoryChanged){
-            moveItemToCategory(it.id, selectedCat, itemsInCategory(selectedCat).filter(x=>x.id!==it.id).length, true);
+          const nv = cleanText(nameInput.value);
+          if(!nv){ alert('Item name cannot be empty.'); return; }
+          const oldNorm = normalizeText(item.name);
+          const newNorm = normalizeText(nv);
+          if(newNorm !== oldNorm){
+            const conflict = state.items.find(i=>i.id!==item.id && normalizeText(i.name)===newNorm);
+            if(conflict){ alert('That item name already exists.'); return; }
           }
-          normalizeStateShape();
-          save();
-          name.textContent = it.name;
-          itemMeta.textContent = it.cat;
-          editTitle.textContent = `Editing: ${it.name}`;
-          updateReceiptPriceInfo();
-          categorySelect.value = state.categories.includes(it.cat) ? it.cat : (state.categories[0] || '');
-          if(categoryChanged){
-            renderManage();
-          } else {
-            exitEdit();
-          }
-          renderBuild();
-          renderShop();
-          renderInsights();
+          item.name = nv; item.cat = catSelect.value || '';
+          item.storeIds = Array.from(storesList.querySelectorAll('input:checked')).map(el=>el.value);
+          save(); renderBuild(); renderManage(); renderShop(); renderInsights();
+          editing = false; render();
         };
-
-        list.appendChild(shell.wrap);
-        list.appendChild(editPanel);
-      });
-
-      sec.appendChild(list);
-      ml.appendChild(sec);
-    });
-    cleanupManageItemDragArtifacts();
+      } else {
+        function statRow(label, value){
+          const row=document.createElement('div'); row.className='item';
+          const left=document.createElement('div'); left.className='left';
+          const n=document.createElement('div'); n.className='name'; n.textContent=label;
+          const c=document.createElement('div'); c.className='cat'; c.textContent=value;
+          left.appendChild(n); left.appendChild(c); row.appendChild(left); return row;
+        }
+        const list=document.createElement('div'); list.className='list';
+        const storeText = (item.storeIds||[]).map(id=> (state.stores||[]).find(s=>s.id===id)?.name).filter(Boolean).join(', ') || 'No stores assigned';
+        list.appendChild(statRow('Category', item.cat || 'No category'));
+        list.appendChild(statRow('Stores', storeText));
+        list.appendChild(statRow('Receipt average', receiptAvg>0?formatMoney(receiptAvg):'No receipt price history yet'));
+        list.appendChild(statRow('Receipt entries', String(validPriceEntries(item).length || 0)));
+        list.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
+        list.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
+        list.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
+        list.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
+        card.appendChild(list);
+        const spacer=document.createElement('div'); spacer.className='spacer'; card.appendChild(spacer);
+        const h=document.createElement('strong'); h.textContent='Recent history'; card.appendChild(h);
+        const recent=document.createElement('div'); recent.className='list';
+        if(stats.recent.length){
+          stats.recent.forEach(({run,rit})=>{
+            const priceText = runItemReceiptTotal(rit)>0 ? `Receipt ${formatMoney(runItemReceiptTotal(rit))}` : 'No receipt price';
+            recent.appendChild(statRow(formatDateLabel(run.committedAt), `Qty ${rit.qty} · ${priceText}`));
+          });
+        } else {
+          const p=document.createElement('p'); p.className='muted'; p.textContent='No recent purchases.'; recent.appendChild(p);
+        }
+        card.appendChild(recent);
+        const actions=document.createElement('div'); actions.className='item-edit-actions';
+        const editBtn=document.createElement('button'); editBtn.className='btn-accent'; editBtn.textContent='Edit';
+        editBtn.onclick = ()=>{ editing = true; render(); };
+        actions.appendChild(editBtn); card.appendChild(actions);
+      }
+    }
+    render();
+    document.body.appendChild(modal);
   }
 
   // ----- Manage Stores -----

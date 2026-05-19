@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.54.0 — Manage Items redesign and item details popup
+
+- Redesigned Manage → Items into a flat item-first browser with live search/add behavior and category filtering.
+- Added an item Details popup with read-only item history/receipt summaries and edit mode for item name, category, and store assignments.
+- Opened the Details popup automatically after creating a new item from Manage → Items.
+- Moved Data Safety / Backup into its own Manage → Backup tab while preserving existing backup/import/export behavior.
+- Simplified Build List → All items rows by removing the Last Run column and enlarging item text, quantity text, and plus/minus controls for faster list building.
+- Preserved receipt-only price estimates, `priceEntries`, Last run, Suggested, Shopping Mode, Insights, Run History, localStorage keys, and JSON backup compatibility.
+
 ## v1.53.3 — All Items estimate pill position fix
 
 - Fixed the Build List All items estimate pill position so it appears above search results.
