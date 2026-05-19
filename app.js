@@ -2430,6 +2430,11 @@
     cleanupManageItemDragArtifacts();
     ensurePositions();
     const root = (target || viewManage);
+    const selectedCategoryValue = (manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) ? manageSelectedCat : '__ALL__';
+    const hasSearchQuery = !!normalizeText(manageItemsQuery || '');
+    const isSpecificCategorySelected = selectedCategoryValue !== '__ALL__' && selectedCategoryValue !== '__NONE__' && state.categories.includes(selectedCategoryValue);
+    const canUseReorderForCurrentView = isSpecificCategorySelected && !hasSearchQuery;
+    if(manageItemReorderMode && !canUseReorderForCurrentView) manageItemReorderMode = false;
     root.innerHTML = `
       <div class="grid">
         <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
@@ -2439,22 +2444,22 @@
       </div>
       <div class="spacer"></div>
       <div class="manage-reorder-toolbar">
-        <button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>
-        <span class="muted manage-reorder-help">${manageItemReorderMode ? 'Use arrows to move items within their current category.' : 'Use reorder mode for reliable mobile item sorting.'}</span>
+        ${isSpecificCategorySelected ? `<button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>` : ''}
+        <span class="muted manage-reorder-help">${!isSpecificCategorySelected ? 'Select a category to reorder items.' : (hasSearchQuery ? 'Clear search to reorder this category.' : (manageItemReorderMode ? 'Use arrows to move items within this category.' : 'Use reorder mode for reliable mobile item sorting.'))}</span>
       </div>
       <div class="spacer"></div>
       <div id="manageItemQuickAdd"></div>
       <div id="manageList" class="${manageItemReorderMode ? 'reorder-mode' : ''}"></div>`;
 
     const reorderToggle = document.getElementById('btnToggleItemReorder');
-    if(reorderToggle) reorderToggle.onclick = ()=>{ manageItemReorderMode = !manageItemReorderMode; renderManageItems(target); };
+    if(reorderToggle) reorderToggle.onclick = ()=>{ if(canUseReorderForCurrentView){ manageItemReorderMode = !manageItemReorderMode; renderManageItems(target); } };
 
     const sel=document.getElementById('newItemCat');
     sel.innerHTML = '<option value="__ALL__">All categories</option><option value="__NONE__">No category</option>';
     state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
     if(manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) sel.value = manageSelectedCat;
     else sel.value='__ALL__';
-    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); drawManageItemsList(); };
+    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); if(manageItemReorderMode){ manageItemReorderMode = false; } renderManageItems(target); };
 
     const input = document.getElementById('newItemName');
     input.value = manageItemsQuery;
@@ -2511,7 +2516,7 @@
         const details=document.createElement('button'); details.className='btn'; details.textContent='Details';
         details.onclick=()=> openItemDetailsModal(it.id, false);
         right.appendChild(details);
-        if(manageItemReorderMode){
+        if(manageItemReorderMode && canUseReorderForCurrentView){
           const moveUp=document.createElement('button'); moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.disabled = idx===0;
           const moveDown=document.createElement('button'); moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.disabled = idx===filtered.length-1;
           moveUp.onclick=()=>{ if(moveItemWithinCategory(it.id,-1)){ save(); drawManageItemsList(); } };
