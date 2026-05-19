@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.53.3"; // All Items estimate pill position fix
+  let APP_VERSION = "1.54.0"; // All Items estimate pill position fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
