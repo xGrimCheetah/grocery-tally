@@ -1658,6 +1658,11 @@
   function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name)) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name))}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
+  function nextItemPosForCategory(cat){
+    const normalizedCat = cleanText(cat || '');
+    const list = state.items.filter(i => cleanText(i && i.cat) === normalizedCat);
+    return list.length ? Math.max(...list.map(i => Number(i && i.pos) || 0)) + 1 : 0;
+  }
   function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
   function moveItemWithinCategory(itemId, direction){
@@ -2449,6 +2454,17 @@
       </div>
       <div class="spacer"></div>
       <div id="manageItemQuickAdd"></div>
+      <details class="bulk-tools">
+        <summary>Bulk setup tools</summary>
+        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category when one is filtered, otherwise the app default category.</p>
+        <textarea id="bulkSetupText" placeholder="Produce:\nBananas\nApples\n\nDairy:\nMilk\nYogurt"></textarea>
+        <div class="spacer"></div>
+        <div class="controls">
+          <button class="btn-accent" id="btnBulkSetup">Add pasted items/categories</button>
+          <button class="btn" id="btnBulkClear">Clear paste box</button>
+        </div>
+      </details>
+      <div class="spacer"></div>
       <div id="manageList" class="${manageItemReorderMode ? 'reorder-mode' : ''}"></div>`;
 
     const reorderToggle = document.getElementById('btnToggleItemReorder');
@@ -2487,7 +2503,7 @@
         quick.onclick = ()=>{
           const selected = sel.value;
           const newCat = selected === '__ALL__' ? '' : (selected === '__NONE__' ? '' : selected);
-          const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextPos(newCat || (state.categories[0] || 'Other')), checked:false, avgPrice:0, storeIds:[] };
+          const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, storeIds:[] };
           state.items.push(item);
           save();
           manageItemsQuery = '';
@@ -2527,6 +2543,61 @@
       });
     }
     drawManageItemsList();
+
+    document.getElementById('btnBulkSetup').onclick = ()=>{
+      const box = document.getElementById('bulkSetupText');
+      if(!box) return;
+      const raw = box.value || '';
+      if(!raw.trim()){
+        alert('Paste one or more items first.');
+        return;
+      }
+      const selectedFilter = sel.value;
+      let currentCat = selectedFilter !== '__ALL__' && selectedFilter !== '__NONE__' ? selectedFilter : '';
+      if(!currentCat){
+        const defaultCat = findCategoryByName('Other') || state.categories[0] || ensureCategory('Other').name || '';
+        currentCat = defaultCat;
+      }
+      if(currentCat) ensureCategory(currentCat);
+      let addedCats = 0;
+      let addedItems = 0;
+      let skippedItems = 0;
+      const batchKeys = new Set();
+      raw.split(/\r?\n/).forEach(line=>{
+        let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, ''));
+        if(!cleaned) return;
+        if(cleaned.endsWith(':')){
+          const catName = cleanText(cleaned.slice(0, -1));
+          const result = ensureCategory(catName);
+          if(result.created) addedCats++;
+          if(result.name) currentCat = result.name;
+          return;
+        }
+        const itemName = cleaned;
+        const cat = currentCat || '';
+        const key = normalizeText(cat) + '|' + normalizeText(itemName);
+        const exists = state.items.find(i=> normalizeText(i.name)===normalizeText(itemName) && normalizeText(i.cat)===normalizeText(cat));
+        if(batchKeys.has(key) || exists){
+          skippedItems++;
+          return;
+        }
+        state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextItemPosForCategory(cat), checked:false, avgPrice:0, storeIds:[] });
+        batchKeys.add(key);
+        addedItems++;
+      });
+      if(!addedCats && !addedItems && skippedItems){
+        alert(`No new items added.\nSkipped ${skippedItems} duplicate item(s).`);
+        return;
+      }
+      save();
+      drawManageItemsList();
+      renderBuild();
+      alert(`Bulk setup complete.\nAdded categories: ${addedCats}\nAdded items: ${addedItems}\nSkipped duplicate items: ${skippedItems}`);
+    };
+    document.getElementById('btnBulkClear').onclick = ()=>{
+      const box = document.getElementById('bulkSetupText');
+      if(box){ box.value=''; box.focus(); }
+    };
     cleanupManageItemDragArtifacts();
   }
 
