@@ -2429,7 +2429,8 @@
     clearItemDragState();
     cleanupManageItemDragArtifacts();
     ensurePositions();
-    (target || viewManage).innerHTML = `
+    const root = (target || viewManage);
+    root.innerHTML = `
       <div class="grid">
         <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
           <input id="newItemName" class="manage-items-search-input" placeholder="Search or add an item" style="flex:2" />
@@ -2453,68 +2454,74 @@
     state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
     if(manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) sel.value = manageSelectedCat;
     else sel.value='__ALL__';
-    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); renderManageItems(target); };
+    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); drawManageItemsList(); };
 
     const input = document.getElementById('newItemName');
     input.value = manageItemsQuery;
-    input.oninput = ()=>{ manageItemsQuery = input.value || ''; renderManageItems(target); };
+    input.oninput = ()=>{ manageItemsQuery = input.value || ''; drawManageItemsList(); };
     input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){
       const btn = document.getElementById('manageQuickAddBtn');
       if(btn){ e.preventDefault(); btn.click(); }
     }});
 
-    const queryNorm = normalizeText(manageItemsQuery || '');
-    const addName = cleanText(manageItemsQuery || '');
-    const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
-    if(addName && !duplicate){
-      const quick = document.createElement('button');
-      quick.id = 'manageQuickAddBtn';
-      quick.type = 'button';
-      quick.className = 'build-quick-add-option';
-      quick.textContent = `Add “${addName}”`;
-      quick.onclick = ()=>{
-        const selected = sel.value;
-        const newCat = selected === '__ALL__' ? '' : (selected === '__NONE__' ? '' : selected);
-        const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextPos(newCat || (state.categories[0] || 'Other')), checked:false, avgPrice:0, storeIds:[] };
-        state.items.push(item);
-        save();
-        manageItemsQuery = '';
-        renderManage();
-        renderBuild();
-        openItemDetailsModal(item.id, true);
-      };
-      document.getElementById('manageItemQuickAdd').appendChild(quick);
-    }
-
-    const ml = document.getElementById('manageList');
-    let filtered = state.items.slice();
-    if(queryNorm) filtered = filtered.filter(it=> normalizeText(it.name).includes(queryNorm));
-    const selected = sel.value;
-    if(selected === '__NONE__') filtered = filtered.filter(it=> !cleanText(it.cat));
-    else if(selected !== '__ALL__') filtered = filtered.filter(it=> it.cat === selected);
-    filtered.sort((a,b)=> (Number(a.pos)||0) - (Number(b.pos)||0));
-
-    filtered.forEach((it, idx)=>{
-      const shell = createSwipeShell(it.id);
-      const row=shell.content;
-      row.classList.add('manage-item-row');
-      const left=document.createElement('div'); left.className='left';
-      const right=document.createElement('div'); right.className='right';
-      const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-      const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat || 'No category';
-      left.appendChild(name); left.appendChild(itemMeta);
-      const details=document.createElement('button'); details.className='btn'; details.textContent='Details';
-      details.onclick=()=> openItemDetailsModal(it.id, false);
-      right.appendChild(details);
-      if(manageItemReorderMode){
-        const moveUp=document.createElement('button'); moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.disabled = idx===0;
-        const moveDown=document.createElement('button'); moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.disabled = idx===filtered.length-1;
-        moveUp.onclick=()=>{ if(moveItemWithinCategory(it.id,-1)){ save(); renderManageItems(target);} };
-        moveDown.onclick=()=>{ if(moveItemWithinCategory(it.id,1)){ save(); renderManageItems(target);} };
-        right.prepend(moveDown); right.prepend(moveUp);
+    function drawManageItemsList(){
+      const quickWrap = document.getElementById('manageItemQuickAdd');
+      const ml = document.getElementById('manageList');
+      if(!quickWrap || !ml) return;
+      quickWrap.replaceChildren();
+      ml.replaceChildren();
+      const queryNorm = normalizeText(manageItemsQuery || '');
+      const addName = cleanText(manageItemsQuery || '');
+      const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
+      if(addName && !duplicate){
+        const quick = document.createElement('button');
+        quick.id = 'manageQuickAddBtn';
+        quick.type = 'button';
+        quick.className = 'build-quick-add-option';
+        quick.textContent = `Add “${addName}”`;
+        quick.onclick = ()=>{
+          const selected = sel.value;
+          const newCat = selected === '__ALL__' ? '' : (selected === '__NONE__' ? '' : selected);
+          const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextPos(newCat || (state.categories[0] || 'Other')), checked:false, avgPrice:0, storeIds:[] };
+          state.items.push(item);
+          save();
+          manageItemsQuery = '';
+          input.value = '';
+          drawManageItemsList();
+          renderBuild();
+          openItemDetailsModal(item.id, true);
+        };
+        quickWrap.appendChild(quick);
       }
-      row.appendChild(left); row.appendChild(right); ml.appendChild(shell.wrap);
-    });
+      let filtered = state.items.slice();
+      if(queryNorm) filtered = filtered.filter(it=> normalizeText(it.name).includes(queryNorm));
+      const selected = sel.value;
+      if(selected === '__NONE__') filtered = filtered.filter(it=> !cleanText(it.cat));
+      else if(selected !== '__ALL__') filtered = filtered.filter(it=> it.cat === selected);
+      filtered.sort((a,b)=> (Number(a.pos)||0) - (Number(b.pos)||0));
+      filtered.forEach((it, idx)=>{
+        const shell = createSwipeShell(it.id);
+        const row=shell.content;
+        row.classList.add('manage-item-row');
+        const left=document.createElement('div'); left.className='left';
+        const right=document.createElement('div'); right.className='right';
+        const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
+        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat || 'No category';
+        left.appendChild(name); left.appendChild(itemMeta);
+        const details=document.createElement('button'); details.className='btn'; details.textContent='Details';
+        details.onclick=()=> openItemDetailsModal(it.id, false);
+        right.appendChild(details);
+        if(manageItemReorderMode){
+          const moveUp=document.createElement('button'); moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.disabled = idx===0;
+          const moveDown=document.createElement('button'); moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.disabled = idx===filtered.length-1;
+          moveUp.onclick=()=>{ if(moveItemWithinCategory(it.id,-1)){ save(); drawManageItemsList(); } };
+          moveDown.onclick=()=>{ if(moveItemWithinCategory(it.id,1)){ save(); drawManageItemsList(); } };
+          right.prepend(moveDown); right.prepend(moveUp);
+        }
+        row.appendChild(left); row.appendChild(right); ml.appendChild(shell.wrap);
+      });
+    }
+    drawManageItemsList();
     cleanupManageItemDragArtifacts();
   }
 
@@ -2570,40 +2577,90 @@
     function render(){
       const stores = sortedStores();
       const receiptAvg = getReceiptEstimatePrice(item);
-      modal.innerHTML = `<div class="item-details-backdrop"></div><div class="item-details-card"><div class="item-details-head"><strong>${item.name}</strong><button class="btn" id="closeDetails">Close</button></div>${editing ? `
-      <div class="item-edit-grid"><label class="item-edit-field"><span class="price-label">Item name</span><input id="detailsName" value="${item.name.replace(/"/g,'&quot;')}"></label>
-      <label class="item-edit-field"><span class="price-label">Category</span><select id="detailsCat"><option value="">No category</option>${state.categories.map(c=>`<option value="${c}" ${item.cat===c?'selected':''}>${c}</option>`).join('')}</select></label></div>
-      <fieldset class="item-edit-stores"><legend>Stores</legend><div class="item-edit-store-list">${stores.length?stores.map(st=>`<label class="item-edit-store-option"><input type="checkbox" value="${st.id}" ${(item.storeIds||[]).includes(st.id)?'checked':''}><span>${st.name}</span></label>`).join(''):'<p class="muted">No stores assigned</p>'}</div></fieldset>
-      <div class="item-edit-actions"><button class="btn-accent" id="saveDetails">Save</button><button class="btn" id="cancelDetails">Cancel</button></div>` : `
-      <div class="list">
-        <div class="item"><div class="left"><div class="name">Category</div><div class="cat">${item.cat || 'No category'}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Stores</div><div class="cat">${(item.storeIds||[]).map(id=> (state.stores||[]).find(s=>s.id===id)?.name).filter(Boolean).join(', ') || 'No stores assigned'}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Receipt average</div><div class="cat">${receiptAvg>0?formatMoney(receiptAvg):'No receipt price history yet'}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Receipt entries</div><div class="cat">${validPriceEntries(item).length || 0}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Purchase count</div><div class="cat">${stats.purchaseCount}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Last purchased</div><div class="cat">${stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Total quantity purchased</div><div class="cat">${stats.totalQty}</div></div></div>
-        <div class="item"><div class="left"><div class="name">Estimated spend</div><div class="cat">${stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'}</div></div></div>
-      </div>
-      <div class="spacer"></div><strong>Recent history</strong><div class="list">${stats.recent.length?stats.recent.map(({run,rit})=>`<div class="item"><div class="left"><div class="name">${formatDateLabel(run.committedAt)}</div><div class="cat">Qty ${rit.qty} · ${runItemReceiptTotal(rit)>0?`Receipt ${formatMoney(runItemReceiptTotal(rit))}`:'No receipt price'}</div></div></div>`).join(''):'<p class="muted">No recent purchases.</p>'}</div>
-      <div class="item-edit-actions"><button class="btn-accent" id="editDetails">Edit</button></div>`}
-      </div>`;
-      modal.querySelector('#closeDetails').onclick = ()=> modal.remove();
-      modal.querySelector('.item-details-backdrop').onclick = ()=> modal.remove();
+      modal.replaceChildren();
+      const backdrop = document.createElement('div');
+      backdrop.className = 'item-details-backdrop';
+      backdrop.onclick = ()=> modal.remove();
+      const card = document.createElement('div');
+      card.className = 'item-details-card';
+      const head = document.createElement('div'); head.className='item-details-head';
+      const title = document.createElement('strong'); title.textContent = item.name;
+      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> modal.remove();
+      head.appendChild(title); head.appendChild(closeBtn); card.appendChild(head);
+      modal.appendChild(backdrop); modal.appendChild(card);
       if(editing){
-        modal.querySelector('#cancelDetails').onclick = ()=>{ editing = false; render(); };
-        modal.querySelector('#saveDetails').onclick = ()=>{
-          const nv = cleanText(modal.querySelector('#detailsName').value);
+        const grid = document.createElement('div'); grid.className='item-edit-grid';
+        const nameLabel = document.createElement('label'); nameLabel.className='item-edit-field';
+        const ns = document.createElement('span'); ns.className='price-label'; ns.textContent='Item name';
+        const nameInput = document.createElement('input'); nameInput.id='detailsName'; nameInput.value=item.name;
+        nameLabel.appendChild(ns); nameLabel.appendChild(nameInput);
+        const catLabel = document.createElement('label'); catLabel.className='item-edit-field';
+        const cs = document.createElement('span'); cs.className='price-label'; cs.textContent='Category';
+        const catSelect = document.createElement('select'); catSelect.id='detailsCat';
+        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='No category'; catSelect.appendChild(noneOpt);
+        state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; if(item.cat===c) opt.selected=true; catSelect.appendChild(opt); });
+        catLabel.appendChild(cs); catLabel.appendChild(catSelect); grid.appendChild(nameLabel); grid.appendChild(catLabel); card.appendChild(grid);
+        const storesField = document.createElement('fieldset'); storesField.className='item-edit-stores';
+        const legend=document.createElement('legend'); legend.textContent='Stores'; storesField.appendChild(legend);
+        const storesList=document.createElement('div'); storesList.className='item-edit-store-list';
+        if(stores.length){
+          stores.forEach(st=>{ const label=document.createElement('label'); label.className='item-edit-store-option'; const c=document.createElement('input'); c.type='checkbox'; c.value=st.id; c.checked=(item.storeIds||[]).includes(st.id); const sp=document.createElement('span'); sp.textContent=st.name; label.appendChild(c); label.appendChild(sp); storesList.appendChild(label); });
+        } else { const p=document.createElement('p'); p.className='muted'; p.textContent='No stores assigned'; storesList.appendChild(p); }
+        storesField.appendChild(storesList); card.appendChild(storesField);
+        const actions=document.createElement('div'); actions.className='item-edit-actions';
+        const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save';
+        const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
+        actions.appendChild(saveBtn); actions.appendChild(cancelBtn); card.appendChild(actions);
+        cancelBtn.onclick = ()=>{ editing = false; render(); };
+        saveBtn.onclick = ()=>{
+          const nv = cleanText(nameInput.value);
           if(!nv){ alert('Item name cannot be empty.'); return; }
-          const conflict = state.items.find(i=>i.id!==item.id && normalizeText(i.name)===normalizeText(nv));
-          if(conflict){ alert('That item name already exists.'); return; }
-          item.name = nv; item.cat = modal.querySelector('#detailsCat').value || '';
-          item.storeIds = Array.from(modal.querySelectorAll('.item-edit-store-option input:checked')).map(el=>el.value);
+          const oldNorm = normalizeText(item.name);
+          const newNorm = normalizeText(nv);
+          if(newNorm !== oldNorm){
+            const conflict = state.items.find(i=>i.id!==item.id && normalizeText(i.name)===newNorm);
+            if(conflict){ alert('That item name already exists.'); return; }
+          }
+          item.name = nv; item.cat = catSelect.value || '';
+          item.storeIds = Array.from(storesList.querySelectorAll('input:checked')).map(el=>el.value);
           save(); renderBuild(); renderManage(); renderShop(); renderInsights();
           editing = false; render();
         };
       } else {
-        modal.querySelector('#editDetails').onclick = ()=>{ editing = true; render(); };
+        function statRow(label, value){
+          const row=document.createElement('div'); row.className='item';
+          const left=document.createElement('div'); left.className='left';
+          const n=document.createElement('div'); n.className='name'; n.textContent=label;
+          const c=document.createElement('div'); c.className='cat'; c.textContent=value;
+          left.appendChild(n); left.appendChild(c); row.appendChild(left); return row;
+        }
+        const list=document.createElement('div'); list.className='list';
+        const storeText = (item.storeIds||[]).map(id=> (state.stores||[]).find(s=>s.id===id)?.name).filter(Boolean).join(', ') || 'No stores assigned';
+        list.appendChild(statRow('Category', item.cat || 'No category'));
+        list.appendChild(statRow('Stores', storeText));
+        list.appendChild(statRow('Receipt average', receiptAvg>0?formatMoney(receiptAvg):'No receipt price history yet'));
+        list.appendChild(statRow('Receipt entries', String(validPriceEntries(item).length || 0)));
+        list.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
+        list.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
+        list.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
+        list.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
+        card.appendChild(list);
+        const spacer=document.createElement('div'); spacer.className='spacer'; card.appendChild(spacer);
+        const h=document.createElement('strong'); h.textContent='Recent history'; card.appendChild(h);
+        const recent=document.createElement('div'); recent.className='list';
+        if(stats.recent.length){
+          stats.recent.forEach(({run,rit})=>{
+            const priceText = runItemReceiptTotal(rit)>0 ? `Receipt ${formatMoney(runItemReceiptTotal(rit))}` : 'No receipt price';
+            recent.appendChild(statRow(formatDateLabel(run.committedAt), `Qty ${rit.qty} · ${priceText}`));
+          });
+        } else {
+          const p=document.createElement('p'); p.className='muted'; p.textContent='No recent purchases.'; recent.appendChild(p);
+        }
+        card.appendChild(recent);
+        const actions=document.createElement('div'); actions.className='item-edit-actions';
+        const editBtn=document.createElement('button'); editBtn.className='btn-accent'; editBtn.textContent='Edit';
+        editBtn.onclick = ()=>{ editing = true; render(); };
+        actions.appendChild(editBtn); card.appendChild(actions);
       }
     }
     render();
