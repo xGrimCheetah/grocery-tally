@@ -466,6 +466,10 @@
   function groupBy(arr, key){ return arr.reduce((acc,x)=>{ (acc[x[key]] ||= []).push(x); return acc },{}) }
   function cleanText(str){ return (str || '').trim().replace(/\s+/g, ' ') }
   function normalizeText(str){ return cleanText(str).toLowerCase() }
+  function categoryDisplayName(cat){
+    const label = cleanText(cat || '');
+    return label || 'No category';
+  }
   function compareStores(a,b){
     const ap = Number.isFinite(Number(a && a.pos)) ? Number(a.pos) : 1e9;
     const bp = Number.isFinite(Number(b && b.pos)) ? Number(b.pos) : 1e9;
@@ -1983,7 +1987,7 @@
     function appendBuildCategoryHeader(container, cat){
       const header = document.createElement('div');
       header.className = 'build-current-cat';
-      header.textContent = cat || 'Other';
+      header.textContent = categoryDisplayName(cat);
       container.appendChild(header);
     }
 
@@ -2284,7 +2288,7 @@
 
       const heading=document.createElement('div');
       heading.className='shop-cat-heading';
-      heading.textContent=cat;
+      heading.textContent=categoryDisplayName(cat);
       block.appendChild(heading);
 
       const list=document.createElement('div');
