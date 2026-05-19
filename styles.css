@@ -49,6 +49,10 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .build-flat-list.build-letter-focused .swipe-wrap.build-letter-match{opacity:1;filter:none}
 .alpha-buttons button.selected{background:var(--accent);color:#052e16}
 .build-flat-list .item{padding:6px 8px;min-height:44px}
+.build-all-results .item,.build-current-list .item{min-height:52px;padding:10px}
+.build-all-results .name,.build-current-list .name{font-size:1.08rem;font-weight:700}
+.build-all-results .qty,.build-current-list .qty{font-size:1.05rem;min-width:54px}
+.build-all-results .right .btn,.build-all-results .right .btn-accent,.build-current-list .right .btn,.build-current-list .right .btn-accent{min-height:44px;min-width:52px;padding:10px 14px}
 .build-flat-list .item .left{gap:8px;flex:1 1 0}
 .build-flat-list .name{line-height:1.15}
 .build-item-text{min-width:0}
@@ -194,6 +198,10 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 #manageList.reorder-mode .swipe-trash{display:none}
 #manageList.reorder-mode .swipe-content{transform:none!important}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
+.item-details-modal{position:fixed;inset:0;z-index:120}
+.item-details-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.65)}
+.item-details-card{position:relative;max-width:760px;margin:5vh auto;background:#0b1220;border:1px solid #243042;border-radius:14px;padding:12px;max-height:90vh;overflow:auto}
+.item-details-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
 .list .swipe-wrap{margin-top:0}
 .swipe-content{position:relative;z-index:1;transition:transform .18s ease;touch-action:pan-y}
 .swipe-wrap.revealed .swipe-content{transform:translateX(-74px)}
