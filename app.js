@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.54.2"; // Manage Items search and A–Z polish
+  let APP_VERSION = "1.54.3"; // Manage Items Clear button and bottom A–Z sticky fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1516,6 +1516,22 @@
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
+  function scrollElementAboveBottomControl(target, nav, behavior){
+    if(!target) return;
+    const runScroll = ()=>{
+      try{
+        const navHeight = nav ? (nav.getBoundingClientRect().height || 0) : 0;
+        const safeBottom = 8 + getKeyboardLift();
+        const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
+        const maxVisibleTop = window.pageYOffset + window.innerHeight - navHeight - safeBottom - 36;
+        const nextTop = Math.min(targetTop, Math.max(window.pageYOffset, maxVisibleTop));
+        window.scrollTo({ top: Math.max(0, nextTop), behavior: behavior || 'smooth' });
+      }catch(e){
+        target.scrollIntoView(true);
+      }
+    };
+    try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
+  }
   function applyBuildLetterFocus(){
     const list = document.getElementById('buildList');
     const nav = document.getElementById('buildAlphaButtons');
@@ -2412,7 +2428,7 @@ Yogurt"></textarea>
         </div>
       </details>
       <div class="spacer"></div>
-      <div id="manageQuickJump" class="alpha-nav" style="display:none" aria-label="Manage Items alphabet quick jump">
+      <div id="manageQuickJump" class="alpha-nav manage-search-nav" style="display:none" aria-label="Manage Items alphabet quick jump">
         <div id="manageAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
       </div>
       <div id="manageList"></div>`;
@@ -2465,7 +2481,7 @@ Yogurt"></textarea>
       const queryNorm = normalizeText(manageItemsQuery || '');
       const addName = cleanText(manageItemsQuery || '');
       const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
-      clearBtn.style.visibility = manageItemsQuery ? 'visible' : 'hidden';
+      clearBtn.disabled = !manageItemsQuery;
       if(addName && !duplicate){
         const quick = document.createElement('button');
         quick.id = 'manageQuickAddBtn'; quick.type = 'button'; quick.className = 'build-quick-add-option';
@@ -2494,7 +2510,7 @@ Yogurt"></textarea>
           jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', false));
           applyManageLetterFocus();
           const target = document.getElementById('newItemName');
-          if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+          if(target) scrollElementAboveBottomControl(target, jump, 'smooth');
         };
         jumpButtons.appendChild(topBtn);
         letters.forEach(letter=>{
@@ -2509,7 +2525,7 @@ Yogurt"></textarea>
             jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', btn.dataset.manageLetter === letter));
             applyManageLetterFocus();
             const target = document.getElementById(`manage-letter-${letter === '#' ? 'num' : letter}`);
-            if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+            if(target) scrollElementAboveBottomControl(target, jump, 'smooth');
           };
           jumpButtons.appendChild(b);
         });
@@ -2537,6 +2553,8 @@ Yogurt"></textarea>
         right.appendChild(details); row.appendChild(left); row.appendChild(right); ml.appendChild(row);
       });
       applyManageLetterFocus();
+      const jumpHeight = showJump ? (jump.getBoundingClientRect().height || 0) : 0;
+      try{ document.documentElement.style.setProperty('--manage-nav-space', Math.ceil(jumpHeight + 32) + 'px'); }catch(e){}
     }
     drawManageItemsList();
 
