@@ -36,6 +36,7 @@
   let runHistoryShowAll = false;
   const runHistoryExpandedIds = new Set();
   let runHistoryReceiptEditId = '';
+  let manageNavResizeListenersAttached = false;
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -1529,6 +1530,23 @@
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
+  function updateManageNavSpace(){
+    const jump = document.getElementById('manageQuickJump');
+    const isVisible = !!(jump && jump.style.display !== 'none');
+    const height = isVisible ? (jump.getBoundingClientRect().height || 0) : 0;
+    try{ document.documentElement.style.setProperty('--manage-nav-space', Math.ceil(height + (isVisible ? 32 : 0)) + 'px'); }catch(e){}
+  }
+  function attachManageNavResizeListeners(){
+    if(manageNavResizeListenersAttached) return;
+    manageNavResizeListenersAttached = true;
+    try{
+      window.addEventListener('resize', updateManageNavSpace);
+      window.addEventListener('orientationchange', updateManageNavSpace);
+      if(window.visualViewport){
+        window.visualViewport.addEventListener('resize', updateManageNavSpace);
+      }
+    }catch(e){}
+  }
   function applyBuildLetterFocus(){
     const list = document.getElementById('buildList');
     const nav = document.getElementById('buildAlphaButtons');
@@ -2530,6 +2548,7 @@ Yogurt"></textarea>
         jump.style.display='none';
         manageItemsFocusLetter = '';
       }
+      updateManageNavSpace();
 
       let lastGroup='';
       filtered.forEach(it=>{
@@ -2550,10 +2569,11 @@ Yogurt"></textarea>
         right.appendChild(details); row.appendChild(left); row.appendChild(right); ml.appendChild(row);
       });
       applyManageLetterFocus();
-      const jumpHeight = showJump ? (jump.getBoundingClientRect().height || 0) : 0;
-      try{ document.documentElement.style.setProperty('--manage-nav-space', Math.ceil(jumpHeight + 32) + 'px'); }catch(e){}
+      updateManageNavSpace();
     }
     drawManageItemsList();
+    attachManageNavResizeListeners();
+    setTimeout(updateManageNavSpace, 0);
 
     document.getElementById('btnBulkSetup').onclick = ()=>{
       const box = document.getElementById('bulkSetupText'); if(!box) return;
