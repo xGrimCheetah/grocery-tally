@@ -2547,18 +2547,39 @@ Skipped duplicate items: ${skippedItems}`);
     const modal = document.createElement('div');
     modal.id = 'itemDetailsModal';
     modal.className = 'item-details-modal';
+    function requestCloseDetailsModal(){
+      if(isNewDraft && editing){
+        if(!confirm('Discard this new item?')) return false;
+      }
+      modal.remove();
+      return true;
+    }
+    function onDetailsModalEscape(e){
+      if(e.key !== 'Escape') return;
+      const activeModal = document.getElementById('itemDetailsModal');
+      if(activeModal !== modal) return;
+      e.preventDefault();
+      requestCloseDetailsModal();
+    }
+    document.addEventListener('keydown', onDetailsModalEscape);
+    modal.addEventListener('remove', ()=> document.removeEventListener('keydown', onDetailsModalEscape));
+    const rawRemove = modal.remove.bind(modal);
+    modal.remove = function(){
+      document.removeEventListener('keydown', onDetailsModalEscape);
+      return rawRemove();
+    };
     function render(){
       const stores = sortedStores();
       const receiptAvg = getReceiptEstimatePrice(item);
       modal.replaceChildren();
       const backdrop = document.createElement('div');
       backdrop.className = 'item-details-backdrop';
-      backdrop.onclick = ()=> modal.remove();
+      backdrop.onclick = ()=> requestCloseDetailsModal();
       const card = document.createElement('div');
       card.className = 'item-details-card';
       const head = document.createElement('div'); head.className='item-details-head';
       const title = document.createElement('strong'); title.textContent = isNewDraft ? 'New Item' : item.name;
-      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> modal.remove();
+      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> requestCloseDetailsModal();
       head.appendChild(title); head.appendChild(closeBtn); card.appendChild(head);
       modal.appendChild(backdrop); modal.appendChild(card);
       if(editing){
@@ -2590,7 +2611,7 @@ Skipped duplicate items: ${skippedItems}`);
           actions.appendChild(delBtn);
         }
         card.appendChild(actions);
-        cancelBtn.onclick = ()=>{ if(isNewDraft){ if(confirm('Discard this new item?')) modal.remove(); return; } editing = false; render(); };
+        cancelBtn.onclick = ()=>{ if(isNewDraft){ requestCloseDetailsModal(); return; } editing = false; render(); };
         saveBtn.onclick = ()=>{
           const nv = cleanText(nameInput.value);
           if(!nv){ alert('Item name cannot be empty.'); return; }
