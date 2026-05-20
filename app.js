@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.54.1"; // Manage Items cleanup and item lifecycle fixes
+  let APP_VERSION = "1.54.2"; // Manage Items search and A–Z polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -25,6 +25,7 @@
   let manageCategoryReorderMode = false;
   let buildSearchQuery = '';
   let buildFocusLetter = '';
+  let manageItemsFocusLetter = '';
   let buildControlMode = 'alpha';
   let buildListMode = 'all';
   let insightsDateRange = 'all';
@@ -2378,12 +2379,17 @@
     const root = (target || viewManage);
     root.innerHTML = `
       <div class="grid">
-        <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
-          <input id="newItemName" class="manage-items-search-input" placeholder="Search or add an item" style="flex:2" />
-          <select id="manageSort" style="flex:1">
-            <option value="alpha">Alphabetical</option>
-            <option value="category">By category</option>
-          </select>
+        <div class="col-12">
+          <div class="manage-items-search-row">
+            <input id="newItemName" class="manage-items-search-input" type="search" placeholder="Search or add an item" autocomplete="off" aria-label="Search or add an item" />
+            <button class="btn manage-items-search-clear" id="btnManageSearchClear" type="button">Clear</button>
+          </div>
+          <div class="manage-items-sort-row">
+            <select id="manageSort" aria-label="Manage Items sort">
+              <option value="alpha">Alphabetical</option>
+              <option value="category">By category</option>
+            </select>
+          </div>
         </div>
       </div>
       <div class="spacer"></div>
@@ -2405,30 +2411,60 @@ Yogurt"></textarea>
         </div>
       </details>
       <div class="spacer"></div>
-      <div id="manageQuickJump" class="quick-jump" style="display:none"></div>
+      <div id="manageQuickJump" class="alpha-nav" style="display:none" aria-label="Manage Items alphabet quick jump">
+        <div id="manageAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
+      </div>
       <div id="manageList"></div>`;
 
     const sortSel=document.getElementById('manageSort');
+    const clearBtn = document.getElementById('btnManageSearchClear');
     sortSel.value = manageItemSort;
-    sortSel.onchange = ()=>{ manageItemSort = sortSel.value === 'category' ? 'category' : 'alpha'; drawManageItemsList(); };
+    sortSel.onchange = ()=>{ manageItemSort = sortSel.value === 'category' ? 'category' : 'alpha'; manageItemsFocusLetter = ''; drawManageItemsList(); };
 
     const input = document.getElementById('newItemName');
     input.value = manageItemsQuery;
-    input.oninput = ()=>{ manageItemsQuery = input.value || ''; drawManageItemsList(); };
+    input.oninput = ()=>{ manageItemsQuery = input.value || ''; manageItemsFocusLetter = ''; drawManageItemsList(); };
     input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){
       const btn = document.getElementById('manageQuickAddBtn');
       if(btn){ e.preventDefault(); btn.click(); }
+    } else if(e.key === 'Escape'){
+      e.preventDefault();
+      manageItemsQuery = '';
+      manageItemsFocusLetter = '';
+      input.value = '';
+      drawManageItemsList();
     }});
+    clearBtn.onclick = ()=>{
+      manageItemsQuery = '';
+      manageItemsFocusLetter = '';
+      input.value = '';
+      drawManageItemsList();
+      try{ input.focus(); }catch(e){}
+    };
+
+    function applyManageLetterFocus(){
+      const ml = document.getElementById('manageList');
+      if(!ml) return;
+      const focused = !!manageItemsFocusLetter && manageItemSort === 'alpha' && !normalizeText(manageItemsQuery || '');
+      ml.classList.toggle('build-letter-focused', focused);
+      ml.querySelectorAll('.manage-item-row').forEach(row=>{
+        const matches = focused && row.dataset.letter === manageItemsFocusLetter;
+        row.classList.toggle('build-letter-match', matches);
+        row.classList.toggle('build-letter-dim', focused && !matches);
+      });
+    }
 
     function drawManageItemsList(){
       const quickWrap = document.getElementById('manageItemQuickAdd');
       const jump = document.getElementById('manageQuickJump');
       const ml = document.getElementById('manageList');
-      if(!quickWrap || !ml || !jump) return;
-      quickWrap.replaceChildren(); ml.replaceChildren(); jump.replaceChildren();
+      const jumpButtons = document.getElementById('manageAlphaButtons');
+      if(!quickWrap || !ml || !jump || !jumpButtons) return;
+      quickWrap.replaceChildren(); ml.replaceChildren(); jumpButtons.replaceChildren();
       const queryNorm = normalizeText(manageItemsQuery || '');
       const addName = cleanText(manageItemsQuery || '');
       const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
+      clearBtn.style.visibility = manageItemsQuery ? 'visible' : 'hidden';
       if(addName && !duplicate){
         const quick = document.createElement('button');
         quick.id = 'manageQuickAddBtn'; quick.type = 'button'; quick.className = 'build-quick-add-option';
@@ -2445,10 +2481,41 @@ Yogurt"></textarea>
       const showJump = manageItemSort==='alpha' && !queryNorm && filtered.length>0;
       if(showJump){
         jump.style.display='flex';
-        const letters=[]; const seen=new Set();
-        filtered.forEach(it=>{ const fc=(cleanText(it.name).charAt(0)||'#').toUpperCase(); const L=/[A-Z]/.test(fc)?fc:'#'; if(!seen.has(L)){seen.add(L);letters.push(L);} });
-        letters.forEach(letter=>{ const b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent=letter; b.onclick=()=>document.getElementById(`manage-letter-${letter}`)?.scrollIntoView({behavior:'smooth',block:'start'}); jump.appendChild(b); });
-      } else jump.style.display='none';
+        const letters=['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
+        const activeLetters = new Set(filtered.map(it=> alphaKeyForItem(it)));
+        if(manageItemsFocusLetter && !activeLetters.has(manageItemsFocusLetter)) manageItemsFocusLetter = '';
+        const topBtn = document.createElement('button');
+        topBtn.type = 'button';
+        topBtn.className = 'top-jump';
+        topBtn.textContent = 'Top';
+        topBtn.onclick = ()=>{
+          manageItemsFocusLetter = '';
+          jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', false));
+          applyManageLetterFocus();
+          const target = document.getElementById('newItemName');
+          if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+        };
+        jumpButtons.appendChild(topBtn);
+        letters.forEach(letter=>{
+          const b=document.createElement('button');
+          b.type='button';
+          b.textContent=letter;
+          b.dataset.manageLetter = letter;
+          b.disabled = !activeLetters.has(letter);
+          b.classList.toggle('selected', manageItemsFocusLetter === letter);
+          b.onclick=()=>{
+            manageItemsFocusLetter = letter;
+            jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', btn.dataset.manageLetter === letter));
+            applyManageLetterFocus();
+            const target = document.getElementById(`manage-letter-${letter === '#' ? 'num' : letter}`);
+            if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+          };
+          jumpButtons.appendChild(b);
+        });
+      } else {
+        jump.style.display='none';
+        manageItemsFocusLetter = '';
+      }
 
       let lastGroup='';
       filtered.forEach(it=>{
@@ -2456,10 +2523,10 @@ Yogurt"></textarea>
         if(group!==lastGroup){
           lastGroup=group;
           const h=document.createElement('div'); h.className='list-header'; h.textContent=group;
-          if(manageItemSort==='alpha') h.id=`manage-letter-${group}`;
+          if(manageItemSort==='alpha') h.id=`manage-letter-${group === '#' ? 'num' : group}`;
           ml.appendChild(h);
         }
-        const row=document.createElement('div'); row.className='item manage-item-row';
+        const row=document.createElement('div'); row.className='item manage-item-row'; row.dataset.letter = group;
         const left=document.createElement('div'); left.className='left';
         const right=document.createElement('div'); right.className='right';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
@@ -2468,6 +2535,7 @@ Yogurt"></textarea>
         const details=document.createElement('button'); details.className='btn'; details.textContent='Details'; details.onclick=()=> openItemDetailsModal(it.id, false);
         right.appendChild(details); row.appendChild(left); row.appendChild(right); ml.appendChild(row);
       });
+      applyManageLetterFocus();
     }
     drawManageItemsList();
 
