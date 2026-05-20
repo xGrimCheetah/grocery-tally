@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.54.1 — Manage Items cleanup and item lifecycle fixes
+
+- Renamed user-facing No category labels to Uncategorized across the app.
+- Treated Uncategorized as a category-like option in item category selectors and grouped views while preserving storage compatibility.
+- Changed Manage → Items new-item creation so new items are only saved after pressing Save in the edit popup.
+- Made Cancel on unsaved new items discard the pending item after confirmation.
+- Added Delete Item to existing item edit mode in the Details popup.
+- Removed swipe-to-delete behavior and moved item deletion into Manage → Items editing.
+- Changed Manage → Items to an alphabetical item browser by default with sticky A-Z quick scroll.
+- Replaced the Manage → Items category filter with a Sort dropdown.
+- Removed Reorder Items controls from Manage → Items in preparation for a future Organize workflow.
+- Fixed Details button reliability in Manage → Items.
+- Preserved Bulk setup tools, Backup tab, receipt-only price estimates, priceEntries, run history, localStorage keys, and JSON backup compatibility.
+
 ## v1.54.0 — Manage Items redesign and item details popup
 
 - Redesigned Manage → Items into a flat item-first browser with live search/add behavior and category filtering.

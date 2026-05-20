@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.54.0"; // All Items estimate pill position fix
+  let APP_VERSION = "1.54.1"; // Manage Items cleanup and item lifecycle fixes
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -10,7 +10,6 @@
   const BUILD_CLOSED_CATS_KEY = 'build_closed_cats';   // legacy Build List collapsed state
   const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';     // legacy Shopping Mode collapsed state
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
-  const SELECTED_CAT_KEY = 'manage_selected_cat';
   const LAST_BACKUP_KEY = 'grocery_tally_last_backup_at';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
@@ -20,10 +19,9 @@
   let closedCats = getClosedCats();
   let buildClosedCats = getBuildClosedCats();
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
-  let manageSelectedCat = localStorage.getItem(SELECTED_CAT_KEY) || '';
   let manageView = 'items';
   let manageItemsQuery = '';
-  let manageItemReorderMode = false;
+  let manageItemSort = 'alpha';
   let manageCategoryReorderMode = false;
   let buildSearchQuery = '';
   let buildFocusLetter = '';
@@ -468,7 +466,7 @@
   function normalizeText(str){ return cleanText(str).toLowerCase() }
   function categoryDisplayName(cat){
     const label = cleanText(cat || '');
-    return label || 'No category';
+    return label || 'Uncategorized';
   }
   function compareStores(a,b){
     const ap = Number.isFinite(Number(a && a.pos)) ? Number(a.pos) : 1e9;
@@ -1763,70 +1761,10 @@
     const wrap=document.createElement('div');
     wrap.className='swipe-wrap';
     wrap.dataset.itemId=itemId;
-
-    const trash=document.createElement('button');
-    trash.type='button';
-    trash.className='swipe-trash';
-    trash.title='Delete item';
-    trash.setAttribute('aria-label','Delete item');
-    trash.textContent='🗑';
-    trash.onclick=(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      deleteItemById(itemId);
-    };
-
     const content=document.createElement('div');
-    content.className='item swipe-content';
-
-    wrap.appendChild(trash);
+    content.className='item';
     wrap.appendChild(content);
-    attachSwipeToReveal(wrap, content);
     return { wrap, content };
-  }
-  function attachSwipeToReveal(wrap, content){
-    let startX=0, startY=0, currentX=0, tracking=false, swiping=false;
-    content.addEventListener('pointerdown', e=>{
-      if(e.button !== undefined && e.button !== 0) return;
-      if(manageItemReorderMode) return;
-      if(e.target && e.target.closest && e.target.closest('button,input,select,textarea')) return;
-      tracking=true; swiping=false;
-      startX=e.clientX; startY=e.clientY; currentX=startX;
-    });
-    content.addEventListener('pointermove', e=>{
-      if(!tracking) return;
-      currentX=e.clientX;
-      const dx=currentX-startX;
-      const dy=e.clientY-startY;
-      if(!swiping && Math.abs(dx)>18 && Math.abs(dx)>Math.abs(dy)*1.25){
-        swiping=true;
-        try{ content.setPointerCapture(e.pointerId); }catch(err){}
-      }
-      if(swiping){
-        e.preventDefault();
-        const offset=Math.max(-74, Math.min(0, dx));
-        content.style.transform=`translateX(${offset}px)`;
-      }
-    });
-    function finish(){
-      if(!tracking) return;
-      const dx=currentX-startX;
-      tracking=false;
-      if(swiping){
-        content.style.transform='';
-        if(dx < -36){
-          document.querySelectorAll('.swipe-wrap.revealed').forEach(el=>{ if(el!==wrap) el.classList.remove('revealed'); });
-          wrap.classList.add('revealed');
-        } else if(dx > 24){
-          wrap.classList.remove('revealed');
-        }
-      } else if(wrap.classList.contains('revealed')){
-        wrap.classList.remove('revealed');
-      }
-      swiping=false;
-    }
-    content.addEventListener('pointerup', finish);
-    content.addEventListener('pointercancel', finish);
   }
 
   // ===== Tabs & Views =====
@@ -2421,7 +2359,6 @@
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
         manageView = ['items','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
-        if(manageView !== 'items') manageItemReorderMode = false;
         if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
       };
@@ -2439,29 +2376,28 @@
     cleanupManageItemDragArtifacts();
     ensurePositions();
     const root = (target || viewManage);
-    const selectedCategoryValue = (manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) ? manageSelectedCat : '__ALL__';
-    const hasSearchQuery = !!normalizeText(manageItemsQuery || '');
-    const isSpecificCategorySelected = selectedCategoryValue !== '__ALL__' && selectedCategoryValue !== '__NONE__' && state.categories.includes(selectedCategoryValue);
-    const canUseReorderForCurrentView = isSpecificCategorySelected && !hasSearchQuery;
-    if(manageItemReorderMode && !canUseReorderForCurrentView) manageItemReorderMode = false;
     root.innerHTML = `
       <div class="grid">
         <div class="col-12 row" style="gap:6px;flex-wrap:wrap">
           <input id="newItemName" class="manage-items-search-input" placeholder="Search or add an item" style="flex:2" />
-          <select id="newItemCat" style="flex:1"></select>
+          <select id="manageSort" style="flex:1">
+            <option value="alpha">Alphabetical</option>
+            <option value="category">By category</option>
+          </select>
         </div>
-      </div>
-      <div class="spacer"></div>
-      <div class="manage-reorder-toolbar">
-        ${isSpecificCategorySelected ? `<button type="button" class="btn" id="btnToggleItemReorder" aria-pressed="${manageItemReorderMode ? 'true' : 'false'}">${manageItemReorderMode ? 'Done Reordering' : 'Reorder Items'}</button>` : ''}
-        <span class="muted manage-reorder-help">${!isSpecificCategorySelected ? 'Select a category to reorder items.' : (hasSearchQuery ? 'Clear search to reorder this category.' : (manageItemReorderMode ? 'Use arrows to move items within this category.' : 'Use reorder mode for reliable mobile item sorting.'))}</span>
       </div>
       <div class="spacer"></div>
       <div id="manageItemQuickAdd"></div>
       <details class="bulk-tools">
         <summary>Bulk setup tools</summary>
-        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the selected category when one is filtered, otherwise the app default category.</p>
-        <textarea id="bulkSetupText" placeholder="Produce:\nBananas\nApples\n\nDairy:\nMilk\nYogurt"></textarea>
+        <p class="muted bulk-help">Paste one item per line. Use category headers ending with a colon, like Produce:. Lines before the first category go into the app’s default category.</p>
+        <textarea id="bulkSetupText" placeholder="Produce:
+Bananas
+Apples
+
+Dairy:
+Milk
+Yogurt"></textarea>
         <div class="spacer"></div>
         <div class="controls">
           <button class="btn-accent" id="btnBulkSetup">Add pasted items/categories</button>
@@ -2469,17 +2405,12 @@
         </div>
       </details>
       <div class="spacer"></div>
-      <div id="manageList" class="${manageItemReorderMode ? 'reorder-mode' : ''}"></div>`;
+      <div id="manageQuickJump" class="quick-jump" style="display:none"></div>
+      <div id="manageList"></div>`;
 
-    const reorderToggle = document.getElementById('btnToggleItemReorder');
-    if(reorderToggle) reorderToggle.onclick = ()=>{ if(canUseReorderForCurrentView){ manageItemReorderMode = !manageItemReorderMode; renderManageItems(target); } };
-
-    const sel=document.getElementById('newItemCat');
-    sel.innerHTML = '<option value="__ALL__">All categories</option><option value="__NONE__">No category</option>';
-    state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt); });
-    if(manageSelectedCat && (manageSelectedCat==='__ALL__' || manageSelectedCat==='__NONE__' || state.categories.includes(manageSelectedCat))) sel.value = manageSelectedCat;
-    else sel.value='__ALL__';
-    sel.onchange = ()=>{ manageSelectedCat = sel.value; localStorage.setItem(SELECTED_CAT_KEY, manageSelectedCat); if(manageItemReorderMode){ manageItemReorderMode = false; } renderManageItems(target); };
+    const sortSel=document.getElementById('manageSort');
+    sortSel.value = manageItemSort;
+    sortSel.onchange = ()=>{ manageItemSort = sortSel.value === 'category' ? 'category' : 'alpha'; drawManageItemsList(); };
 
     const input = document.getElementById('newItemName');
     input.value = manageItemsQuery;
@@ -2491,117 +2422,78 @@
 
     function drawManageItemsList(){
       const quickWrap = document.getElementById('manageItemQuickAdd');
+      const jump = document.getElementById('manageQuickJump');
       const ml = document.getElementById('manageList');
-      if(!quickWrap || !ml) return;
-      quickWrap.replaceChildren();
-      ml.replaceChildren();
+      if(!quickWrap || !ml || !jump) return;
+      quickWrap.replaceChildren(); ml.replaceChildren(); jump.replaceChildren();
       const queryNorm = normalizeText(manageItemsQuery || '');
       const addName = cleanText(manageItemsQuery || '');
       const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
       if(addName && !duplicate){
         const quick = document.createElement('button');
-        quick.id = 'manageQuickAddBtn';
-        quick.type = 'button';
-        quick.className = 'build-quick-add-option';
+        quick.id = 'manageQuickAddBtn'; quick.type = 'button'; quick.className = 'build-quick-add-option';
         quick.textContent = `Add “${addName}”`;
-        quick.onclick = ()=>{
-          const selected = sel.value;
-          const newCat = selected === '__ALL__' ? '' : (selected === '__NONE__' ? '' : selected);
-          const item = { id:id(), name:addName, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, storeIds:[] };
-          state.items.push(item);
-          save();
-          manageItemsQuery = '';
-          input.value = '';
-          drawManageItemsList();
-          renderBuild();
-          openItemDetailsModal(item.id, true);
-        };
+        quick.onclick = ()=> openItemDetailsModal(null, true, { name:addName, cat:'', storeIds:[] });
         quickWrap.appendChild(quick);
       }
       let filtered = state.items.slice();
       if(queryNorm) filtered = filtered.filter(it=> normalizeText(it.name).includes(queryNorm));
-      const selected = sel.value;
-      if(selected === '__NONE__') filtered = filtered.filter(it=> !cleanText(it.cat));
-      else if(selected !== '__ALL__') filtered = filtered.filter(it=> it.cat === selected);
-      filtered.sort((a,b)=> (Number(a.pos)||0) - (Number(b.pos)||0));
-      filtered.forEach((it, idx)=>{
-        const shell = createSwipeShell(it.id);
-        const row=shell.content;
-        row.classList.add('manage-item-row');
+      const alphaSort = (a,b)=> normalizeText(a.name).localeCompare(normalizeText(b.name)) || (Number(a.pos)||0)-(Number(b.pos)||0);
+      if(manageItemSort==='alpha') filtered.sort(alphaSort);
+      else filtered.sort((a,b)=> normalizeText(a.cat).localeCompare(normalizeText(b.cat)) || alphaSort(a,b));
+
+      const showJump = manageItemSort==='alpha' && !queryNorm && filtered.length>0;
+      if(showJump){
+        jump.style.display='flex';
+        const letters=[]; const seen=new Set();
+        filtered.forEach(it=>{ const fc=(cleanText(it.name).charAt(0)||'#').toUpperCase(); const L=/[A-Z]/.test(fc)?fc:'#'; if(!seen.has(L)){seen.add(L);letters.push(L);} });
+        letters.forEach(letter=>{ const b=document.createElement('button'); b.type='button'; b.className='btn'; b.textContent=letter; b.onclick=()=>document.getElementById(`manage-letter-${letter}`)?.scrollIntoView({behavior:'smooth',block:'start'}); jump.appendChild(b); });
+      } else jump.style.display='none';
+
+      let lastGroup='';
+      filtered.forEach(it=>{
+        const group = manageItemSort==='category' ? categoryDisplayName(it.cat) : ((/[A-Z]/.test((cleanText(it.name).charAt(0)||'').toUpperCase()) ? (cleanText(it.name).charAt(0)||'').toUpperCase() : '#'));
+        if(group!==lastGroup){
+          lastGroup=group;
+          const h=document.createElement('div'); h.className='list-header'; h.textContent=group;
+          if(manageItemSort==='alpha') h.id=`manage-letter-${group}`;
+          ml.appendChild(h);
+        }
+        const row=document.createElement('div'); row.className='item manage-item-row';
         const left=document.createElement('div'); left.className='left';
         const right=document.createElement('div'); right.className='right';
         const name=document.createElement('div'); name.className='name'; name.textContent=it.name;
-        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=it.cat || 'No category';
+        const itemMeta=document.createElement('div'); itemMeta.className='cat'; itemMeta.textContent=categoryDisplayName(it.cat);
         left.appendChild(name); left.appendChild(itemMeta);
-        const details=document.createElement('button'); details.className='btn'; details.textContent='Details';
-        details.onclick=()=> openItemDetailsModal(it.id, false);
-        right.appendChild(details);
-        if(manageItemReorderMode && canUseReorderForCurrentView){
-          const moveUp=document.createElement('button'); moveUp.className='btn reorder-btn'; moveUp.textContent='↑'; moveUp.disabled = idx===0;
-          const moveDown=document.createElement('button'); moveDown.className='btn reorder-btn'; moveDown.textContent='↓'; moveDown.disabled = idx===filtered.length-1;
-          moveUp.onclick=()=>{ if(moveItemWithinCategory(it.id,-1)){ save(); drawManageItemsList(); } };
-          moveDown.onclick=()=>{ if(moveItemWithinCategory(it.id,1)){ save(); drawManageItemsList(); } };
-          right.prepend(moveDown); right.prepend(moveUp);
-        }
-        row.appendChild(left); row.appendChild(right); ml.appendChild(shell.wrap);
+        const details=document.createElement('button'); details.className='btn'; details.textContent='Details'; details.onclick=()=> openItemDetailsModal(it.id, false);
+        right.appendChild(details); row.appendChild(left); row.appendChild(right); ml.appendChild(row);
       });
     }
     drawManageItemsList();
 
     document.getElementById('btnBulkSetup').onclick = ()=>{
-      const box = document.getElementById('bulkSetupText');
-      if(!box) return;
-      const raw = box.value || '';
-      if(!raw.trim()){
-        alert('Paste one or more items first.');
-        return;
-      }
-      const selectedFilter = sel.value;
-      let currentCat = selectedFilter !== '__ALL__' && selectedFilter !== '__NONE__' ? selectedFilter : '';
-      if(!currentCat){
-        const defaultCat = findCategoryByName('Other') || state.categories[0] || ensureCategory('Other').name || '';
-        currentCat = defaultCat;
-      }
+      const box = document.getElementById('bulkSetupText'); if(!box) return;
+      const raw = box.value || ''; if(!raw.trim()){ alert('Paste one or more items first.'); return; }
+      let currentCat = findCategoryByName('Other') || state.categories[0] || ensureCategory('Other').name || '';
       if(currentCat) ensureCategory(currentCat);
-      let addedCats = 0;
-      let addedItems = 0;
-      let skippedItems = 0;
-      const batchKeys = new Set();
+      let addedCats = 0, addedItems = 0, skippedItems = 0; const batchKeys = new Set();
       raw.split(/\r?\n/).forEach(line=>{
-        let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, ''));
-        if(!cleaned) return;
-        if(cleaned.endsWith(':')){
-          const catName = cleanText(cleaned.slice(0, -1));
-          const result = ensureCategory(catName);
-          if(result.created) addedCats++;
-          if(result.name) currentCat = result.name;
-          return;
-        }
-        const itemName = cleaned;
-        const cat = currentCat || '';
-        const key = normalizeText(cat) + '|' + normalizeText(itemName);
+        let cleaned = cleanText(line.replace(/^[•*\-–—]+\s*/, '')); if(!cleaned) return;
+        if(cleaned.endsWith(':')){ const result = ensureCategory(cleanText(cleaned.slice(0, -1))); if(result.created) addedCats++; if(result.name) currentCat = result.name; return; }
+        const itemName = cleaned; const cat = currentCat || ''; const key = normalizeText(cat) + '|' + normalizeText(itemName);
         const exists = state.items.find(i=> normalizeText(i.name)===normalizeText(itemName) && normalizeText(i.cat)===normalizeText(cat));
-        if(batchKeys.has(key) || exists){
-          skippedItems++;
-          return;
-        }
+        if(batchKeys.has(key) || exists){ skippedItems++; return; }
         state.items.push({ id:id(), name:itemName, cat, qty:0, prevQty:0, pos: nextItemPosForCategory(cat), checked:false, avgPrice:0, storeIds:[] });
-        batchKeys.add(key);
-        addedItems++;
+        batchKeys.add(key); addedItems++;
       });
-      if(!addedCats && !addedItems && skippedItems){
-        alert(`No new items added.\nSkipped ${skippedItems} duplicate item(s).`);
-        return;
-      }
-      save();
-      drawManageItemsList();
-      renderBuild();
-      alert(`Bulk setup complete.\nAdded categories: ${addedCats}\nAdded items: ${addedItems}\nSkipped duplicate items: ${skippedItems}`);
+      if(!addedCats && !addedItems && skippedItems){ alert(`No new items added.
+Skipped ${skippedItems} duplicate item(s).`); return; }
+      save(); drawManageItemsList(); renderBuild(); alert(`Bulk setup complete.
+Added categories: ${addedCats}
+Added items: ${addedItems}
+Skipped duplicate items: ${skippedItems}`);
     };
-    document.getElementById('btnBulkClear').onclick = ()=>{
-      const box = document.getElementById('bulkSetupText');
-      if(box){ box.value=''; box.focus(); }
-    };
+    document.getElementById('btnBulkClear').onclick = ()=>{ const box = document.getElementById('bulkSetupText'); if(box){ box.value=''; box.focus(); } };
     cleanupManageItemDragArtifacts();
   }
 
@@ -2645,8 +2537,9 @@
     runs.sort((a,b)=> new Date(b.run.committedAt) - new Date(a.run.committedAt));
     return { purchaseCount, totalQty, estimatedSpend: roundMoney(estimatedSpend), lastPurchased, recent: runs.slice(0,5) };
   }
-  function openItemDetailsModal(itemId, startEdit){
-    const item = state.items.find(i=> cleanText(i.id) === cleanText(itemId));
+  function openItemDetailsModal(itemId, startEdit, draftItem){
+    const isNewDraft = !itemId;
+    const item = isNewDraft ? { id:'', name: cleanText((draftItem&&draftItem.name)||''), cat:'', qty:0, prevQty:0, pos:0, checked:false, avgPrice:0, storeIds:Array.isArray(draftItem&&draftItem.storeIds)?draftItem.storeIds.slice():[] } : state.items.find(i=> cleanText(i.id) === cleanText(itemId));
     if(!item) return;
     const existing = document.getElementById('itemDetailsModal'); if(existing) existing.remove();
     const stats = getItemPurchaseStats(item);
@@ -2654,18 +2547,39 @@
     const modal = document.createElement('div');
     modal.id = 'itemDetailsModal';
     modal.className = 'item-details-modal';
+    function requestCloseDetailsModal(){
+      if(isNewDraft && editing){
+        if(!confirm('Discard this new item?')) return false;
+      }
+      modal.remove();
+      return true;
+    }
+    function onDetailsModalEscape(e){
+      if(e.key !== 'Escape') return;
+      const activeModal = document.getElementById('itemDetailsModal');
+      if(activeModal !== modal) return;
+      e.preventDefault();
+      requestCloseDetailsModal();
+    }
+    document.addEventListener('keydown', onDetailsModalEscape);
+    modal.addEventListener('remove', ()=> document.removeEventListener('keydown', onDetailsModalEscape));
+    const rawRemove = modal.remove.bind(modal);
+    modal.remove = function(){
+      document.removeEventListener('keydown', onDetailsModalEscape);
+      return rawRemove();
+    };
     function render(){
       const stores = sortedStores();
       const receiptAvg = getReceiptEstimatePrice(item);
       modal.replaceChildren();
       const backdrop = document.createElement('div');
       backdrop.className = 'item-details-backdrop';
-      backdrop.onclick = ()=> modal.remove();
+      backdrop.onclick = ()=> requestCloseDetailsModal();
       const card = document.createElement('div');
       card.className = 'item-details-card';
       const head = document.createElement('div'); head.className='item-details-head';
-      const title = document.createElement('strong'); title.textContent = item.name;
-      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> modal.remove();
+      const title = document.createElement('strong'); title.textContent = isNewDraft ? 'New Item' : item.name;
+      const closeBtn = document.createElement('button'); closeBtn.className='btn'; closeBtn.textContent='Close'; closeBtn.onclick=()=> requestCloseDetailsModal();
       head.appendChild(title); head.appendChild(closeBtn); card.appendChild(head);
       modal.appendChild(backdrop); modal.appendChild(card);
       if(editing){
@@ -2677,7 +2591,7 @@
         const catLabel = document.createElement('label'); catLabel.className='item-edit-field';
         const cs = document.createElement('span'); cs.className='price-label'; cs.textContent='Category';
         const catSelect = document.createElement('select'); catSelect.id='detailsCat';
-        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='No category'; catSelect.appendChild(noneOpt);
+        const noneOpt = document.createElement('option'); noneOpt.value=''; noneOpt.textContent='Uncategorized'; catSelect.appendChild(noneOpt);
         state.categories.forEach(c=>{ const opt=document.createElement('option'); opt.value=c; opt.textContent=c; if(item.cat===c) opt.selected=true; catSelect.appendChild(opt); });
         catLabel.appendChild(cs); catLabel.appendChild(catSelect); grid.appendChild(nameLabel); grid.appendChild(catLabel); card.appendChild(grid);
         const storesField = document.createElement('fieldset'); storesField.className='item-edit-stores';
@@ -2690,8 +2604,14 @@
         const actions=document.createElement('div'); actions.className='item-edit-actions';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
-        actions.appendChild(saveBtn); actions.appendChild(cancelBtn); card.appendChild(actions);
-        cancelBtn.onclick = ()=>{ editing = false; render(); };
+        actions.appendChild(saveBtn); actions.appendChild(cancelBtn);
+        if(!isNewDraft){
+          const delBtn=document.createElement('button'); delBtn.className='btn-danger'; delBtn.textContent='Delete Item';
+          delBtn.onclick=()=>{ if(!confirm('Delete this item from your master list? Past run history will be preserved.')) return; state.items = state.items.filter(i=> cleanText(i.id)!==cleanText(item.id)); save(); renderBuild(); renderManage(); renderShop(); renderInsights(); modal.remove(); };
+          actions.appendChild(delBtn);
+        }
+        card.appendChild(actions);
+        cancelBtn.onclick = ()=>{ if(isNewDraft){ requestCloseDetailsModal(); return; } editing = false; render(); };
         saveBtn.onclick = ()=>{
           const nv = cleanText(nameInput.value);
           if(!nv){ alert('Item name cannot be empty.'); return; }
@@ -2701,8 +2621,18 @@
             const conflict = state.items.find(i=>i.id!==item.id && normalizeText(i.name)===newNorm);
             if(conflict){ alert('That item name already exists.'); return; }
           }
+          const selectedStoreIds = Array.from(storesList.querySelectorAll('input:checked')).map(el=>el.value);
+          if(isNewDraft){
+            const newCat = catSelect.value || '';
+            const created = { id:id(), name:nv, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, storeIds:selectedStoreIds };
+            state.items.push(created);
+            save(); manageItemsQuery=''; const search=document.getElementById('newItemName'); if(search) search.value='';
+            renderBuild(); renderManage(); renderShop(); renderInsights();
+            modal.remove();
+            return;
+          }
           item.name = nv; item.cat = catSelect.value || '';
-          item.storeIds = Array.from(storesList.querySelectorAll('input:checked')).map(el=>el.value);
+          item.storeIds = selectedStoreIds;
           save(); renderBuild(); renderManage(); renderShop(); renderInsights();
           editing = false; render();
         };
@@ -2716,7 +2646,7 @@
         }
         const list=document.createElement('div'); list.className='list';
         const storeText = (item.storeIds||[]).map(id=> (state.stores||[]).find(s=>s.id===id)?.name).filter(Boolean).join(', ') || 'No stores assigned';
-        list.appendChild(statRow('Category', item.cat || 'No category'));
+        list.appendChild(statRow('Category', categoryDisplayName(item.cat)));
         list.appendChild(statRow('Stores', storeText));
         list.appendChild(statRow('Receipt average', receiptAvg>0?formatMoney(receiptAvg):'No receipt price history yet'));
         list.appendChild(statRow('Receipt entries', String(validPriceEntries(item).length || 0)));
