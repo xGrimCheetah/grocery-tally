@@ -1334,8 +1334,9 @@
       list.appendChild(row);
     });
   }
-  function alphaKeyForItem(it){
-    const first = cleanText(it && it.name).charAt(0).toUpperCase();
+  // Shared alpha key helper for Build List and Manage → Items quick-jump.
+  function alphaKeyForItem(item){
+    const first = cleanText(item && item.name).charAt(0).toUpperCase();
     return /^[A-Z]$/.test(first) ? first : '#';
   }
   function buildListSort(a,b){
