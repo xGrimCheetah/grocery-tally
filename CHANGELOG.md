@@ -1,3 +1,5 @@
+# Changelog
+
 ## v1.54.2 — Manage Items search and A–Z polish
 
 - Enlarged the Manage → Items search/add field to prevent iPhone zoom on focus.
@@ -6,8 +8,6 @@
 - Updated Manage → Items A–Z quick scroll to match the Build List sticky multi-row quick scroll behavior and styling.
 - Added active-letter highlighting and non-selected item fading for Manage → Items alphabetical quick scroll.
 - Preserved item draft creation, Details popup editing/deleting, Bulk setup tools, Uncategorized behavior, Backup, receipt-only pricing, localStorage keys, and JSON compatibility.
-
-# Changelog
 
 ## v1.54.1 — Manage Items cleanup and item lifecycle fixes
 
