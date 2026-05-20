@@ -1520,14 +1520,11 @@
     if(!target) return;
     const runScroll = ()=>{
       try{
-        const navHeight = nav ? (nav.getBoundingClientRect().height || 0) : 0;
-        const safeBottom = 8 + getKeyboardLift();
         const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
-        const maxVisibleTop = window.pageYOffset + window.innerHeight - navHeight - safeBottom - 36;
-        const nextTop = Math.min(targetTop, Math.max(window.pageYOffset, maxVisibleTop));
-        window.scrollTo({ top: Math.max(0, nextTop), behavior: behavior || 'smooth' });
+        const topOffset = Math.max(12, buildTopScrollOffset());
+        window.scrollTo({ top: Math.max(0, targetTop - topOffset), behavior: behavior || 'smooth' });
       }catch(e){
-        target.scrollIntoView(true);
+        target.scrollIntoView({ behavior: behavior || 'smooth', block: 'start' });
       }
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
