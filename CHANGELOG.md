@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.54.3 — Manage Items Clear button and bottom A-Z sticky fix
+
+- Kept the Manage → Items Clear button visible even when the search/add field is empty.
+- Moved the Manage → Items A-Z quick scroll to bottom-sticky behavior matching Build List.
+- Adjusted Manage → Items letter jump scrolling so selected letter sections land visibly above the bottom sticky control.
+- Preserved Manage → Items search/add, Sort dropdown, Top button, A-Z highlighting/dimming, Details popup, Bulk setup tools, Backup tab, receipt-only pricing, localStorage keys, and JSON backup compatibility.
+
 ## v1.54.2 — Manage Items search and A–Z polish
 
 - Enlarged the Manage → Items search/add field to prevent iPhone zoom on focus.

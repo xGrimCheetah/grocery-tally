@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.54.2"; // Manage Items search and A–Z polish
+  let APP_VERSION = "1.54.3"; // Manage Items Clear button and bottom A–Z sticky fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -36,6 +36,7 @@
   let runHistoryShowAll = false;
   const runHistoryExpandedIds = new Set();
   let runHistoryReceiptEditId = '';
+  let manageNavResizeListenersAttached = false;
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -1516,6 +1517,36 @@
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
+  function scrollElementAboveBottomControl(target, nav, behavior){
+    if(!target) return;
+    const runScroll = ()=>{
+      try{
+        const targetTop = target.getBoundingClientRect().top + window.pageYOffset;
+        const topOffset = Math.max(12, buildTopScrollOffset());
+        window.scrollTo({ top: Math.max(0, targetTop - topOffset), behavior: behavior || 'smooth' });
+      }catch(e){
+        target.scrollIntoView({ behavior: behavior || 'smooth', block: 'start' });
+      }
+    };
+    try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
+  }
+  function updateManageNavSpace(){
+    const jump = document.getElementById('manageQuickJump');
+    const isVisible = !!(jump && jump.style.display !== 'none');
+    const height = isVisible ? (jump.getBoundingClientRect().height || 0) : 0;
+    try{ document.documentElement.style.setProperty('--manage-nav-space', Math.ceil(height + (isVisible ? 32 : 0)) + 'px'); }catch(e){}
+  }
+  function attachManageNavResizeListeners(){
+    if(manageNavResizeListenersAttached) return;
+    manageNavResizeListenersAttached = true;
+    try{
+      window.addEventListener('resize', updateManageNavSpace);
+      window.addEventListener('orientationchange', updateManageNavSpace);
+      if(window.visualViewport){
+        window.visualViewport.addEventListener('resize', updateManageNavSpace);
+      }
+    }catch(e){}
+  }
   function applyBuildLetterFocus(){
     const list = document.getElementById('buildList');
     const nav = document.getElementById('buildAlphaButtons');
@@ -2412,7 +2443,7 @@ Yogurt"></textarea>
         </div>
       </details>
       <div class="spacer"></div>
-      <div id="manageQuickJump" class="alpha-nav" style="display:none" aria-label="Manage Items alphabet quick jump">
+      <div id="manageQuickJump" class="alpha-nav manage-search-nav" style="display:none" aria-label="Manage Items alphabet quick jump">
         <div id="manageAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
       </div>
       <div id="manageList"></div>`;
@@ -2465,7 +2496,7 @@ Yogurt"></textarea>
       const queryNorm = normalizeText(manageItemsQuery || '');
       const addName = cleanText(manageItemsQuery || '');
       const duplicate = !!state.items.find(i=> normalizeText(i.name) === normalizeText(addName));
-      clearBtn.style.visibility = manageItemsQuery ? 'visible' : 'hidden';
+      clearBtn.disabled = !manageItemsQuery;
       if(addName && !duplicate){
         const quick = document.createElement('button');
         quick.id = 'manageQuickAddBtn'; quick.type = 'button'; quick.className = 'build-quick-add-option';
@@ -2494,7 +2525,7 @@ Yogurt"></textarea>
           jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', false));
           applyManageLetterFocus();
           const target = document.getElementById('newItemName');
-          if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+          if(target) scrollElementAboveBottomControl(target, jump, 'smooth');
         };
         jumpButtons.appendChild(topBtn);
         letters.forEach(letter=>{
@@ -2509,7 +2540,7 @@ Yogurt"></textarea>
             jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', btn.dataset.manageLetter === letter));
             applyManageLetterFocus();
             const target = document.getElementById(`manage-letter-${letter === '#' ? 'num' : letter}`);
-            if(target) scrollElementBelowBuildEstimate(target, 'smooth');
+            if(target) scrollElementAboveBottomControl(target, jump, 'smooth');
           };
           jumpButtons.appendChild(b);
         });
@@ -2517,6 +2548,7 @@ Yogurt"></textarea>
         jump.style.display='none';
         manageItemsFocusLetter = '';
       }
+      updateManageNavSpace();
 
       let lastGroup='';
       filtered.forEach(it=>{
@@ -2537,8 +2569,11 @@ Yogurt"></textarea>
         right.appendChild(details); row.appendChild(left); row.appendChild(right); ml.appendChild(row);
       });
       applyManageLetterFocus();
+      updateManageNavSpace();
     }
     drawManageItemsList();
+    attachManageNavResizeListeners();
+    setTimeout(updateManageNavSpace, 0);
 
     document.getElementById('btnBulkSetup').onclick = ()=>{
       const box = document.getElementById('bulkSetupText'); if(!box) return;
