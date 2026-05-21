@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.55.0"; // Manage Organize tab for category/item ordering
+  let APP_VERSION = "1.55.1"; // Organize navigation and reorder focus polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -2426,16 +2426,23 @@
     const root = (target || viewManage);
     root.innerHTML = `
       <p class="muted">Arrange categories and items in the order you walk through the store.</p>
-      <div class="card organize-card"><h3>Category order</h3><div id="organizeCategoryList"></div></div>
+      <div class="card organize-card" id="organizeTopAnchor"><h3>Category order</h3><div id="organizeCategoryList"></div></div>
       <div class="spacer"></div>
-      <div class="card organize-card"><h3 id="organizeItemsHeading"></h3><div id="organizeItemsList"></div></div>`;
+      <div class="card organize-card" id="organizeItemsSection"><h3 id="organizeItemsHeading"></h3><div id="organizeItemsList"></div></div>
+      <div class="organize-bottom-actions"><button type="button" class="btn" id="organizeTopBtn">Top</button></div>
+      <div class="organize-bottom-spacer" aria-hidden="true"></div>`;
     const itemsHeading = document.getElementById('organizeItemsHeading');
     if(itemsHeading) itemsHeading.textContent = `Items in ${categoryDisplayName(selectedCat)}`;
     const categoryList = document.getElementById('organizeCategoryList');
     const itemsList = document.getElementById('organizeItemsList');
+    const topBtn = document.getElementById('organizeTopBtn');
+    if(topBtn){
+      topBtn.onclick = ()=> scrollToOrganizeTop();
+    }
     categories.forEach((cat, idx)=>{
       const row = document.createElement('div');
       row.className = 'item organize-row' + (selectedCat === cat ? ' selected' : '');
+      row.dataset.organizeCatKey = cat || '';
       const left = document.createElement('div'); left.className = 'left';
       const right = document.createElement('div'); right.className = 'right';
       const name = document.createElement('div'); name.className='name'; name.textContent = categoryDisplayName(cat);
@@ -2450,9 +2457,16 @@
       const isLastReal = realIndex === state.categories.length - 1;
       up.disabled = isUncat || isFirstReal;
       down.disabled = isUncat || isLastReal;
-      up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1)){ save(); renderManage(); renderBuild(); renderShop(); } };
-      down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1)){ save(); renderManage(); renderBuild(); renderShop(); } };
-      row.onclick = ()=>{ manageOrganizeSelectedCat = cat; renderManage(); };
+      up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1)) rerenderAfterOrganizeMove(row); };
+      down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1)) rerenderAfterOrganizeMove(row); };
+      row.onclick = ()=>{
+        if(manageOrganizeSelectedCat === cat){
+          scrollToOrganizeItemsSection();
+          return;
+        }
+        manageOrganizeSelectedCat = cat;
+        renderManage();
+      };
       right.appendChild(up); right.appendChild(down);
       row.appendChild(left); row.appendChild(right);
       categoryList.appendChild(row);
@@ -2465,6 +2479,7 @@
     }
     itemRows.forEach((it, idx)=>{
       const row = document.createElement('div'); row.className='item organize-row';
+      row.dataset.organizeItemId = String(it.id);
       const left = document.createElement('div'); left.className='left';
       const right = document.createElement('div'); right.className='right';
       const name = document.createElement('div'); name.className='name'; name.textContent=it.name;
@@ -2473,12 +2488,47 @@
       const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${it.name} down`);
       up.disabled = idx === 0;
       down.disabled = idx === itemRows.length - 1;
-      up.onclick = ()=>{ if(moveItemWithinCategory(it.id, -1)){ save(); renderManage(); renderBuild(); renderShop(); } };
-      down.onclick = ()=>{ if(moveItemWithinCategory(it.id, 1)){ save(); renderManage(); renderBuild(); renderShop(); } };
+      up.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, -1)) rerenderAfterOrganizeMove(row); };
+      down.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, 1)) rerenderAfterOrganizeMove(row); };
       right.appendChild(up); right.appendChild(down);
       row.appendChild(left); row.appendChild(right);
       itemsList.appendChild(row);
     });
+  }
+
+  function rerenderAfterOrganizeMove(anchorRow){
+    const beforeTop = (anchorRow && anchorRow.getBoundingClientRect) ? anchorRow.getBoundingClientRect().top : null;
+    const itemId = anchorRow && anchorRow.dataset ? anchorRow.dataset.organizeItemId : '';
+    const catKey = anchorRow && anchorRow.dataset ? anchorRow.dataset.organizeCatKey : '';
+    save();
+    renderManage();
+    renderBuild();
+    renderShop();
+    if(beforeTop == null) return;
+    requestAnimationFrame(()=>{
+      const afterRow = findOrganizeRow(itemId, catKey);
+      if(!afterRow || !afterRow.getBoundingClientRect) return;
+      const afterTop = afterRow.getBoundingClientRect().top;
+      window.scrollBy(0, afterTop - beforeTop);
+    });
+  }
+
+  function findOrganizeRow(itemId, catKey){
+    const rows = Array.from(document.querySelectorAll('.organize-row'));
+    if(itemId){
+      return rows.find(row => row.dataset && row.dataset.organizeItemId === String(itemId)) || null;
+    }
+    return rows.find(row => row.dataset && row.dataset.organizeCatKey === (catKey || '')) || null;
+  }
+
+  function scrollToOrganizeItemsSection(){
+    const section = document.getElementById('organizeItemsSection');
+    if(section) section.scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function scrollToOrganizeTop(){
+    const topAnchor = document.getElementById('organizeTopAnchor');
+    if(topAnchor) topAnchor.scrollIntoView({ behavior:'smooth', block:'start' });
   }
 
   function renderManageItems(target){
