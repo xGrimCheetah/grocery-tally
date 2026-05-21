@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.56.0 — Backup and restore confidence polish
+
+- Improved Manage → Backup with a clearer current app data summary.
+- Added clearer export backup wording and version/date-aware backup filenames.
+- Added post-export success feedback reminding users to save backups somewhere safe.
+- Added import preview before restore so selected files can be reviewed before replacing local data.
+- Added clearer restore warnings and friendlier invalid-file handling.
+- Preserved existing JSON backup compatibility, localStorage keys, grocery data, run history, receipt price entries, item/store/category data, ordering data, Build List, Shopping Mode, Insights, Run History, Manage Items, Manage Organize, Manage Categories, and Manage Stores behavior.
+
 ## v1.55.1 — Organize navigation and reorder focus polish
 
 - Kept moved Organize category and item rows visually anchored while using ↑ / ↓ controls on long lists.
