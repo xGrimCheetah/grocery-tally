@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.55.1 — Organize navigation and reorder focus polish
+
+- Kept moved Organize category and item rows visually anchored while using ↑ / ↓ controls on long lists.
+- Added second-tap behavior on the selected Organize category to jump to that category's item-ordering section.
+- Added a bottom-sticky Organize Top button with spacing so the final rows remain visible.
+- Preserved Manage → Organize ordering behavior, Uncategorized handling, Manage Items, Manage Categories, Stores, Backup, Build List, Shopping Mode, Insights, Run History, receipt-only pricing, localStorage keys, and JSON backup compatibility.
+
 ## v1.55.0 — Manage Organize tab for store-walk order
 
 - Added a new Manage → Organize tab for arranging grocery flow.
