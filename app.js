@@ -2443,8 +2443,11 @@
       const up = document.createElement('button'); up.type='button'; up.className='btn reorder-btn'; up.textContent='↑'; up.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} up`);
       const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} down`);
       const isUncat = !cleanText(cat);
-      up.disabled = idx === 0 || isUncat;
-      down.disabled = idx === categories.length - 1 || isUncat;
+      const realIndex = state.categories.indexOf(cat);
+      const isFirstReal = realIndex === 0;
+      const isLastReal = realIndex === state.categories.length - 1;
+      up.disabled = isUncat || isFirstReal;
+      down.disabled = isUncat || isLastReal;
       up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1)){ save(); renderManage(); renderBuild(); renderShop(); } };
       down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1)){ save(); renderManage(); renderBuild(); renderShop(); } };
       row.onclick = ()=>{ manageOrganizeSelectedCat = cat; renderManage(); };
