@@ -2428,7 +2428,9 @@
       <p class="muted">Arrange categories and items in the order you walk through the store.</p>
       <div class="card organize-card"><h3>Category order</h3><div id="organizeCategoryList"></div></div>
       <div class="spacer"></div>
-      <div class="card organize-card"><h3 id="organizeItemsHeading">Items in ${categoryDisplayName(selectedCat)}</h3><div id="organizeItemsList"></div></div>`;
+      <div class="card organize-card"><h3 id="organizeItemsHeading"></h3><div id="organizeItemsList"></div></div>`;
+    const itemsHeading = document.getElementById('organizeItemsHeading');
+    if(itemsHeading) itemsHeading.textContent = `Items in ${categoryDisplayName(selectedCat)}`;
     const categoryList = document.getElementById('organizeCategoryList');
     const itemsList = document.getElementById('organizeItemsList');
     categories.forEach((cat, idx)=>{
