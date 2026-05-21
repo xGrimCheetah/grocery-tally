@@ -2791,6 +2791,7 @@ Skipped duplicate items: ${skippedItems}`);
     const importStatusEl = document.getElementById('backupImportStatus');
     const importPreviewEl = document.getElementById('backupImportPreview');
     let pendingImportData = null;
+    let importSelectionToken = 0;
     document.getElementById('btnExport').onclick = ()=>{
       const stats = getDataSafetyStats(state); const exportedAt = new Date().toISOString();
       const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, backupMeta: { appName: 'Grocery Tally', appVersion: APP_VERSION, exportedAt }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [] };
@@ -2799,22 +2800,27 @@ Skipped duplicate items: ${skippedItems}`);
     };
     const fileInput = document.getElementById('fileImport'); document.getElementById('btnImport').onclick = ()=> fileInput.click();
     fileInput.onchange = async (e)=>{
+      const selectionToken = ++importSelectionToken;
       const file = e.target.files[0];
       if(!file) return;
       pendingImportData = null;
       if(importPreviewEl) importPreviewEl.innerHTML = '';
       try{
         const text = await file.text();
+        if(selectionToken !== importSelectionToken) return;
         const data = JSON.parse(text);
         if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
+        if(selectionToken !== importSelectionToken) return;
         pendingImportData = data;
         const stats = getDataSafetyStats(data);
         const backupVersion = getBackupFileVersion(data);
         const metadata = data.backupMeta || data.exportMetadata || data.metadata || {};
         const exportedAt = metadata.exportedAt ? formatBackupTimestamp(metadata.exportedAt) : 'Not included';
         const looksLegacy = !metadata.exportedAt || backupVersion === 'Not included';
+        if(selectionToken !== importSelectionToken) return;
         if(importStatusEl) importStatusEl.textContent = `Loaded file: ${file.name}`;
         if(importPreviewEl){
+          if(selectionToken !== importSelectionToken) return;
           importPreviewEl.innerHTML = '';
           const previewStats = document.createElement('div');
           previewStats.className = 'data-safety-stats';
@@ -2857,6 +2863,7 @@ Skipped duplicate items: ${skippedItems}`);
           }
 
           restoreBtn.onclick = ()=>{
+            if(selectionToken !== importSelectionToken) return;
             const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
             if(!pendingImportData || !confirm(warning)) return;
             state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [] };
@@ -2864,6 +2871,7 @@ Skipped duplicate items: ${skippedItems}`);
           };
         }
       }catch(err){
+        if(selectionToken !== importSelectionToken) return;
         if(importStatusEl) importStatusEl.textContent = 'This file could not be read as a Grocery Tally backup. No data was changed.';
         if(importPreviewEl) importPreviewEl.innerHTML = '';
       }
