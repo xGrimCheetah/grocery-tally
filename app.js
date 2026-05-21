@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.54.3"; // Manage Items Clear button and bottom A–Z sticky fix
+  let APP_VERSION = "1.55.0"; // Manage Organize tab for category/item ordering
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -20,6 +20,7 @@
   let buildClosedCats = getBuildClosedCats();
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageView = 'items';
+  let manageOrganizeSelectedCat = '';
   let manageItemsQuery = '';
   let manageItemSort = 'alpha';
   let manageCategoryReorderMode = false;
@@ -1755,6 +1756,19 @@
   function rerenderCategoryOrderViews(){
     try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
+  function getManageOrganizeCategories(){
+    const categories = state.categories.slice();
+    const hasUncategorized = state.items.some(it => !cleanText(it && it.cat));
+    if(hasUncategorized) categories.push('');
+    return categories;
+  }
+  function ensureManageOrganizeSelectedCat(){
+    const categories = getManageOrganizeCategories();
+    if(!categories.length){ manageOrganizeSelectedCat = ''; return ''; }
+    if(categories.includes(manageOrganizeSelectedCat)) return manageOrganizeSelectedCat;
+    manageOrganizeSelectedCat = categories[0];
+    return manageOrganizeSelectedCat;
+  }
   function restoreTouchDragSource(el){
     if(!el || !el.classList) return;
     el.classList.remove('touch-drag-source','dragging','drop-target');
@@ -2382,6 +2396,7 @@
       <div class="manage-view-toggle-row">
         <div class="insights-view-toggle manage-view-toggle" role="group" aria-label="Manage view">
           <button type="button" class="insights-view-btn${manageView === 'items' ? ' active' : ''}" data-manage-view="items" aria-pressed="${manageView === 'items' ? 'true' : 'false'}">Items</button>
+          <button type="button" class="insights-view-btn${manageView === 'organize' ? ' active' : ''}" data-manage-view="organize" aria-pressed="${manageView === 'organize' ? 'true' : 'false'}">Organize</button>
           <button type="button" class="insights-view-btn${manageView === 'categories' ? ' active' : ''}" data-manage-view="categories" aria-pressed="${manageView === 'categories' ? 'true' : 'false'}">Categories</button>
           <button type="button" class="insights-view-btn${manageView === 'stores' ? ' active' : ''}" data-manage-view="stores" aria-pressed="${manageView === 'stores' ? 'true' : 'false'}">Stores</button>
           <button type="button" class="insights-view-btn${manageView === 'backup' ? ' active' : ''}" data-manage-view="backup" aria-pressed="${manageView === 'backup' ? 'true' : 'false'}">Backup</button>
@@ -2391,17 +2406,79 @@
       <div id="manageSubView"></div>`;
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
-        manageView = ['items','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
+        manageView = ['items','organize','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
         if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
       };
     });
     const subView = document.getElementById('manageSubView');
-    if(manageView === 'categories') renderManageCategories(subView);
+    if(manageView === 'organize') renderManageOrganize(subView);
+    else if(manageView === 'categories') renderManageCategories(subView);
     else if(manageView === 'stores') renderManageStores(subView);
     else if(manageView === 'backup') renderManageBackup(subView);
     else renderManageItems(subView);
     clearTouchDragArtifacts();
+  }
+  function renderManageOrganize(target){
+    ensurePositions();
+    const selectedCat = ensureManageOrganizeSelectedCat();
+    const categories = getManageOrganizeCategories();
+    const root = (target || viewManage);
+    root.innerHTML = `
+      <p class="muted">Arrange categories and items in the order you walk through the store.</p>
+      <div class="card organize-card"><h3>Category order</h3><div id="organizeCategoryList"></div></div>
+      <div class="spacer"></div>
+      <div class="card organize-card"><h3 id="organizeItemsHeading"></h3><div id="organizeItemsList"></div></div>`;
+    const itemsHeading = document.getElementById('organizeItemsHeading');
+    if(itemsHeading) itemsHeading.textContent = `Items in ${categoryDisplayName(selectedCat)}`;
+    const categoryList = document.getElementById('organizeCategoryList');
+    const itemsList = document.getElementById('organizeItemsList');
+    categories.forEach((cat, idx)=>{
+      const row = document.createElement('div');
+      row.className = 'item organize-row' + (selectedCat === cat ? ' selected' : '');
+      const left = document.createElement('div'); left.className = 'left';
+      const right = document.createElement('div'); right.className = 'right';
+      const name = document.createElement('div'); name.className='name'; name.textContent = categoryDisplayName(cat);
+      const count = state.items.filter(it => cleanText((it && it.cat) || '') === cleanText(cat || '')).length;
+      const meta = document.createElement('div'); meta.className='cat'; meta.textContent = `${count} ${count === 1 ? 'item' : 'items'}`;
+      left.appendChild(name); left.appendChild(meta);
+      const up = document.createElement('button'); up.type='button'; up.className='btn reorder-btn'; up.textContent='↑'; up.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} up`);
+      const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} down`);
+      const isUncat = !cleanText(cat);
+      const realIndex = state.categories.indexOf(cat);
+      const isFirstReal = realIndex === 0;
+      const isLastReal = realIndex === state.categories.length - 1;
+      up.disabled = isUncat || isFirstReal;
+      down.disabled = isUncat || isLastReal;
+      up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1)){ save(); renderManage(); renderBuild(); renderShop(); } };
+      down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1)){ save(); renderManage(); renderBuild(); renderShop(); } };
+      row.onclick = ()=>{ manageOrganizeSelectedCat = cat; renderManage(); };
+      right.appendChild(up); right.appendChild(down);
+      row.appendChild(left); row.appendChild(right);
+      categoryList.appendChild(row);
+    });
+    const itemRows = itemsInCategory(selectedCat);
+    if(!itemRows.length){
+      const empty = document.createElement('p'); empty.className='muted'; empty.textContent='No items in this category yet.';
+      itemsList.appendChild(empty);
+      return;
+    }
+    itemRows.forEach((it, idx)=>{
+      const row = document.createElement('div'); row.className='item organize-row';
+      const left = document.createElement('div'); left.className='left';
+      const right = document.createElement('div'); right.className='right';
+      const name = document.createElement('div'); name.className='name'; name.textContent=it.name;
+      left.appendChild(name);
+      const up = document.createElement('button'); up.type='button'; up.className='btn reorder-btn'; up.textContent='↑'; up.setAttribute('aria-label', `Move ${it.name} up`);
+      const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${it.name} down`);
+      up.disabled = idx === 0;
+      down.disabled = idx === itemRows.length - 1;
+      up.onclick = ()=>{ if(moveItemWithinCategory(it.id, -1)){ save(); renderManage(); renderBuild(); renderShop(); } };
+      down.onclick = ()=>{ if(moveItemWithinCategory(it.id, 1)){ save(); renderManage(); renderBuild(); renderShop(); } };
+      right.appendChild(up); right.appendChild(down);
+      row.appendChild(left); row.appendChild(right);
+      itemsList.appendChild(row);
+    });
   }
 
   function renderManageItems(target){

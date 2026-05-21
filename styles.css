@@ -202,6 +202,9 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .manage-reorder-help{font-size:.92rem}
 .manage-item-row.reordering,.manage-category-row.reordering{cursor:default}
 .manage-item-row.reordering .right,.manage-category-row.reordering .right{gap:6px}
+.organize-card h3{margin:0 0 8px}
+.organize-row{margin-top:8px}
+.organize-row.selected{border-color:#3b82f6;background:#10233f}
 .reorder-btn{min-width:44px;min-height:40px;font-size:1.1rem;font-weight:800;line-height:1}
 .reorder-btn:disabled{opacity:.35;cursor:not-allowed}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}

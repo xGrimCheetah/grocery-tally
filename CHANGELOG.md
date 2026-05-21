@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.55.0 — Manage Organize tab for store-walk order
+
+- Added a new Manage → Organize tab for arranging grocery flow.
+- Added category ↑ / ↓ controls for store-walk category order.
+- Added selected-category item ↑ / ↓ controls for item order within a category.
+- Kept Organize focused on ordering only, while preserving item details/editing in Manage → Items and category editing in Manage → Categories.
+- Preserved Shopping Mode category/item order behavior, receipt-only pricing, Build List modes, Insights, Run History, Manage Items, Stores, Backup, localStorage keys, and JSON backup compatibility.
+
 ## v1.54.3 — Manage Items Clear button and bottom A-Z sticky fix
 
 - Kept the Manage → Items Clear button visible even when the search/add field is empty.
