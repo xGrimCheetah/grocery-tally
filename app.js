@@ -2798,7 +2798,77 @@ Skipped duplicate items: ${skippedItems}`);
       if(exportStatusEl) exportStatusEl.textContent = 'Backup downloaded. Save a copy somewhere safe, such as iCloud Drive, Google Drive, OneDrive, or another device.';
     };
     const fileInput = document.getElementById('fileImport'); document.getElementById('btnImport').onclick = ()=> fileInput.click();
-    fileInput.onchange = async (e)=>{ const file=e.target.files[0]; if(!file) return; pendingImportData = null; if(importPreviewEl) importPreviewEl.innerHTML = ''; try{ const text=await file.text(); const data = JSON.parse(text); if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format'); pendingImportData = data; const stats = getDataSafetyStats(data); const backupVersion = getBackupFileVersion(data); const metadata = data.backupMeta || data.exportMetadata || data.metadata || {}; const exportedAt = metadata.exportedAt ? formatBackupTimestamp(metadata.exportedAt) : 'Not included'; const looksLegacy = !metadata.exportedAt || backupVersion === 'Not included'; if(importStatusEl) importStatusEl.textContent = `Loaded file: ${file.name}`; if(importPreviewEl) importPreviewEl.innerHTML = `<div class="data-safety-stats"><div><span>Backup app version</span><strong>${backupVersion}</strong></div><div><span>Exported at</span><strong>${exportedAt}</strong></div><div><span>Items</span><strong>${stats.itemCount}</strong></div><div><span>Categories</span><strong>${stats.categoryCount}</strong></div><div><span>Stores</span><strong>${stats.storeCount}</strong></div><div><span>Committed runs</span><strong>${stats.committedRunCount}</strong></div><div><span>Receipt price entries</span><strong>${stats.receiptPriceEntryCount}</strong></div><div><span>Items with price history</span><strong>${stats.itemsWithPriceHistoryCount}</strong></div></div><div class="controls" style="margin-top:8px"><button class="btn" id="btnConfirmRestore">Restore This Backup</button></div>${looksLegacy ? '<p class="muted" style="margin-top:6px">This looks like an older backup. Some metadata is unavailable, but the app will try to restore it using existing compatibility behavior.</p>' : ''}`; const restoreBtn = document.getElementById('btnConfirmRestore'); if(restoreBtn){ restoreBtn.onclick = ()=>{ const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?'; if(!pendingImportData || !confirm(warning)) return; state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [] }; normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!'); }; } }catch(err){ if(importStatusEl) importStatusEl.textContent = 'This file could not be read as a Grocery Tally backup. No data was changed.'; if(importPreviewEl) importPreviewEl.innerHTML = ''; } fileInput.value=''; };
+    fileInput.onchange = async (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      pendingImportData = null;
+      if(importPreviewEl) importPreviewEl.innerHTML = '';
+      try{
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if(!data || !Array.isArray(data.categories) || !Array.isArray(data.items)) throw new Error('Invalid backup format');
+        pendingImportData = data;
+        const stats = getDataSafetyStats(data);
+        const backupVersion = getBackupFileVersion(data);
+        const metadata = data.backupMeta || data.exportMetadata || data.metadata || {};
+        const exportedAt = metadata.exportedAt ? formatBackupTimestamp(metadata.exportedAt) : 'Not included';
+        const looksLegacy = !metadata.exportedAt || backupVersion === 'Not included';
+        if(importStatusEl) importStatusEl.textContent = `Loaded file: ${file.name}`;
+        if(importPreviewEl){
+          importPreviewEl.innerHTML = '';
+          const previewStats = document.createElement('div');
+          previewStats.className = 'data-safety-stats';
+          const addPreviewStat = (label, value)=>{
+            const box = document.createElement('div');
+            const span = document.createElement('span');
+            span.textContent = label;
+            const strong = document.createElement('strong');
+            strong.textContent = String(value);
+            box.appendChild(span);
+            box.appendChild(strong);
+            previewStats.appendChild(box);
+          };
+          addPreviewStat('Backup app version', backupVersion);
+          addPreviewStat('Exported at', exportedAt);
+          addPreviewStat('Items', stats.itemCount);
+          addPreviewStat('Categories', stats.categoryCount);
+          addPreviewStat('Stores', stats.storeCount);
+          addPreviewStat('Committed runs', stats.committedRunCount);
+          addPreviewStat('Receipt price entries', stats.receiptPriceEntryCount);
+          addPreviewStat('Items with price history', stats.itemsWithPriceHistoryCount);
+          importPreviewEl.appendChild(previewStats);
+
+          const controls = document.createElement('div');
+          controls.className = 'controls';
+          controls.style.marginTop = '8px';
+          const restoreBtn = document.createElement('button');
+          restoreBtn.className = 'btn';
+          restoreBtn.id = 'btnConfirmRestore';
+          restoreBtn.textContent = 'Restore This Backup';
+          controls.appendChild(restoreBtn);
+          importPreviewEl.appendChild(controls);
+
+          if(looksLegacy){
+            const note = document.createElement('p');
+            note.className = 'muted';
+            note.style.marginTop = '6px';
+            note.textContent = 'This looks like an older backup. Some metadata is unavailable, but the app will try to restore it using existing compatibility behavior.';
+            importPreviewEl.appendChild(note);
+          }
+
+          restoreBtn.onclick = ()=>{
+            const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
+            if(!pendingImportData || !confirm(warning)) return;
+            state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [] };
+            normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!');
+          };
+        }
+      }catch(err){
+        if(importStatusEl) importStatusEl.textContent = 'This file could not be read as a Grocery Tally backup. No data was changed.';
+        if(importPreviewEl) importPreviewEl.innerHTML = '';
+      }
+      fileInput.value = '';
+    };
     document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearLastBackupAt(); save(); renderAll(); } };
   }
 
