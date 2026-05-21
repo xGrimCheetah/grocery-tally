@@ -2435,6 +2435,10 @@
     if(itemsHeading) itemsHeading.textContent = `Items in ${categoryDisplayName(selectedCat)}`;
     const categoryList = document.getElementById('organizeCategoryList');
     const itemsList = document.getElementById('organizeItemsList');
+    const topBtn = document.getElementById('organizeTopBtn');
+    if(topBtn){
+      topBtn.onclick = ()=> scrollToOrganizeTop();
+    }
     categories.forEach((cat, idx)=>{
       const row = document.createElement('div');
       row.className = 'item organize-row' + (selectedCat === cat ? ' selected' : '');
@@ -2490,10 +2494,6 @@
       row.appendChild(left); row.appendChild(right);
       itemsList.appendChild(row);
     });
-    const topBtn = document.getElementById('organizeTopBtn');
-    if(topBtn){
-      topBtn.onclick = ()=> scrollToOrganizeTop();
-    }
   }
 
   function rerenderAfterOrganizeMove(anchorRow){
