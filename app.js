@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.56.0"; // Backup and restore confidence polish
+  let APP_VERSION = "1.57.0"; // Store-specific Shopping Mode grouping
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -11,6 +11,7 @@
   const SHOP_CLOSED_CATS_KEY = 'shop_closed_cats';     // legacy Shopping Mode collapsed state
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
   const LAST_BACKUP_KEY = 'grocery_tally_last_backup_at';
+  const SHOP_SELECTED_STORE_KEY = 'shop_selected_store_id';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
@@ -38,6 +39,7 @@
   const runHistoryExpandedIds = new Set();
   let runHistoryReceiptEditId = '';
   let manageNavResizeListenersAttached = false;
+  let shopSelectedStoreId = loadShopSelectedStoreId();
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -204,6 +206,29 @@
 
   function clearLastBackupAt(){
     try{ localStorage.removeItem(LAST_BACKUP_KEY); }catch(e){}
+  }
+
+
+  function loadShopSelectedStoreId(){
+    try{ return cleanText(localStorage.getItem(SHOP_SELECTED_STORE_KEY) || ''); }catch(e){ return ''; }
+  }
+
+  function saveShopSelectedStoreId(storeId){
+    const cleaned = cleanText(storeId);
+    try{
+      if(cleaned) localStorage.setItem(SHOP_SELECTED_STORE_KEY, cleaned);
+      else localStorage.removeItem(SHOP_SELECTED_STORE_KEY);
+    }catch(e){}
+  }
+
+  function activeShopSelectedStoreId(){
+    const selected = cleanText(shopSelectedStoreId);
+    if(!selected) return '';
+    const exists = sortedStores().some(store => cleanText(store.id) === selected);
+    if(exists) return selected;
+    shopSelectedStoreId = '';
+    saveShopSelectedStoreId('');
+    return '';
   }
 
   function formatBackupTimestamp(value){
@@ -2258,6 +2283,9 @@
   // ----- Shopping Mode -----
   function renderShop(fadeInCat){
     ensurePositions();
+    const stores = sortedStores();
+    const selectedStoreId = activeShopSelectedStoreId();
+    const selectedStore = stores.find(store => cleanText(store.id) === selectedStoreId) || null;
     viewShop.innerHTML = `
       <div class="controls">
         <button class="btn" id="btnBack">← Back</button>
@@ -2266,6 +2294,14 @@
       </div>
       <div id="shopEstimate" class="estimate-sticky"></div>
       <p class="muted shop-instruction">Tap to check off. Press and hold to skip or unskip.</p>
+      <div class="shop-store-filter-row">
+        <label for="shopStoreSelect">Shopping at:</label>
+        <select id="shopStoreSelect" aria-label="Shopping Mode store">
+          <option value="">All stores</option>
+          ${stores.map(store=> `<option value="${store.id}">${store.name}</option>`).join('')}
+        </select>
+      </div>
+      ${stores.length ? '' : '<p class="muted shop-store-note">No stores yet. Add stores in Manage → Stores.</p>'}
       <div class="spacer"></div>
       <div id="shopList"></div>`;
     document.getElementById('btnBack').onclick = ()=>{ try{ renderBuild(); }catch(e){ console.error(e) } setTab('build') };
@@ -2273,145 +2309,213 @@
     document.getElementById('btnResetCheckmarks').onclick = resetCheckmarks;
     renderEstimatePill(document.getElementById('shopEstimate'));
 
+    const storeSelect = document.getElementById('shopStoreSelect');
+    if(storeSelect){
+      storeSelect.value = selectedStore ? selectedStore.id : '';
+      storeSelect.onchange = ()=>{
+        const nextStoreId = cleanText(storeSelect.value);
+        shopSelectedStoreId = nextStoreId;
+        saveShopSelectedStoreId(nextStoreId);
+        renderShop();
+      };
+    }
+
     const shopList = document.getElementById('shopList');
     const items = nonZero().sort(sortItems);
-    const byCat = groupBy(items,'cat');
     const isHandled = item => !!(item && (item.checked || item.skipped));
-    const orderedCats = Object.keys(byCat).sort((a,b)=>{
-      const aDone = byCat[a].length > 0 && byCat[a].every(isHandled);
-      const bDone = byCat[b].length > 0 && byCat[b].every(isHandled);
-      if(aDone !== bDone) return aDone ? 1 : -1;
-      return catIndex(a)-catIndex(b);
-    });
 
-    if(!orderedCats.length){
+    if(!items.length){
       shopList.innerHTML = '<p class="muted">No items yet.</p>';
       return;
     }
 
-    orderedCats.forEach(cat=>{
-      const catItems = byCat[cat];
-      const catComplete = catItems.length > 0 && catItems.every(isHandled);
-      const block=document.createElement('div');
-      block.className='shop-cat-block' + (catComplete ? ' completed' : '');
-      block.dataset.cat = cat;
-
-      const heading=document.createElement('div');
-      heading.className='shop-cat-heading';
-      heading.textContent=categoryDisplayName(cat);
-      block.appendChild(heading);
-
-      const list=document.createElement('div');
-      list.className='shop-cat-list';
-
-      catItems.slice().sort((a,b)=>{
-        const ah = isHandled(a);
-        const bh = isHandled(b);
-        if(ah !== bh) return ah ? 1 : -1;
-        return sortItems(a,b);
-      }).forEach(it=>{
-        const row=document.createElement('div');
-        row.className='shop-item' + (it.checked ? ' checked' : '') + (it.skipped ? ' skipped' : '');
-        row.setAttribute('role','button');
-        row.setAttribute('aria-pressed', it.checked ? 'true' : 'false');
-        row.setAttribute('aria-label', `${it.name}. ${it.checked ? 'Checked' : (it.skipped ? 'Skipped' : 'Not checked')}. Tap to check off. Press and hold to skip or unskip.`);
-
-        const check=document.createElement('div');
-        check.className='shop-check';
-        check.setAttribute('aria-hidden','true');
-        check.textContent = it.checked ? '✔' : '';
-
-        const divider1=document.createElement('div');
-        divider1.className='shop-divider';
-        divider1.setAttribute('aria-hidden','true');
-
-        const qty=document.createElement('div');
-        qty.className='shop-qty';
-        qty.textContent = it.qty;
-
-        const divider2=document.createElement('div');
-        divider2.className='shop-divider';
-        divider2.setAttribute('aria-hidden','true');
-
-        const name=document.createElement('div');
-        name.className='shop-name';
-        name.textContent = it.name;
-
-        row.appendChild(check);
-        row.appendChild(divider1);
-        row.appendChild(qty);
-        row.appendChild(divider2);
-        row.appendChild(name);
-
-        let longPressTimer = null;
-        let longPressTriggered = false;
-        let startX = 0;
-        let startY = 0;
-        const clearLongPressTimer = ()=>{
-          if(longPressTimer){
-            clearTimeout(longPressTimer);
-            longPressTimer = null;
-          }
-        };
-        const refreshAfterShopChange = (wasCatComplete)=>{
-          save();
-          renderEstimatePill(document.getElementById('shopEstimate'));
-          const currentCatItems = state.items.filter(i => i.cat === cat && Number(i.qty) > 0);
-          const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(isHandled);
-          if(isCatComplete && !wasCatComplete){
-            block.classList.add('fading-out');
-            setTimeout(()=> renderShop(cat), 250);
-          } else {
-            renderShop();
-          }
-        };
-        row.addEventListener('pointerdown', e=>{
-          if(e.button !== undefined && e.button !== 0) return;
-          startX = e.clientX;
-          startY = e.clientY;
-          longPressTriggered = false;
-          clearLongPressTimer();
-          try{ row.setPointerCapture(e.pointerId); }catch(err){}
-          longPressTimer = setTimeout(()=>{
-            longPressTimer = null;
-            longPressTriggered = true;
-            if(it.checked) return;
-            const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
-            it.skipped = !it.skipped;
-            it.checked = false;
-            refreshAfterShopChange(wasCatComplete);
-          }, 600);
-        });
-        row.addEventListener('pointermove', e=>{
-          if(!longPressTimer) return;
-          if(Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10){
-            clearLongPressTimer();
-          }
-        });
-        row.addEventListener('pointerup', clearLongPressTimer);
-        row.addEventListener('pointercancel', clearLongPressTimer);
-        row.addEventListener('contextmenu', e=> e.preventDefault());
-        row.onclick = ()=>{
-          if(longPressTriggered){
-            longPressTriggered = false;
-            return;
-          }
-          if(it.skipped) return;
-          const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
-          it.checked = !it.checked;
-          if(it.checked) it.skipped = false;
-          refreshAfterShopChange(wasCatComplete);
-        };
-        list.appendChild(row);
+    function createShopCategoryBlocks(target, sourceItems, options){
+      const byCat = groupBy(sourceItems,'cat');
+      const orderedCats = Object.keys(byCat).sort((a,b)=>{
+        const aDone = byCat[a].length > 0 && byCat[a].every(isHandled);
+        const bDone = byCat[b].length > 0 && byCat[b].every(isHandled);
+        if(aDone !== bDone) return aDone ? 1 : -1;
+        return catIndex(a)-catIndex(b);
       });
+      orderedCats.forEach(cat=>{
+        const catItems = byCat[cat];
+        const catComplete = catItems.length > 0 && catItems.every(isHandled);
+        const block=document.createElement('div');
+        block.className='shop-cat-block' + (catComplete ? ' completed' : '');
+        block.dataset.cat = cat;
 
-      block.appendChild(list);
-      shopList.appendChild(block);
-      if(fadeInCat && cat === fadeInCat){
-        block.classList.add('fading-in');
-        setTimeout(()=> block.classList.remove('fading-in'), 260);
-      }
+        const heading=document.createElement('div');
+        heading.className='shop-cat-heading';
+        heading.textContent=categoryDisplayName(cat);
+        block.appendChild(heading);
+
+        const list=document.createElement('div');
+        list.className='shop-cat-list';
+
+        catItems.slice().sort((a,b)=>{
+          const ah = isHandled(a);
+          const bh = isHandled(b);
+          if(ah !== bh) return ah ? 1 : -1;
+          return sortItems(a,b);
+        }).forEach(it=>{
+          const row=document.createElement('div');
+          row.className='shop-item' + (it.checked ? ' checked' : '') + (it.skipped ? ' skipped' : '');
+          row.setAttribute('role','button');
+          row.setAttribute('aria-pressed', it.checked ? 'true' : 'false');
+          row.setAttribute('aria-label', `${it.name}. ${it.checked ? 'Checked' : (it.skipped ? 'Skipped' : 'Not checked')}. Tap to check off. Press and hold to skip or unskip.`);
+
+          const check=document.createElement('div');
+          check.className='shop-check';
+          check.setAttribute('aria-hidden','true');
+          check.textContent = it.checked ? '✔' : '';
+
+          const divider1=document.createElement('div');
+          divider1.className='shop-divider';
+          divider1.setAttribute('aria-hidden','true');
+
+          const qty=document.createElement('div');
+          qty.className='shop-qty';
+          qty.textContent = it.qty;
+
+          const divider2=document.createElement('div');
+          divider2.className='shop-divider';
+          divider2.setAttribute('aria-hidden','true');
+
+          const nameWrap=document.createElement('div');
+          nameWrap.className='shop-name-wrap';
+          const name=document.createElement('div');
+          name.className='shop-name';
+          name.textContent = it.name;
+          nameWrap.appendChild(name);
+          if(options && options.showAssignedStores){
+            const assignedStores = (it.storeIds || []).map(storeId => stores.find(store => store.id === storeId)?.name).filter(Boolean);
+            if(assignedStores.length){
+              const assigned=document.createElement('div');
+              assigned.className='shop-item-assigned-store muted';
+              assigned.textContent = `Assigned: ${assignedStores.join(', ')}`;
+              nameWrap.appendChild(assigned);
+            }
+          }
+
+          row.appendChild(check);
+          row.appendChild(divider1);
+          row.appendChild(qty);
+          row.appendChild(divider2);
+          row.appendChild(nameWrap);
+
+          let longPressTimer = null;
+          let longPressTriggered = false;
+          let startX = 0;
+          let startY = 0;
+          const clearLongPressTimer = ()=>{
+            if(longPressTimer){
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+            }
+          };
+          const refreshAfterShopChange = (wasCatComplete)=>{
+            save();
+            renderEstimatePill(document.getElementById('shopEstimate'));
+            const currentCatItems = state.items.filter(i => i.cat === cat && Number(i.qty) > 0);
+            const isCatComplete = currentCatItems.length > 0 && currentCatItems.every(isHandled);
+            if(isCatComplete && !wasCatComplete){
+              block.classList.add('fading-out');
+              setTimeout(()=> renderShop(cat), 250);
+            } else {
+              renderShop();
+            }
+          };
+          row.addEventListener('pointerdown', e=>{
+            if(e.button !== undefined && e.button !== 0) return;
+            startX = e.clientX;
+            startY = e.clientY;
+            longPressTriggered = false;
+            clearLongPressTimer();
+            try{ row.setPointerCapture(e.pointerId); }catch(err){}
+            longPressTimer = setTimeout(()=>{
+              longPressTimer = null;
+              longPressTriggered = true;
+              if(it.checked) return;
+              const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
+              it.skipped = !it.skipped;
+              it.checked = false;
+              refreshAfterShopChange(wasCatComplete);
+            }, 600);
+          });
+          row.addEventListener('pointermove', e=>{
+            if(!longPressTimer) return;
+            if(Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10){
+              clearLongPressTimer();
+            }
+          });
+          row.addEventListener('pointerup', clearLongPressTimer);
+          row.addEventListener('pointercancel', clearLongPressTimer);
+          row.addEventListener('contextmenu', e=> e.preventDefault());
+          row.onclick = ()=>{
+            if(longPressTriggered){
+              longPressTriggered = false;
+              return;
+            }
+            if(it.skipped) return;
+            const wasCatComplete = catItems.length > 0 && catItems.every(isHandled);
+            it.checked = !it.checked;
+            if(it.checked) it.skipped = false;
+            refreshAfterShopChange(wasCatComplete);
+          };
+          list.appendChild(row);
+        });
+
+        block.appendChild(list);
+        target.appendChild(block);
+        if(fadeInCat && cat === fadeInCat){
+          block.classList.add('fading-in');
+          setTimeout(()=> block.classList.remove('fading-in'), 260);
+        }
+      });
+    }
+
+    if(!selectedStore){
+      createShopCategoryBlocks(shopList, items, { showAssignedStores:false });
+      return;
+    }
+
+    const selectedStoreItems = [];
+    const unassignedItems = [];
+    const otherStoreItems = [];
+    items.forEach(item=>{
+      const itemStoreIds = Array.isArray(item.storeIds) ? item.storeIds.filter(Boolean) : [];
+      if(!itemStoreIds.length) unassignedItems.push(item);
+      else if(itemStoreIds.includes(selectedStore.id)) selectedStoreItems.push(item);
+      else otherStoreItems.push(item);
     });
+
+    function section(title, note){
+      const wrap = document.createElement('div');
+      wrap.className = 'shop-store-section';
+      const heading = document.createElement('h3');
+      heading.className = 'shop-store-section-title';
+      heading.textContent = title;
+      wrap.appendChild(heading);
+      if(note){
+        const msg = document.createElement('p');
+        msg.className = 'muted shop-store-section-note';
+        msg.textContent = note;
+        wrap.appendChild(msg);
+      }
+      shopList.appendChild(wrap);
+      return wrap;
+    }
+
+    const selectedSection = section(`For ${selectedStore.name}`, selectedStoreItems.length ? '' : `No current list items are assigned to ${selectedStore.name} yet. Unassigned items are still shown below so your list stays usable.`);
+    if(selectedStoreItems.length) createShopCategoryBlocks(selectedSection, selectedStoreItems, { showAssignedStores:false });
+    if(unassignedItems.length){
+      const unassignedSection = section('Unassigned', 'Items with no store assignment yet.');
+      createShopCategoryBlocks(unassignedSection, unassignedItems, { showAssignedStores:false });
+    }
+    if(otherStoreItems.length){
+      const otherSection = section('Assigned to other stores', '');
+      createShopCategoryBlocks(otherSection, otherStoreItems, { showAssignedStores:true });
+    }
   }
 
   // ----- Manage Items -----
