@@ -2298,7 +2298,6 @@
         <label for="shopStoreSelect">Shopping at:</label>
         <select id="shopStoreSelect" aria-label="Shopping Mode store">
           <option value="">All stores</option>
-          ${stores.map(store=> `<option value="${store.id}">${store.name}</option>`).join('')}
         </select>
       </div>
       ${stores.length ? '' : '<p class="muted shop-store-note">No stores yet. Add stores in Manage → Stores.</p>'}
@@ -2311,6 +2310,12 @@
 
     const storeSelect = document.getElementById('shopStoreSelect');
     if(storeSelect){
+      stores.forEach(store=>{
+        const option = document.createElement('option');
+        option.value = store.id;
+        option.textContent = store.name;
+        storeSelect.appendChild(option);
+      });
       storeSelect.value = selectedStore ? selectedStore.id : '';
       storeSelect.onchange = ()=>{
         const nextStoreId = cleanText(storeSelect.value);
