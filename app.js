@@ -1741,8 +1741,8 @@
       console.error(e);
     }
   }
-  function catIndex(c, storeId){ const i = orderedCategoryList(storeId).indexOf(c); return i === -1 ? 9999 : i }
-  function sortItems(a,b,storeId){ const ci=catIndex(a.cat, storeId)-catIndex(b.cat, storeId); if(ci!==0) return ci; const catItems = orderedItemList(a.cat, storeId); const ai = catItems.findIndex(x=>x.id===a.id); const bi = catItems.findIndex(x=>x.id===b.id); if(ai!==bi) return ai-bi; return String(a.name).localeCompare(String(b.name)) }
+  function catIndex(c, storeId, sortContext){ if(sortContext && sortContext.catIndexMap) return sortContext.catIndexMap.has(c) ? sortContext.catIndexMap.get(c) : 9999; const i = orderedCategoryList(storeId).indexOf(c); return i === -1 ? 9999 : i }
+  function sortItems(a,b,storeId,sortContext){ const ci=catIndex(a.cat, storeId, sortContext)-catIndex(b.cat, storeId, sortContext); if(ci!==0) return ci; if(sortContext && sortContext.itemIndexByCategory){ const idxMap = sortContext.itemIndexByCategory.get(cleanText(a.cat)) || new Map(); const ai = idxMap.has(String(a.id)) ? idxMap.get(String(a.id)) : 1e9; const bi = idxMap.has(String(b.id)) ? idxMap.get(String(b.id)) : 1e9; if(ai!==bi) return ai-bi; } else { const catItems = orderedItemList(a.cat, storeId); const ai = catItems.findIndex(x=>x.id===a.id); const bi = catItems.findIndex(x=>x.id===b.id); if(ai!==bi) return ai-bi; } return String(a.name).localeCompare(String(b.name)) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name))}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
   function nextItemPosForCategory(cat){
@@ -1956,6 +1956,40 @@
     custom.forEach(itemId=>{ const it = byId.get(String(itemId)); if(it && !seen.has(it.id)){ seen.add(it.id); ordered.push(it); } });
     base.forEach(it=>{ if(!seen.has(it.id)) ordered.push(it); });
     return ordered;
+  }
+  function migrateStoreOrdersForCategoryRename(oldName, newName){
+    const from = cleanText(oldName);
+    const to = cleanText(newName);
+    if(!from || !to || from === to || !state.storeOrders || typeof state.storeOrders !== 'object') return;
+    Object.keys(state.storeOrders).forEach(storeId=>{
+      const order = getStoreOrderData(storeId);
+      order.categoryOrder = (order.categoryOrder || []).map(cat=> cat === from ? to : cat);
+      const nextItemOrderByCategory = {};
+      Object.keys(order.itemOrderByCategory || {}).forEach(cat=>{
+        const targetCat = cat === from ? to : cat;
+        const ids = Array.isArray(order.itemOrderByCategory[cat]) ? order.itemOrderByCategory[cat].slice() : [];
+        if(!nextItemOrderByCategory[targetCat]) nextItemOrderByCategory[targetCat] = ids;
+        else{
+          const seen = new Set(nextItemOrderByCategory[targetCat].map(x=>String(x)));
+          ids.forEach(itemId=>{ const idv = String(itemId); if(!seen.has(idv)){ seen.add(idv); nextItemOrderByCategory[targetCat].push(idv); } });
+        }
+      });
+      order.itemOrderByCategory = nextItemOrderByCategory;
+    });
+  }
+  function createSortContext(storeId, sourceItems){
+    const sid = cleanText(storeId);
+    const catOrder = orderedCategoryList(sid);
+    const catIndexMap = new Map(catOrder.map((cat, idx)=>[cat, idx]));
+    const itemIndexByCategory = new Map();
+    const categories = new Set((sourceItems || state.items || []).map(it=>cleanText(it && it.cat)));
+    categories.forEach(cat=>{
+      const ordered = orderedItemList(cat, sid);
+      const idxMap = new Map();
+      ordered.forEach((it, idx)=> idxMap.set(String(it.id), idx));
+      itemIndexByCategory.set(cat, idxMap);
+    });
+    return { catIndexMap, itemIndexByCategory };
   }
 
   // ===== Tabs & Views =====
@@ -2420,7 +2454,8 @@
     }
 
     const shopList = document.getElementById('shopList');
-    const items = nonZero().sort((a,b)=>sortItems(a,b, selectedStore ? selectedStore.id : ''));
+    const sortContext = createSortContext(selectedStore ? selectedStore.id : '', state.items);
+    const items = nonZero().sort((a,b)=>sortItems(a,b, selectedStore ? selectedStore.id : '', sortContext));
     const isHandled = item => !!(item && (item.checked || item.skipped));
 
     if(!items.length){
@@ -2434,7 +2469,7 @@
         const aDone = byCat[a].length > 0 && byCat[a].every(isHandled);
         const bDone = byCat[b].length > 0 && byCat[b].every(isHandled);
         if(aDone !== bDone) return aDone ? 1 : -1;
-        return catIndex(a, selectedStore ? selectedStore.id : '')-catIndex(b, selectedStore ? selectedStore.id : '');
+        return catIndex(a, selectedStore ? selectedStore.id : '', sortContext)-catIndex(b, selectedStore ? selectedStore.id : '', sortContext);
       });
       orderedCats.forEach(cat=>{
         const catItems = byCat[cat];
@@ -2455,7 +2490,7 @@
           const ah = isHandled(a);
           const bh = isHandled(b);
           if(ah !== bh) return ah ? 1 : -1;
-          return sortItems(a,b, selectedStore ? selectedStore.id : '');
+          return sortItems(a,b, selectedStore ? selectedStore.id : '', sortContext);
         }).forEach(it=>{
           const row=document.createElement('div');
           row.className='shop-item' + (it.checked ? ' checked' : '') + (it.skipped ? ' skipped' : '');
@@ -3439,6 +3474,7 @@ Skipped duplicate items: ${skippedItems}`);
         const oldName = state.categories[i];
         state.categories[i] = newName;
         state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
+        migrateStoreOrdersForCategoryRename(oldName, newName);
         if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
         if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
         save();
