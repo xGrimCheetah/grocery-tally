@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.57.0 — Store-specific Shopping Mode grouping
+
+- Added a Shopping Mode store selector with an All stores default.
+- Added selected-store grouping for current shopping list items: For selected store, Unassigned, and Assigned to other stores.
+- Kept All stores mode aligned with existing Shopping Mode behavior.
+- Preserved checked, skipped, commit-run, run-history, receipt pricing, estimates, Build List, Manage Items, Manage Organize, Manage Stores, Manage Backup, localStorage, and JSON backup compatibility.
+
 ## v1.56.0 — Backup and restore confidence polish
 
 - Improved Manage → Backup with a clearer current app data summary.
