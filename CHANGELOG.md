@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.58.0 — Store-specific category/item ordering
+
+- Added store-specific category and item ordering in Manage → Organize.
+- Preserved the existing Default order as the fallback/global order.
+- Made Shopping Mode use the selected store’s custom order when available.
+- Added safe fallback behavior for stores, categories, items, and Uncategorized.
+- Added a reset option for store-specific order.
+- Preserved Build List, Shopping Mode grouping, check/skip/commit behavior, Manage Items, Manage Stores, Manage Backup, localStorage, and JSON backup compatibility.
+
 ## v1.57.0 — Store-specific Shopping Mode grouping
 
 - Added a Shopping Mode store selector with an All stores default.

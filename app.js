@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.57.0"; // Store-specific Shopping Mode grouping
+  let APP_VERSION = "1.58.0"; // Store-specific category/item ordering
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -14,7 +14,7 @@
   const SHOP_SELECTED_STORE_KEY = 'shop_selected_store_id';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
-  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] };
+  let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [], storeOrders: {} };
   normalizeStateShape();
 
   let closedCats = getClosedCats();
@@ -22,6 +22,7 @@
   let shopClosedCats = getShopClosedCats(); // legacy only; Shopping Mode no longer uses accordions
   let manageView = 'items';
   let manageOrganizeSelectedCat = '';
+  let manageOrganizeSelectedStoreId = '';
   let manageItemsQuery = '';
   let manageItemSort = 'alpha';
   let manageCategoryReorderMode = false;
@@ -1401,9 +1402,9 @@
     const bn = normalizeText(b && b.name);
     const byName = an.localeCompare(bn);
     if(byName !== 0) return byName;
-    const byCat = catIndex(a.cat) - catIndex(b.cat);
+    const byCat = catIndex(a.cat, '') - catIndex(b.cat, '');
     if(byCat !== 0) return byCat;
-    return sortItems(a,b);
+    return sortItems(a,b, '');
   }
   function buildSearchRank(it, query){
     if(!query) return 0;
@@ -1740,8 +1741,8 @@
       console.error(e);
     }
   }
-  function catIndex(c){ const i = state.categories.indexOf(c); return i === -1 ? 9999 : i }
-  function sortItems(a,b){ const ci=catIndex(a.cat)-catIndex(b.cat); if(ci!==0) return ci; const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name)) }
+  function catIndex(c, storeId, sortContext){ if(sortContext && sortContext.catIndexMap) return sortContext.catIndexMap.has(c) ? sortContext.catIndexMap.get(c) : 9999; const i = orderedCategoryList(storeId).indexOf(c); return i === -1 ? 9999 : i }
+  function sortItems(a,b,storeId,sortContext){ const sid = cleanText(storeId); const ci=catIndex(a.cat, sid, sortContext)-catIndex(b.cat, sid, sortContext); if(ci!==0) return ci; if(sortContext && sortContext.itemIndexByCategory){ const idxMap = sortContext.itemIndexByCategory.get(cleanText(a.cat)) || new Map(); const ai = idxMap.has(String(a.id)) ? idxMap.get(String(a.id)) : 1e9; const bi = idxMap.has(String(b.id)) ? idxMap.get(String(b.id)) : 1e9; if(ai!==bi) return ai-bi; } else if(!sid){ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; } else { const catItems = orderedItemList(a.cat, sid); const ai = catItems.findIndex(x=>x.id===a.id); const bi = catItems.findIndex(x=>x.id===b.id); if(ai!==bi) return ai-bi; } return String(a.name).localeCompare(String(b.name)) }
   function ensurePositions(){ const byCat=groupBy(state.items,'cat'); Object.keys(byCat).forEach(cat=>{ let idx=0; byCat[cat].sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name))}).forEach(it=>{ if(typeof it.pos!=='number') it.pos=idx++; else idx=Math.max(idx,it.pos+1)}); byCat[cat].sort((a,b)=>a.pos-b.pos).forEach((it,i)=>it.pos=i) }) }
   function nextPos(cat){ const list=state.items.filter(i=>i.cat===cat); return list.length? Math.max(...list.map(i=> typeof i.pos==='number'?i.pos:-1))+1 : 0 }
   function nextItemPosForCategory(cat){
@@ -1749,9 +1750,26 @@
     const list = state.items.filter(i => cleanText(i && i.cat) === normalizedCat);
     return list.length ? Math.max(...list.map(i => Number(i && i.pos) || 0)) + 1 : 0;
   }
-  function itemsInCategory(cat){ return state.items.filter(i=>i.cat===cat).sort(sortItems) }
+  function itemsInCategory(cat, storeId){ return orderedItemList(cat, storeId) }
   function reindexCategory(cat){ itemsInCategory(cat).forEach((it,i)=> it.pos=i) }
-  function moveItemWithinCategory(itemId, direction){
+  function moveItemWithinCategory(itemId, direction, storeId){
+    const sid = cleanText(storeId);
+    if(sid){
+      const item = state.items.find(x=>x.id===itemId);
+      if(!item) return false;
+      const order = getStoreOrderData(sid);
+      const cat = item.cat;
+      const categoryItems = orderedItemList(cat, sid);
+      const from = categoryItems.findIndex(x=>x.id===itemId);
+      if(from < 0) return false;
+      const to = from + (direction < 0 ? -1 : 1);
+      if(to < 0 || to >= categoryItems.length) return false;
+      const ids = categoryItems.map(x=>String(x.id));
+      const moved = ids.splice(from,1)[0];
+      ids.splice(to,0,moved);
+      order.itemOrderByCategory[cat] = ids;
+      return true;
+    }
     const it = state.items.find(x=>x.id===itemId);
     if(!it) return false;
     const cat = it.cat;
@@ -1793,7 +1811,20 @@
   function rerenderItemViews(){
     try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
-  function moveCategoryWithinOrder(categoryName, direction){
+  function moveCategoryWithinOrder(categoryName, direction, storeId){
+    const sid = cleanText(storeId);
+    if(sid){
+      const order = getStoreOrderData(sid);
+      const categories = orderedCategoryList(sid);
+      const from = categories.indexOf(categoryName);
+      if(from < 0) return false;
+      const to = from + (direction < 0 ? -1 : 1);
+      if(to < 0 || to >= categories.length) return false;
+      const moved = categories.splice(from, 1)[0];
+      categories.splice(to, 0, moved);
+      order.categoryOrder = categories.filter(cat=>cleanText(cat));
+      return true;
+    }
     const delta = direction < 0 ? -1 : 1;
     const currentIndex = state.categories.indexOf(categoryName);
     if(currentIndex < 0) return false;
@@ -1807,7 +1838,7 @@
     try{ renderManage(); renderBuild(); renderShop(); }catch(e){ console.error(e) }
   }
   function getManageOrganizeCategories(){
-    const categories = state.categories.slice();
+    const categories = orderedCategoryList(activeOrganizeStoreId());
     const hasUncategorized = state.items.some(it => !cleanText(it && it.cat));
     if(hasUncategorized) categories.push('');
     return categories;
@@ -1862,6 +1893,103 @@
     content.className='item';
     wrap.appendChild(content);
     return { wrap, content };
+  }
+
+
+  function normalizeStoreOrders(storeOrders, validStoreIds){
+    const result = {};
+    if(!storeOrders || typeof storeOrders !== 'object') return result;
+    Object.keys(storeOrders).forEach(storeId=>{
+      const cleanStoreId = cleanText(storeId);
+      if(!cleanStoreId || !validStoreIds.has(cleanStoreId)) return;
+      const raw = storeOrders[storeId] || {};
+      const categoryOrder = Array.isArray(raw.categoryOrder) ? raw.categoryOrder.map(cat=>cleanText(cat)).filter(Boolean) : [];
+      const seenCats = new Set();
+      const uniqueCategoryOrder = categoryOrder.filter(cat=> seenCats.has(cat) ? false : (seenCats.add(cat), true));
+      const itemOrderByCategory = {};
+      const rawItemOrderByCategory = raw.itemOrderByCategory && typeof raw.itemOrderByCategory === 'object' ? raw.itemOrderByCategory : {};
+      Object.keys(rawItemOrderByCategory).forEach(cat=>{
+        const catKey = cleanText(cat);
+        if(!catKey) return;
+        const ids = Array.isArray(rawItemOrderByCategory[cat]) ? rawItemOrderByCategory[cat].map(x=>cleanText(x)).filter(Boolean) : [];
+        const seenIds = new Set();
+        const uniqueIds = ids.filter(itemId=> seenIds.has(itemId) ? false : (seenIds.add(itemId), true));
+        if(uniqueIds.length) itemOrderByCategory[catKey] = uniqueIds;
+      });
+      result[cleanStoreId] = { categoryOrder: uniqueCategoryOrder, itemOrderByCategory };
+    });
+    return result;
+  }
+  function activeOrganizeStoreId(){
+    const selected = cleanText(manageOrganizeSelectedStoreId);
+    if(!selected) return '';
+    return sortedStores().some(store=>store.id === selected) ? selected : '';
+  }
+  function getStoreOrderData(storeId){
+    const sid = cleanText(storeId);
+    if(!sid) return null;
+    if(!state.storeOrders || typeof state.storeOrders !== 'object') state.storeOrders = {};
+    if(!state.storeOrders[sid] || typeof state.storeOrders[sid] !== 'object') state.storeOrders[sid] = { categoryOrder: [], itemOrderByCategory: {} };
+    const order = state.storeOrders[sid];
+    if(!Array.isArray(order.categoryOrder)) order.categoryOrder = [];
+    if(!order.itemOrderByCategory || typeof order.itemOrderByCategory !== 'object') order.itemOrderByCategory = {};
+    return order;
+  }
+  function orderedCategoryList(storeId){
+    const base = state.categories.slice();
+    const storeOrder = getStoreOrderData(storeId);
+    if(!storeOrder) return base;
+    const seen = new Set();
+    const ordered = [];
+    (storeOrder.categoryOrder || []).forEach(cat=>{ if(base.includes(cat) && !seen.has(cat)){ seen.add(cat); ordered.push(cat); } });
+    base.forEach(cat=>{ if(!seen.has(cat)) ordered.push(cat); });
+    return ordered;
+  }
+  function orderedItemList(cat, storeId){
+    const base = state.items.filter(i=>i.cat===cat).sort((a,b)=>{ const ap=typeof a.pos==='number'?a.pos:1e9; const bp=typeof b.pos==='number'?b.pos:1e9; if(ap!==bp) return ap-bp; return String(a.name).localeCompare(String(b.name)); });
+    const storeOrder = getStoreOrderData(storeId);
+    if(!storeOrder) return base;
+    const custom = Array.isArray(storeOrder.itemOrderByCategory[cat]) ? storeOrder.itemOrderByCategory[cat] : [];
+    const byId = new Map(base.map(it=>[String(it.id), it]));
+    const seen = new Set();
+    const ordered = [];
+    custom.forEach(itemId=>{ const it = byId.get(String(itemId)); if(it && !seen.has(it.id)){ seen.add(it.id); ordered.push(it); } });
+    base.forEach(it=>{ if(!seen.has(it.id)) ordered.push(it); });
+    return ordered;
+  }
+  function migrateStoreOrdersForCategoryRename(oldName, newName){
+    const from = cleanText(oldName);
+    const to = cleanText(newName);
+    if(!from || !to || from === to || !state.storeOrders || typeof state.storeOrders !== 'object') return;
+    Object.keys(state.storeOrders).forEach(storeId=>{
+      const order = getStoreOrderData(storeId);
+      order.categoryOrder = (order.categoryOrder || []).map(cat=> cat === from ? to : cat);
+      const nextItemOrderByCategory = {};
+      Object.keys(order.itemOrderByCategory || {}).forEach(cat=>{
+        const targetCat = cat === from ? to : cat;
+        const ids = Array.isArray(order.itemOrderByCategory[cat]) ? order.itemOrderByCategory[cat].slice() : [];
+        if(!nextItemOrderByCategory[targetCat]) nextItemOrderByCategory[targetCat] = ids;
+        else{
+          const seen = new Set(nextItemOrderByCategory[targetCat].map(x=>String(x)));
+          ids.forEach(itemId=>{ const idv = String(itemId); if(!seen.has(idv)){ seen.add(idv); nextItemOrderByCategory[targetCat].push(idv); } });
+        }
+      });
+      order.itemOrderByCategory = nextItemOrderByCategory;
+    });
+  }
+  function createSortContext(storeId, sourceItems){
+    const sid = cleanText(storeId);
+    const catOrder = orderedCategoryList(sid);
+    const catIndexMap = new Map(catOrder.map((cat, idx)=>[cat, idx]));
+    const itemIndexByCategory = new Map();
+    const categories = new Set((sourceItems || state.items || []).map(it=>cleanText(it && it.cat)));
+    categories.forEach(cat=>{
+      const ordered = orderedItemList(cat, sid);
+      const idxMap = new Map();
+      ordered.forEach((it, idx)=> idxMap.set(String(it.id), idx));
+      itemIndexByCategory.set(cat, idxMap);
+    });
+    return { catIndexMap, itemIndexByCategory };
   }
 
   // ===== Tabs & Views =====
@@ -2326,7 +2454,8 @@
     }
 
     const shopList = document.getElementById('shopList');
-    const items = nonZero().sort(sortItems);
+    const sortContext = createSortContext(selectedStore ? selectedStore.id : '', state.items);
+    const items = nonZero().sort((a,b)=>sortItems(a,b, selectedStore ? selectedStore.id : '', sortContext));
     const isHandled = item => !!(item && (item.checked || item.skipped));
 
     if(!items.length){
@@ -2340,7 +2469,7 @@
         const aDone = byCat[a].length > 0 && byCat[a].every(isHandled);
         const bDone = byCat[b].length > 0 && byCat[b].every(isHandled);
         if(aDone !== bDone) return aDone ? 1 : -1;
-        return catIndex(a)-catIndex(b);
+        return catIndex(a, selectedStore ? selectedStore.id : '', sortContext)-catIndex(b, selectedStore ? selectedStore.id : '', sortContext);
       });
       orderedCats.forEach(cat=>{
         const catItems = byCat[cat];
@@ -2361,7 +2490,7 @@
           const ah = isHandled(a);
           const bh = isHandled(b);
           if(ah !== bh) return ah ? 1 : -1;
-          return sortItems(a,b);
+          return sortItems(a,b, selectedStore ? selectedStore.id : '', sortContext);
         }).forEach(it=>{
           const row=document.createElement('div');
           row.className='shop-item' + (it.checked ? ' checked' : '') + (it.skipped ? ' skipped' : '');
@@ -2555,11 +2684,14 @@
   }
   function renderManageOrganize(target){
     ensurePositions();
+    const selectedStoreId = activeOrganizeStoreId();
+    const selectedStore = sortedStores().find(store=>store.id === selectedStoreId) || null;
     const selectedCat = ensureManageOrganizeSelectedCat();
     const categories = getManageOrganizeCategories();
     const root = (target || viewManage);
     root.innerHTML = `
       <p class="muted">Arrange categories and items in the order you walk through the store.</p>
+      <div class="row"><label for="organizeStoreSelect">Organizing order for:</label><select id="organizeStoreSelect" aria-label="Organizing order for"><option value="">Default order</option></select><button type="button" class="btn" id="btnResetStoreOrder"${selectedStore ? '' : ' disabled'}>Reset this store order</button></div>
       <div class="card organize-card" id="organizeTopAnchor"><h3>Category order</h3><div id="organizeCategoryList"></div></div>
       <div class="spacer"></div>
       <div class="card organize-card" id="organizeItemsSection"><h3 id="organizeItemsHeading"></h3><div id="organizeItemsList"></div></div>
@@ -2570,6 +2702,10 @@
     const categoryList = document.getElementById('organizeCategoryList');
     const itemsList = document.getElementById('organizeItemsList');
     const topBtn = document.getElementById('organizeTopBtn');
+    const organizeStoreSelect = document.getElementById('organizeStoreSelect');
+    const resetStoreOrderBtn = document.getElementById('btnResetStoreOrder');
+    if(organizeStoreSelect){ sortedStores().forEach(store=>{ const option=document.createElement('option'); option.value=store.id; option.textContent=store.name; organizeStoreSelect.appendChild(option); }); organizeStoreSelect.value = selectedStoreId; organizeStoreSelect.onchange = ()=>{ manageOrganizeSelectedStoreId = cleanText(organizeStoreSelect.value); ensureManageOrganizeSelectedCat(); renderManage(); }; }
+    if(resetStoreOrderBtn){ resetStoreOrderBtn.onclick = ()=>{ if(!selectedStore) return; if(!confirm(`Reset ${selectedStore.name} order to Default order?`)) return; if(state.storeOrders && state.storeOrders[selectedStore.id]) delete state.storeOrders[selectedStore.id]; save(); renderManage(); renderShop(); }; }
     if(topBtn){
       topBtn.onclick = ()=> scrollToOrganizeTop();
     }
@@ -2586,13 +2722,14 @@
       const up = document.createElement('button'); up.type='button'; up.className='btn reorder-btn'; up.textContent='↑'; up.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} up`);
       const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${categoryDisplayName(cat)} down`);
       const isUncat = !cleanText(cat);
-      const realIndex = state.categories.indexOf(cat);
+      const activeCategories = orderedCategoryList(selectedStoreId);
+      const realIndex = activeCategories.indexOf(cat);
       const isFirstReal = realIndex === 0;
-      const isLastReal = realIndex === state.categories.length - 1;
+      const isLastReal = realIndex === activeCategories.length - 1;
       up.disabled = isUncat || isFirstReal;
       down.disabled = isUncat || isLastReal;
-      up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1)) rerenderAfterOrganizeMove(row); };
-      down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1)) rerenderAfterOrganizeMove(row); };
+      up.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, -1, selectedStoreId)) rerenderAfterOrganizeMove(row); };
+      down.onclick = (e)=>{ e.stopPropagation(); if(moveCategoryWithinOrder(cat, 1, selectedStoreId)) rerenderAfterOrganizeMove(row); };
       row.onclick = ()=>{
         if(manageOrganizeSelectedCat === cat){
           scrollToOrganizeItemsSection();
@@ -2605,7 +2742,7 @@
       row.appendChild(left); row.appendChild(right);
       categoryList.appendChild(row);
     });
-    const itemRows = itemsInCategory(selectedCat);
+    const itemRows = itemsInCategory(selectedCat, selectedStoreId);
     if(!itemRows.length){
       const empty = document.createElement('p'); empty.className='muted'; empty.textContent='No items in this category yet.';
       itemsList.appendChild(empty);
@@ -2622,8 +2759,8 @@
       const down = document.createElement('button'); down.type='button'; down.className='btn reorder-btn'; down.textContent='↓'; down.setAttribute('aria-label', `Move ${it.name} down`);
       up.disabled = idx === 0;
       down.disabled = idx === itemRows.length - 1;
-      up.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, -1)) rerenderAfterOrganizeMove(row); };
-      down.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, 1)) rerenderAfterOrganizeMove(row); };
+      up.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, -1, selectedStoreId)) rerenderAfterOrganizeMove(row); };
+      down.onclick = (e)=>{ e.stopPropagation(); if(moveItemWithinCategory(it.id, 1, selectedStoreId)) rerenderAfterOrganizeMove(row); };
       right.appendChild(up); right.appendChild(down);
       row.appendChild(left); row.appendChild(right);
       itemsList.appendChild(row);
@@ -2903,7 +3040,7 @@ Skipped duplicate items: ${skippedItems}`);
     let importSelectionToken = 0;
     document.getElementById('btnExport').onclick = ()=>{
       const stats = getDataSafetyStats(state); const exportedAt = new Date().toISOString();
-      const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, backupMeta: { appName: 'Grocery Tally', appVersion: APP_VERSION, exportedAt }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [] };
+      const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, backupMeta: { appName: 'Grocery Tally', appVersion: APP_VERSION, exportedAt }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [], storeOrders: state.storeOrders || {} };
       const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grocery-tally-backup-v${APP_VERSION}-${backupDateStamp(new Date())}.json`; a.click(); setTimeout(()=> URL.revokeObjectURL(a.href), 0); setLastBackupAt(exportedAt); refreshDataSafetyPanel();
       if(exportStatusEl) exportStatusEl.textContent = 'Backup downloaded. Save a copy somewhere safe, such as iCloud Drive, Google Drive, OneDrive, or another device.';
     };
@@ -2975,7 +3112,7 @@ Skipped duplicate items: ${skippedItems}`);
             if(selectionToken !== importSelectionToken) return;
             const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
             if(!pendingImportData || !confirm(warning)) return;
-            state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [] };
+            state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [], storeOrders: pendingImportData.storeOrders || {} };
             normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!');
           };
         }
@@ -3242,6 +3379,7 @@ Skipped duplicate items: ${skippedItems}`);
     del.onclick = ()=>{
       if(!confirm('Delete this store? This cannot be undone.')) return;
       state.stores = (state.stores || []).filter(candidate => candidate.id !== store.id);
+      if(state.storeOrders && state.storeOrders[store.id]) delete state.storeOrders[store.id];
       state.items.forEach(item=>{
         if(Array.isArray(item.storeIds)) item.storeIds = item.storeIds.filter(storeId => storeId !== store.id);
       });
@@ -3336,6 +3474,7 @@ Skipped duplicate items: ${skippedItems}`);
         const oldName = state.categories[i];
         state.categories[i] = newName;
         state.items.forEach(it=>{ if(it.cat===oldName) it.cat=newName; });
+        migrateStoreOrdersForCategoryRename(oldName, newName);
         if(closedCats.has(oldName)){ closedCats.delete(oldName); closedCats.add(newName); setClosedCats(closedCats); }
         if(buildClosedCats.has(oldName)){ buildClosedCats.delete(oldName); buildClosedCats.add(newName); setBuildClosedCats(buildClosedCats); }
         save();
