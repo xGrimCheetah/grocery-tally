@@ -2176,6 +2176,16 @@
               const created = createBuildQuickAddItem(proposedName);
               if(created && created.item){
                 if(created.isNew){
+                  buildSearchQuery = created.item.name;
+                  renderBuild();
+                  try{
+                    const nextSearch = document.getElementById('buildSearchInput');
+                    if(nextSearch){
+                      nextSearch.value = buildSearchQuery;
+                      nextSearch.setSelectionRange(buildSearchQuery.length, buildSearchQuery.length);
+                      nextSearch.blur();
+                    }
+                  }catch(e){}
                   openItemDetailsModal(created.item.id, true, null, { source: "buildQuickAdd", returnSearchQuery: created.item.name });
                   return;
                 }
@@ -3235,7 +3245,7 @@ Skipped duplicate items: ${skippedItems}`);
           item.storeIds = selectedStoreIds;
           save();
           if(isBuildQuickAddFlow){
-            buildSearchQuery = cleanText(modalOptions.returnSearchQuery || nv);
+            buildSearchQuery = cleanText(nv);
             renderBuild(); renderManage(); renderShop(); renderInsights();
             modal.remove();
             requestAnimationFrame(()=>{
