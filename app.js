@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.58.0"; // Store-specific category/item ordering
+  let APP_VERSION = "1.58.1"; // Build List new-item flow cleanup
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -2127,24 +2127,16 @@
       return state.items.find(it => normalizeText(it && it.name) === target) || null;
     }
 
-    function defaultQuickAddCategory(){
-      const other = findCategoryByName('Other');
-      if(other) return other;
-      if(state.categories && state.categories.length) return state.categories[0];
-      const result = ensureCategory('Other');
-      return result.name || 'Other';
-    }
-
     function createBuildQuickAddItem(name){
       const itemName = cleanText(name);
       if(!itemName) return null;
       const duplicate = findBuildQuickAddDuplicate(itemName);
-      if(duplicate) return duplicate;
-      const cat = defaultQuickAddCategory();
+      if(duplicate) return { item: duplicate, isNew: false };
+      const cat = '';
       const item = { id:id(), name:itemName, cat, qty:1, prevQty:0, pos: nextPos(cat), checked:false, skipped:false, avgPrice:0 };
       state.items.push(item);
       save();
-      return item;
+      return { item, isNew: true };
     }
 
     function appendBuildCategoryHeader(container, cat){
@@ -2182,12 +2174,19 @@
             addBtn.textContent = `+ Add “${proposedName}”`;
             addBtn.onclick = ()=>{
               const created = createBuildQuickAddItem(proposedName);
-              if(created){
-                buildSearchQuery = created.name;
+              if(created && created.item){
+                buildSearchQuery = '';
                 renderBuild();
+                if(created.isNew){
+                  openItemDetailsModal(created.item.id, true);
+                }
                 try{
                   const nextSearch = document.getElementById('buildSearchInput');
-                  if(nextSearch){ nextSearch.focus(); nextSearch.select(); }
+                  if(nextSearch){
+                    nextSearch.value = '';
+                    nextSearch.setSelectionRange(0, 0);
+                    nextSearch.blur();
+                  }
                 }catch(e){}
               }
             };
