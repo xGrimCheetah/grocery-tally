@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.58.1 — Build List new-item flow cleanup
+
+- Fixed Build List All items new-item creation so newly added items default to Uncategorized instead of the first category in the default order.
+- Improved the Build List new-item flow so the search field is not left highlighted after creating a new item while preserving Clear button focus behavior.
+- Opened the item Details edit popup after creating a brand-new item from Build List so category and store can be set immediately.
+- Enlarged the Manage → Organize sticky Top button for easier tapping.
+- Preserved Build List modes, Shopping Mode store grouping/order behavior, Manage Items, Manage Organize ordering, receipt-derived pricing, backups, localStorage data, and JSON import/export compatibility.
+
 ## v1.58.0 — Store-specific category/item ordering
 
 - Added store-specific category and item ordering in Manage → Organize.
