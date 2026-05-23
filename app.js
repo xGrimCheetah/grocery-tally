@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.58.1"; // Build List new-item flow cleanup
+  let APP_VERSION = "1.58.2"; // Build List new-item save-flow polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -2175,19 +2175,12 @@
             addBtn.onclick = ()=>{
               const created = createBuildQuickAddItem(proposedName);
               if(created && created.item){
+                if(created.isNew){
+                  openItemDetailsModal(created.item.id, true, null, { source: "buildQuickAdd", returnSearchQuery: created.item.name });
+                  return;
+                }
                 buildSearchQuery = '';
                 renderBuild();
-                if(created.isNew){
-                  openItemDetailsModal(created.item.id, true);
-                }
-                try{
-                  const nextSearch = document.getElementById('buildSearchInput');
-                  if(nextSearch){
-                    nextSearch.value = '';
-                    nextSearch.setSelectionRange(0, 0);
-                    nextSearch.blur();
-                  }
-                }catch(e){}
               }
             };
             buildAllResults.appendChild(addBtn);
@@ -3142,7 +3135,9 @@ Skipped duplicate items: ${skippedItems}`);
     runs.sort((a,b)=> new Date(b.run.committedAt) - new Date(a.run.committedAt));
     return { purchaseCount, totalQty, estimatedSpend: roundMoney(estimatedSpend), lastPurchased, recent: runs.slice(0,5) };
   }
-  function openItemDetailsModal(itemId, startEdit, draftItem){
+  function openItemDetailsModal(itemId, startEdit, draftItem, options){
+    const modalOptions = options || {};
+    const isBuildQuickAddFlow = modalOptions.source === "buildQuickAdd";
     const isNewDraft = !itemId;
     const item = isNewDraft ? { id:'', name: cleanText((draftItem&&draftItem.name)||''), cat:'', qty:0, prevQty:0, pos:0, checked:false, avgPrice:0, storeIds:Array.isArray(draftItem&&draftItem.storeIds)?draftItem.storeIds.slice():[] } : state.items.find(i=> cleanText(i.id) === cleanText(itemId));
     if(!item) return;
@@ -3238,7 +3233,21 @@ Skipped duplicate items: ${skippedItems}`);
           }
           item.name = nv; item.cat = catSelect.value || '';
           item.storeIds = selectedStoreIds;
-          save(); renderBuild(); renderManage(); renderShop(); renderInsights();
+          save();
+          if(isBuildQuickAddFlow){
+            buildSearchQuery = cleanText(modalOptions.returnSearchQuery || nv);
+            renderBuild(); renderManage(); renderShop(); renderInsights();
+            modal.remove();
+            requestAnimationFrame(()=>{
+              const searchInput = document.getElementById('buildSearchInput');
+              if(!searchInput) return;
+              searchInput.value = buildSearchQuery;
+              try{ searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length); }catch(e){}
+              try{ searchInput.blur(); }catch(e){}
+            });
+            return;
+          }
+          renderBuild(); renderManage(); renderShop(); renderInsights();
           editing = false; render();
         };
       } else {

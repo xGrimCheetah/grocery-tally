@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.58.2 — Build List new-item save-flow polish
+
+- Polished the Build List All items new-item flow so saving category/store closes the popup without opening a second details view.
+- Kept the newly created item name in the Build List search field after saving so the item remains easy to find for quantity adjustment.
+- Left the Build List search field unfocused after saving to avoid bringing the iPhone keyboard back up.
+- Preserved Clear button focus behavior, Uncategorized defaults, Build List row simplicity, Manage Items details behavior, Organize Top button sizing, store-specific ordering, backups, localStorage data, and JSON import/export compatibility.
+
 ## v1.58.1 — Build List new-item flow cleanup
 
 - Fixed Build List All items new-item creation so newly added items default to Uncategorized instead of the first category in the default order.
