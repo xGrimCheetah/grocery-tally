@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.59.0 — Build List All Items browse mode
+
+- Added a separate Build List All Items browse mode for viewing the full master item list with A-Z quick scroll.
+- Kept Search mode focused on fast search, quick-add, and new-item category/store setup.
+- Preserved Last Run and Suggested behavior while separating full-list browsing from search-first item creation.
+- Preserved Shopping Mode, store-specific ordering, receipt pricing, backups, localStorage data, and JSON import/export compatibility.
+
 ## v1.58.2 — Build List new-item save-flow polish
 
 - Polished the Build List All items new-item flow so saving category/store closes the popup without opening a second details view.
