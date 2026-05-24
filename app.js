@@ -2099,11 +2099,12 @@
           <div id="buildAlphaView" class="build-alpha-view">
             <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
           </div>
+          ${buildListMode === 'allItems' ? '' : `
           <div id="buildSearchView" class="build-search-row" hidden>
             <input id="buildSearchInput" class="build-search-input" type="search" placeholder="Search Build List" autocomplete="off" aria-label="Search Build List">
             <button class="btn build-search-clear" id="btnBuildSearchClear" type="button">Clear</button>
             <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
-          </div>
+          </div>`}
         </div>`}
       <div id="buildList" class="build-flat-list${isSearchMode ? ' build-current-list' : ''}"></div>`;
 
@@ -2256,12 +2257,14 @@
         alphaButtons.appendChild(btn);
       });
 
-      const searchToggleBtn = document.createElement('button');
-      searchToggleBtn.type = 'button';
-      searchToggleBtn.className = 'btn build-search-toggle';
-      searchToggleBtn.textContent = 'Search';
-      searchToggleBtn.onclick = ()=> setBuildControlMode('search', true);
-      alphaButtons.appendChild(searchToggleBtn);
+      if(buildListMode !== 'allItems'){
+        const searchToggleBtn = document.createElement('button');
+        searchToggleBtn.type = 'button';
+        searchToggleBtn.className = 'btn build-search-toggle';
+        searchToggleBtn.textContent = 'Search';
+        searchToggleBtn.onclick = ()=> setBuildControlMode('search', true);
+        alphaButtons.appendChild(searchToggleBtn);
+      }
 
       buildList.innerHTML = '';
       if(buildListMode === 'lastRun' && !lastRunPool.hasRun){
@@ -2316,6 +2319,7 @@
 
     function setBuildControlMode(mode, focusSearch){
       if(isSearchMode) return;
+      if(buildListMode === 'allItems') mode = 'alpha';
       buildControlMode = mode === 'search' ? 'search' : 'alpha';
       alphaView.hidden = buildControlMode !== 'alpha';
       searchView.hidden = buildControlMode !== 'search';
