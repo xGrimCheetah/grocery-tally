@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.58.2"; // Build List new-item save-flow polish
+  let APP_VERSION = "1.59.0"; // Build List All Items browse mode
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -30,7 +30,7 @@
   let buildFocusLetter = '';
   let manageItemsFocusLetter = '';
   let buildControlMode = 'alpha';
-  let buildListMode = 'all';
+  let buildListMode = 'search';
   let insightsDateRange = 'all';
   let insightsSort = 'name';
   let insightsFilter = 'all';
@@ -2070,7 +2070,7 @@
   }
   function renderBuild(){
     ensurePositions();
-    const isAllItemsMode = buildListMode === 'all';
+    const isSearchMode = buildListMode === 'search';
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
@@ -2078,12 +2078,13 @@
       </div>
       <div class="build-view-toggle-row">
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
-          <button type="button" class="insights-view-btn${buildListMode === 'all' ? ' active' : ''}" data-build-list-mode="all" aria-pressed="${buildListMode === 'all' ? 'true' : 'false'}">All items</button>
+          <button type="button" class="insights-view-btn${buildListMode === 'search' ? ' active' : ''}" data-build-list-mode="search" aria-pressed="${buildListMode === 'search' ? 'true' : 'false'}">Search</button>
+          <button type="button" class="insights-view-btn${buildListMode === 'allItems' ? ' active' : ''}" data-build-list-mode="allItems" aria-pressed="${buildListMode === 'allItems' ? 'true' : 'false'}">All Items</button>
           <button type="button" class="insights-view-btn${buildListMode === 'lastRun' ? ' active' : ''}" data-build-list-mode="lastRun" aria-pressed="${buildListMode === 'lastRun' ? 'true' : 'false'}">Last run</button>
           <button type="button" class="insights-view-btn${buildListMode === 'suggested' ? ' active' : ''}" data-build-list-mode="suggested" aria-pressed="${buildListMode === 'suggested' ? 'true' : 'false'}">Suggested</button>
         </div>
       </div>
-      ${isAllItemsMode ? `
+      ${isSearchMode ? `
         <div class="build-all-search-card" aria-label="All items search-first add flow">
           <div class="build-all-search-row">
             <input id="buildSearchInput" class="build-search-input build-all-search-input" type="search" placeholder="Search or add an item" autocomplete="off" aria-label="Search or add an item">
@@ -2092,8 +2093,8 @@
           <p id="buildAllHelper" class="muted build-all-helper"></p>
         </div>` : ''}
       <div id="buildEstimate" class="estimate-sticky"></div>
-      ${isAllItemsMode ? '<div id="buildAllResults" class="build-flat-list build-all-results"></div>' : ''}
-      ${isAllItemsMode ? '' : `
+      ${isSearchMode ? '<div id="buildAllResults" class="build-flat-list build-all-results"></div>' : ''}
+      ${isSearchMode ? '' : `
         <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
           <div id="buildAlphaView" class="build-alpha-view">
             <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
@@ -2104,7 +2105,7 @@
             <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
           </div>
         </div>`}
-      <div id="buildList" class="build-flat-list${isAllItemsMode ? ' build-current-list' : ''}"></div>`;
+      <div id="buildList" class="build-flat-list${isSearchMode ? ' build-current-list' : ''}"></div>`;
 
     const buildEstimate = document.getElementById('buildEstimate');
     const buildList = document.getElementById('buildList');
@@ -2153,7 +2154,7 @@
       if(buildAllHelper){
         buildAllHelper.textContent = draftItems.length ? 'Type to add more items' : 'Type to start adding items';
       }
-      if(isAllItemsMode && clearBtn){
+      if(isSearchMode && clearBtn){
         clearBtn.disabled = !buildSearchQuery;
       }
       if(buildAllResults){
@@ -2309,12 +2310,12 @@
     }
 
     function drawBuildList(){
-      if(isAllItemsMode) drawAllItemsBuildList();
+      if(isSearchMode) drawAllItemsBuildList();
       else drawBrowseBuildList();
     }
 
     function setBuildControlMode(mode, focusSearch){
-      if(isAllItemsMode) return;
+      if(isSearchMode) return;
       buildControlMode = mode === 'search' ? 'search' : 'alpha';
       alphaView.hidden = buildControlMode !== 'alpha';
       searchView.hidden = buildControlMode !== 'search';
@@ -2326,12 +2327,16 @@
 
     buildModeButtons.forEach(btn=>{
       btn.onclick = ()=>{
-        const nextMode = btn.dataset.buildListMode === 'lastRun' ? 'lastRun' : (btn.dataset.buildListMode === 'suggested' ? 'suggested' : 'all');
+        const nextMode = btn.dataset.buildListMode === 'lastRun'
+          ? 'lastRun'
+          : (btn.dataset.buildListMode === 'suggested'
+            ? 'suggested'
+            : (btn.dataset.buildListMode === 'allItems' ? 'allItems' : 'search'));
         if(buildListMode !== nextMode){
-          const leavingAllItemsMode = buildListMode === 'all' && nextMode !== 'all';
+          const leavingSearchMode = buildListMode === 'search' && nextMode !== 'search';
           buildListMode = nextMode;
           buildFocusLetter = '';
-          if(leavingAllItemsMode){
+          if(leavingSearchMode){
             buildSearchQuery = '';
             buildControlMode = 'alpha';
           }
@@ -2346,7 +2351,7 @@
         buildFocusLetter = '';
         drawBuildList();
         updateBuildBottomControlLayout();
-        if(!isAllItemsMode) scrollToBuildResultsStart();
+        if(!isSearchMode) scrollToBuildResultsStart();
       });
       searchInput.addEventListener('keydown', (e)=>{
         if(e.key === 'Escape'){
@@ -2356,12 +2361,12 @@
           searchInput.value = '';
           drawBuildList();
           updateBuildBottomControlLayout();
-          if(!isAllItemsMode) scrollToBuildResultsStart();
+          if(!isSearchMode) scrollToBuildResultsStart();
         }
       });
     }
     if(clearBtn){
-      if(isAllItemsMode){
+      if(isSearchMode){
         clearBtn.addEventListener('pointerdown', (e)=>{
           e.preventDefault();
         });
@@ -2372,7 +2377,7 @@
         searchInput.value = '';
         drawBuildList();
         updateBuildBottomControlLayout();
-        if(!isAllItemsMode) scrollToBuildResultsStart();
+        if(!isSearchMode) scrollToBuildResultsStart();
         searchInput.focus();
       };
     }
@@ -2392,14 +2397,14 @@
     try{
       window.removeEventListener('scroll', updateBuildBottomControlLayout);
       window.removeEventListener('resize', updateBuildBottomControlLayout);
-      if(!isAllItemsMode){
+      if(!isSearchMode){
         window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
         window.addEventListener('resize', updateBuildBottomControlLayout);
       }
       if(window.visualViewport){
         window.visualViewport.removeEventListener('resize', updateBuildBottomControlLayout);
         window.visualViewport.removeEventListener('scroll', updateBuildBottomControlLayout);
-        if(!isAllItemsMode){
+        if(!isSearchMode){
           window.visualViewport.addEventListener('resize', updateBuildBottomControlLayout);
           window.visualViewport.addEventListener('scroll', updateBuildBottomControlLayout);
         }
