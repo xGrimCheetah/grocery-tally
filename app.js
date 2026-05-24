@@ -2322,7 +2322,7 @@
       if(buildListMode === 'allItems') mode = 'alpha';
       buildControlMode = mode === 'search' ? 'search' : 'alpha';
       alphaView.hidden = buildControlMode !== 'alpha';
-      searchView.hidden = buildControlMode !== 'search';
+      if(searchView) searchView.hidden = buildControlMode !== 'search';
       updateBuildBottomControlLayout();
       if(focusSearch && buildControlMode === 'search'){
         try{ searchInput.focus(); }catch(e){}
@@ -2339,8 +2339,14 @@
         if(buildListMode !== nextMode){
           const leavingSearchMode = buildListMode === 'search' && nextMode !== 'search';
           buildListMode = nextMode;
-          buildFocusLetter = '';
-          if(leavingSearchMode){
+          if(nextMode === 'allItems'){
+            buildSearchQuery = '';
+            buildFocusLetter = '';
+            buildControlMode = 'alpha';
+          }else{
+            buildFocusLetter = '';
+          }
+          if(leavingSearchMode && nextMode !== 'allItems'){
             buildSearchQuery = '';
             buildControlMode = 'alpha';
           }
