@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.60.0"; // Build List All Items browse mode
+  let APP_VERSION = "1.60.0"; // Smart suggestions expansion from previous runs
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
