@@ -1772,8 +1772,9 @@
 
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
-    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked);
-    if(!resettable.length){
+    const hasHiddenRows = hiddenSuggestedIds.size > 0 || hiddenLastRunIds.size > 0;
+    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked || i.skipped);
+    if(!resettable.length && !hasHiddenRows){
       alert('Nothing to reset.');
       return;
     }
@@ -2359,6 +2360,8 @@
       const visiblePool = activeHiddenSet
         ? itemPool.filter(entry=>{
           const it = entry && entry.item ? entry.item : entry;
+          const qty = Math.max(0, Number(it && it.qty) || 0);
+          if(qty > 0) return true;
           return !activeHiddenSet.has(cleanText(it && it.id));
         })
         : itemPool;
@@ -3263,6 +3266,7 @@ Skipped duplicate items: ${skippedItems}`);
             const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
             if(!pendingImportData || !confirm(warning)) return;
             state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [], storeOrders: pendingImportData.storeOrders || {} };
+            clearHiddenBuildRows();
             normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!');
           };
         }
@@ -3273,7 +3277,7 @@ Skipped duplicate items: ${skippedItems}`);
       }
       fileInput.value = '';
     };
-    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearLastBackupAt(); save(); renderAll(); } };
+    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearHiddenBuildRows(); clearLastBackupAt(); save(); renderAll(); } };
   }
 
   function getItemPurchaseStats(item){
