@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.60.0 — Smart suggestions expansion from previous runs
+
+- Improved Build List Suggested mode with more useful history-based suggestion ranking.
+- Added clearer compact reason labels such as due-soon, common-repeat, often-bought, and recently-bought explanations where supported by committed run history.
+- Preserved user-controlled suggestion behavior with no auto-added items, no auto-changed quantities, and no usual quantity behavior.
+- Preserved Search, All Items, Last run, Shopping Mode, Manage, Insights, receipt pricing, store-specific ordering, localStorage behavior, and JSON backup compatibility.
+
 ## v1.59.0 — Build List All Items browse mode
 
 - Added a separate Build List All Items browse mode for viewing the full master item list with A-Z quick scroll.
