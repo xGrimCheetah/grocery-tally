@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.61.1"; // Suggested recent-run label fix
+  let APP_VERSION = "1.62.0"; // Hide Suggested / Last run items from view
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -12,6 +12,8 @@
   const LEGACY_OPEN_KEY = 'manage_open_cats';          // legacy migration only
   const LAST_BACKUP_KEY = 'grocery_tally_last_backup_at';
   const SHOP_SELECTED_STORE_KEY = 'shop_selected_store_id';
+  const HIDDEN_SUGGESTED_IDS_KEY = 'build_hidden_suggested_ids';
+  const HIDDEN_LAST_RUN_IDS_KEY = 'build_hidden_last_run_ids';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [], storeOrders: {} };
@@ -41,6 +43,8 @@
   let runHistoryReceiptEditId = '';
   let manageNavResizeListenersAttached = false;
   let shopSelectedStoreId = loadShopSelectedStoreId();
+  let hiddenSuggestedIds = loadHiddenIdSet(HIDDEN_SUGGESTED_IDS_KEY);
+  let hiddenLastRunIds = loadHiddenIdSet(HIDDEN_LAST_RUN_IDS_KEY);
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -230,6 +234,42 @@
     shopSelectedStoreId = '';
     saveShopSelectedStoreId('');
     return '';
+  }
+
+  function loadHiddenIdSet(storageKey){
+    try{
+      const parsed = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      if(!Array.isArray(parsed)) return new Set();
+      return new Set(parsed.map(v=>cleanText(v)).filter(Boolean));
+    }catch(e){
+      return new Set();
+    }
+  }
+
+  function saveHiddenIdSet(storageKey, idSet){
+    try{
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(idSet || []).map(v=>cleanText(v)).filter(Boolean)));
+    }catch(e){}
+  }
+
+  function hiddenSetForMode(mode){
+    return mode === 'suggested' ? hiddenSuggestedIds : (mode === 'lastRun' ? hiddenLastRunIds : null);
+  }
+
+  function hideBuildRowForMode(mode, itemId){
+    const idValue = cleanText(itemId);
+    const targetSet = hiddenSetForMode(mode);
+    if(!idValue || !targetSet) return;
+    targetSet.add(idValue);
+    if(mode === 'suggested') saveHiddenIdSet(HIDDEN_SUGGESTED_IDS_KEY, hiddenSuggestedIds);
+    if(mode === 'lastRun') saveHiddenIdSet(HIDDEN_LAST_RUN_IDS_KEY, hiddenLastRunIds);
+  }
+
+  function clearHiddenBuildRows(){
+    hiddenSuggestedIds = new Set();
+    hiddenLastRunIds = new Set();
+    saveHiddenIdSet(HIDDEN_SUGGESTED_IDS_KEY, hiddenSuggestedIds);
+    saveHiddenIdSet(HIDDEN_LAST_RUN_IDS_KEY, hiddenLastRunIds);
   }
 
   function formatBackupTimestamp(value){
@@ -1732,12 +1772,13 @@
 
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
-    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked);
-    if(!resettable.length){
+    const hasHiddenRows = hiddenSuggestedIds.size > 0 || hiddenLastRunIds.size > 0;
+    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked || i.skipped);
+    if(!resettable.length && !hasHiddenRows){
       alert('Nothing to reset.');
       return;
     }
-    if(!confirm('Reset all quantities to 0 and clear checked status?')){
+    if(!confirm('Reset list quantities to 0 and clear checked status?')){
       return;
     }
     state.items.forEach(i=>{
@@ -1745,6 +1786,7 @@
       i.checked = false;
       i.skipped = false;
     });
+    clearHiddenBuildRows();
     save();
     try{ renderBuild(); renderShop(); }catch(e){}
   }
@@ -2121,7 +2163,24 @@
     left.appendChild(nameWrap);
 
     const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
-    const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
+    const minus=document.createElement('button');
+    minus.className='btn';
+    const allowHideAtZero = !!opts.allowHideAtZero;
+    const currentQty = Math.max(0, Number(it.qty) || 0);
+    const showHideControl = allowHideAtZero && currentQty === 0;
+    minus.textContent = showHideControl ? '×' : '–';
+    minus.title = showHideControl ? 'Hide from this list' : 'Decrease quantity';
+    minus.setAttribute('aria-label', showHideControl ? 'Hide from this list' : 'Decrease quantity');
+    minus.onclick=()=>{
+      if(showHideControl){
+        hideBuildRowForMode(opts.hideMode, it.id);
+      }else{
+        it.qty=Math.max(0,Number(it.qty)-1);
+        if(!Number(it.qty)) it.skipped=false;
+        save();
+      }
+      renderBuild();
+    };
     const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ const currentQty=Math.max(0, Number(it.qty) || 0); it.qty=currentQty>0 ? currentQty + 1 : inferUsualQuickAddQty(it.id, state.runHistory); it.checked=false; it.skipped=false; save(); renderBuild() };
     right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
     if(!opts.compact){
@@ -2140,7 +2199,7 @@
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
-        <button class="btn right-controls" id="btnZeroAll">Reset all to 0</button>
+        <button class="btn right-controls" id="btnZeroAll">Reset List</button>
       </div>
       <div class="build-view-toggle-row">
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
@@ -2297,9 +2356,18 @@
       const lastRunPool = buildListMode === 'lastRun' ? getLastRunItemPool(allItems) : { hasRun:true, items:allItems };
       const suggestionPool = buildListMode === 'suggested' ? getSmartSuggestions(allItems) : [];
       const itemPool = buildListMode === 'lastRun' ? lastRunPool.items : (buildListMode === 'suggested' ? suggestionPool : allItems);
-      const items = query
-        ? itemPool.filter(entry => matchesBuildSearch(entry && entry.item ? entry.item : entry, query)).sort((a,b)=>buildSearchSort(query)(a && a.item ? a.item : a, b && b.item ? b.item : b))
+      const activeHiddenSet = hiddenSetForMode(buildListMode);
+      const visiblePool = activeHiddenSet
+        ? itemPool.filter(entry=>{
+          const it = entry && entry.item ? entry.item : entry;
+          const qty = Math.max(0, Number(it && it.qty) || 0);
+          if(qty > 0) return true;
+          return !activeHiddenSet.has(cleanText(it && it.id));
+        })
         : itemPool;
+      const items = query
+        ? visiblePool.filter(entry => matchesBuildSearch(entry && entry.item ? entry.item : entry, query)).sort((a,b)=>buildSearchSort(query)(a && a.item ? a.item : a, b && b.item ? b.item : b))
+        : visiblePool;
       const letters = ['#','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z'];
       const activeLetters = new Set(items.map(entry => alphaKeyForItem(entry && entry.item ? entry.item : entry)));
       if(buildFocusLetter && !activeLetters.has(buildFocusLetter)) buildFocusLetter = '';
@@ -2372,7 +2440,9 @@
         appendBuildItemRow(buildList, it, {
           letter,
           isFirstForLetter,
-          reason: entry && entry.item ? (entry.reasonLabel || entry.reason) : ''
+          reason: entry && entry.item ? (entry.reasonLabel || entry.reason) : '',
+          allowHideAtZero: buildListMode === 'lastRun' || buildListMode === 'suggested',
+          hideMode: buildListMode
         });
       });
       applyBuildLetterFocus();
@@ -3196,6 +3266,7 @@ Skipped duplicate items: ${skippedItems}`);
             const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
             if(!pendingImportData || !confirm(warning)) return;
             state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [], storeOrders: pendingImportData.storeOrders || {} };
+            clearHiddenBuildRows();
             normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!');
           };
         }
@@ -3206,7 +3277,7 @@ Skipped duplicate items: ${skippedItems}`);
       }
       fileInput.value = '';
     };
-    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearLastBackupAt(); save(); renderAll(); } };
+    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearHiddenBuildRows(); clearLastBackupAt(); save(); renderAll(); } };
   }
 
   function getItemPurchaseStats(item){
