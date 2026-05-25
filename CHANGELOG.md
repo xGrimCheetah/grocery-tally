@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.61.0 — Usual quantity quick-add behavior
+
+- Added conservative usual quantity quick-add behavior for Build List items with committed run history.
+- When an item is at quantity 0, the first `+` tap can now start at a reliable usual quantity instead of always starting at 1.
+- Items without reliable quantity history still start at 1.
+- Kept normal one-step `+ / –` behavior after an item has quantity greater than 0.
+- Kept Suggested mode user-controlled with no auto-added items and no auto-changed quantities.
+- Preserved Search, All Items, Last run, Shopping Mode, Manage, Insights, receipt pricing, store-specific ordering, localStorage behavior, and JSON backup compatibility.
+
 ## v1.60.0 — Smart suggestions expansion from previous runs
 
 - Improved Build List Suggested mode with more useful history-based suggestion ranking.
