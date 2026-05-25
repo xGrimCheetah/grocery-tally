@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.61.0"; // Usual quantity quick-add behavior
+  let APP_VERSION = "1.61.1"; // Suggested recent-run label fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1468,6 +1468,11 @@
     if(!Number.isFinite(earlier) || !Number.isFinite(later) || later <= earlier) return 0;
     return (later - earlier) / 86400000;
   }
+  function formatRunsAgoLabelFromIndex(runIndex){
+    if(runIndex === 0) return 'Last run';
+    if(Number.isFinite(runIndex) && runIndex > 0) return `${runIndex + 1} runs ago`;
+    return '';
+  }
   function getSmartSuggestions(allItems){
     const runs = (Array.isArray(state.runHistory) ? state.runHistory : [])
       .filter(run => Array.isArray(run && run.items) && run.items.length)
@@ -1540,7 +1545,7 @@
       let reasonScore = 0;
       if(maybeDueSoon){
         reason = 'Maybe due soon';
-        reasonLabel = daysSinceLast > 0 ? `Maybe due soon • Last bought ${Math.round(daysSinceLast)} days ago` : `Maybe due soon • ${runsAgo === 1 ? 'Last run' : `${runsAgo} runs ago`}`;
+        reasonLabel = daysSinceLast > 0 ? `Maybe due soon • Last bought ${Math.round(daysSinceLast)} days ago` : `Maybe due soon • ${formatRunsAgoLabelFromIndex(runsAgo)}`;
         reasonScore = (daysSinceLast || 0) + (runsAgo * 2);
       }else if(commonRepeat){
         reason = 'Common repeat';
@@ -1552,7 +1557,7 @@
         reasonScore = stats.purchaseCount;
       }else if(recentlyBought){
         reason = 'Recently bought';
-        reasonLabel = runsAgo <= 1 ? 'Recently bought • Last run' : `Recently bought • ${runsAgo} runs ago`;
+        reasonLabel = `Recently bought • ${formatRunsAgoLabelFromIndex(runsAgo)}`;
         reasonScore = 10 - runsAgo;
       }
 
