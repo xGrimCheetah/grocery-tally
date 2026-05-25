@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.59.0"; // Build List All Items browse mode
+  let APP_VERSION = "1.60.0"; // Smart suggestions expansion from previous runs
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1484,61 +1484,86 @@
       if(fallbackKey !== '|' && !itemsByFallback.has(fallbackKey)) itemsByFallback.set(fallbackKey, it);
     });
 
-    const recentRunItemIds = new Set();
-    runs.slice(0, 3).forEach(run=>{
-      const seenThisRun = new Set();
-      run.items.forEach(rit=>{
-        const item = findCurrentItemForRunItem(rit, itemsById, itemsByFallback);
-        if(!item || seenThisRun.has(item.id)) return;
-        seenThisRun.add(item.id);
-        recentRunItemIds.add(item.id);
-      });
-    });
-
     const statsByItemId = new Map();
-    runs.forEach(run=>{
+    runs.forEach((run, runIdx)=>{
       const committedAt = cleanText(run && run.committedAt);
+      const committedTs = Date.parse(committedAt || '');
       const seenThisRun = new Set();
       run.items.forEach(rit=>{
         const item = findCurrentItemForRunItem(rit, itemsById, itemsByFallback);
         if(!item || seenThisRun.has(item.id)) return;
         seenThisRun.add(item.id);
         if(!statsByItemId.has(item.id)){
-          statsByItemId.set(item.id, { item, purchaseCount:0, dates:[] });
+          statsByItemId.set(item.id, { item, purchaseCount:0, dates:[], runIndexes:[] });
         }
         const stats = statsByItemId.get(item.id);
         stats.purchaseCount += 1;
-        if(committedAt) stats.dates.push(committedAt);
+        stats.runIndexes.push(runIdx);
+        if(Number.isFinite(committedTs) && committedTs > 0) stats.dates.push(committedAt);
       });
     });
 
     const nowIso = new Date().toISOString();
     return Array.from(statsByItemId.values()).map(stats=>{
       const sortedDates = stats.dates.slice().sort((a,b)=>(Date.parse(a) || 0) - (Date.parse(b) || 0));
-      const gaps = [];
+      const dateGaps = [];
       for(let i=1; i<sortedDates.length; i++){
         const gap = daysBetweenDates(sortedDates[i - 1], sortedDates[i]);
-        if(gap > 0) gaps.push(gap);
+        if(gap > 0) dateGaps.push(gap);
       }
-      const avgGap = gaps.length ? gaps.reduce((sum, gap)=>sum + gap, 0) / gaps.length : 0;
+      const avgGapDays = dateGaps.length ? (dateGaps.reduce((sum, gap)=>sum + gap, 0) / dateGaps.length) : 0;
       const lastPurchasedAt = sortedDates[sortedDates.length - 1] || '';
       const daysSinceLast = lastPurchasedAt ? daysBetweenDates(lastPurchasedAt, nowIso) : 0;
-      const maybeDueSoon = stats.purchaseCount >= 3 && avgGap > 0 && daysSinceLast >= Math.max(1, avgGap * 0.85);
-      const oftenBought = stats.purchaseCount >= 3;
-      const recentlyBought = recentRunItemIds.has(stats.item.id);
+      const runIndexes = stats.runIndexes.slice().sort((a,b)=>a-b);
+      const runGaps = [];
+      for(let i=1; i<runIndexes.length; i++){
+        const gap = runIndexes[i] - runIndexes[i - 1];
+        if(gap > 0) runGaps.push(gap);
+      }
+      const avgRunGap = runGaps.length ? (runGaps.reduce((sum, gap)=>sum + gap, 0) / runGaps.length) : 0;
+      const lastRunIdx = runIndexes.length ? Math.min(...runIndexes) : Infinity;
+      const runsAgo = Number.isFinite(lastRunIdx) ? lastRunIdx : Infinity;
+      const recentWindow = Math.min(6, runs.length);
+      const recentCount = runIndexes.filter(idx => idx < recentWindow).length;
+
+      const hasDateRhythm = avgGapDays > 0 && sortedDates.length >= 2;
+      const hasRunRhythm = avgRunGap > 0 && runIndexes.length >= 3;
+      const dueByDate = hasDateRhythm && daysSinceLast >= Math.max(1, avgGapDays * 0.9);
+      const dueByRun = hasRunRhythm && runsAgo >= Math.max(1, avgRunGap * 0.9);
+      const maybeDueSoon = stats.purchaseCount >= 3 && (dueByDate || dueByRun);
+      const commonRepeat = recentWindow >= 3 && recentCount >= Math.max(2, Math.ceil(recentWindow * 0.6));
+      const oftenBought = stats.purchaseCount >= 4;
+      const recentlyBought = runsAgo <= 2;
+
       let reason = '';
-      if(maybeDueSoon) reason = 'Maybe due soon';
-      else if(oftenBought) reason = 'Often bought';
-      else if(recentlyBought) reason = 'Recently bought';
-      return Object.assign({}, stats, { avgGap, lastPurchasedAt, daysSinceLast, reason });
+      let reasonLabel = '';
+      let reasonScore = 0;
+      if(maybeDueSoon){
+        reason = 'Maybe due soon';
+        reasonLabel = daysSinceLast > 0 ? `Maybe due soon • Last bought ${Math.round(daysSinceLast)} days ago` : `Maybe due soon • ${runsAgo === 1 ? 'Last run' : `${runsAgo} runs ago`}`;
+        reasonScore = (daysSinceLast || 0) + (runsAgo * 2);
+      }else if(commonRepeat){
+        reason = 'Common repeat';
+        reasonLabel = `Common repeat • ${recentCount} of last ${recentWindow} runs`;
+        reasonScore = (recentCount * 100) + stats.purchaseCount;
+      }else if(oftenBought){
+        reason = 'Often bought';
+        reasonLabel = `Often bought • ${stats.purchaseCount} purchases`;
+        reasonScore = stats.purchaseCount;
+      }else if(recentlyBought){
+        reason = 'Recently bought';
+        reasonLabel = runsAgo <= 1 ? 'Recently bought • Last run' : `Recently bought • ${runsAgo} runs ago`;
+        reasonScore = 10 - runsAgo;
+      }
+
+      return Object.assign({}, stats, { lastPurchasedAt, daysSinceLast, runsAgo, recentCount, recentWindow, reason, reasonLabel, reasonScore });
     }).filter(suggestion => suggestion.reason)
       .sort((a,b)=>{
-        const reasonRank = { 'Maybe due soon':0, 'Often bought':1, 'Recently bought':2 };
+        const reasonRank = { 'Maybe due soon':0, 'Common repeat':1, 'Often bought':2, 'Recently bought':3 };
         const byReason = (reasonRank[a.reason] ?? 9) - (reasonRank[b.reason] ?? 9);
         if(byReason !== 0) return byReason;
+        if(b.reasonScore !== a.reasonScore) return b.reasonScore - a.reasonScore;
         if(b.purchaseCount !== a.purchaseCount) return b.purchaseCount - a.purchaseCount;
-        const byDate = (Date.parse(b.lastPurchasedAt) || 0) - (Date.parse(a.lastPurchasedAt) || 0);
-        if(byDate !== 0) return byDate;
         return buildListSort(a.item, b.item);
       });
   }
@@ -2306,7 +2331,7 @@
         appendBuildItemRow(buildList, it, {
           letter,
           isFirstForLetter,
-          reason: entry && entry.item ? entry.reason : ''
+          reason: entry && entry.item ? (entry.reasonLabel || entry.reason) : ''
         });
       });
       applyBuildLetterFocus();
