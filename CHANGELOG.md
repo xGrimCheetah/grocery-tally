@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.62.0 — Hide Suggested / Last run items from view
+
+- Added hide-from-view cleanup for zero-quantity items in Build List → Suggested and Build List → Last run.
+- Reused the existing minus-button slot as an `×` hide control when quantity is 0.
+- Kept normal minus behavior when quantity is greater than 0.
+- Kept hidden state lightweight and view-only so master-list items, quantities, committed run history, suggestions, receipt pricing, and backups are not changed.
+- Updated reset behavior so Reset List restores hidden Suggested / Last run items.
+
 ## v1.61.1 — Suggested recent-run label fix
 
 - Fixed Suggested mode recent-run labels so only items bought in the most recent committed run show **Recently bought • Last run**.
