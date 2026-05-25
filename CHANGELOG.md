@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.61.1 — Suggested recent-run label fix
+
+- Fixed Suggested mode recent-run labels so only items bought in the most recent committed run show **Recently bought • Last run**.
+- Corrected run-before-last labels to show as **2 runs ago** instead of **Last run**.
+- Preserved usual quantity quick-add behavior, suggestion ranking, Last Run behavior, Build List modes, Shopping Mode, Manage, Insights, receipt pricing, localStorage behavior, and JSON backup compatibility.
+
 ## v1.61.0 — Usual quantity quick-add behavior
 
 - Added conservative usual quantity quick-add behavior for Build List items with committed run history.
