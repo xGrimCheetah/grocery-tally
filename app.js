@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.60.0"; // Smart suggestions expansion from previous runs
+  let APP_VERSION = "1.61.0"; // Usual quantity quick-add behavior
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1689,6 +1689,42 @@
     }
     try{ nav.style.setProperty('--build-nav-lift', footerLift + 'px'); }catch(e){}
   }
+
+  function inferUsualQuickAddQty(itemId, runs){
+    const activeItemId = cleanText(itemId);
+    if(!activeItemId) return 1;
+    const history = Array.isArray(runs) ? runs : [];
+    const purchasedQtys = [];
+    history.forEach(run=>{
+      const runItems = Array.isArray(run && run.items) ? run.items : [];
+      const match = runItems.find(rit => cleanText(rit && rit.itemId) === activeItemId);
+      if(!match) return;
+      const qty = Math.round(Number(match && match.qty));
+      if(Number.isFinite(qty) && qty > 0) purchasedQtys.push(qty);
+    });
+    if(purchasedQtys.length < 3) return 1;
+
+    const counts = new Map();
+    purchasedQtys.forEach(qty=> counts.set(qty, (counts.get(qty) || 0) + 1));
+    let bestCount = 0;
+    let bestQty = null;
+    counts.forEach((count, qty)=>{
+      if(count < 2) return;
+      if(count > bestCount || (count === bestCount && (bestQty === null || qty < bestQty))){
+        bestCount = count;
+        bestQty = qty;
+      }
+    });
+    if(bestQty !== null) return Math.max(1, bestQty);
+
+    const sorted = purchasedQtys.slice().sort((a,b)=> a-b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length % 2
+      ? sorted[mid]
+      : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+    return Math.max(1, Number.isFinite(median) ? median : 1);
+  }
+
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
   function zeroAll(){
     const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked);
@@ -2081,7 +2117,7 @@
 
     const qty=document.createElement('div'); qty.className='qty'; qty.textContent=it.qty;
     const minus=document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ it.qty=Math.max(0,Number(it.qty)-1); if(!Number(it.qty)) it.skipped=false; save(); renderBuild() };
-    const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ it.qty=(Number(it.qty)||0)+1; it.checked=false; it.skipped=false; save(); renderBuild() };
+    const plus=document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ const currentQty=Math.max(0, Number(it.qty) || 0); it.qty=currentQty>0 ? currentQty + 1 : inferUsualQuickAddQty(it.id, state.runHistory); it.checked=false; it.skipped=false; save(); renderBuild() };
     right.appendChild(qty); right.appendChild(minus); right.appendChild(plus);
     if(!opts.compact){
       const prev=document.createElement('div');
