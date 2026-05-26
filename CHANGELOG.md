@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.62.1 — Split Reset List actions
+
+- Replaced the direct Reset List action with reset options.
+- Added separate choices to show hidden Suggested / Last run items, reset quantities, or do both together.
+- Preserved hidden Suggested / Last run state when only resetting quantities.
+- Preserved quantities/checkmarks/skipped state when only showing hidden items.
+- Kept Build List Search, All Items, Suggested, Last run, Shopping Mode, Manage, Insights, receipt pricing, localStorage grocery data, and JSON backup compatibility intact.
+
 ## v1.62.0 — Hide Suggested / Last run items from view
 
 - Added hide-from-view cleanup for zero-quantity items in Build List → Suggested and Build List → Last run.
