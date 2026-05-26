@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.62.1"; // Split Reset List actions
+  let APP_VERSION = "1.63.0"; // Color themes
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -15,6 +15,16 @@
   const HIDDEN_SUGGESTED_IDS_KEY = 'build_hidden_suggested_ids';
   const HIDDEN_LAST_RUN_IDS_KEY = 'build_hidden_last_run_ids';
   const DEFAULT_CATS = ["Produce","Dairy","Bakery","Meat","Frozen","Pantry","Beverages","Household","Other"];
+  const THEME_KEY = 'grocery_tally_theme';
+  const DEFAULT_THEME = 'default';
+  const THEMES = [
+    { key:'default', label:'Default dark' },
+    { key:'green', label:'Green grocery' },
+    { key:'blue', label:'Blue' },
+    { key:'purple', label:'Purple' },
+    { key:'orange', label:'Bright orange buttons' },
+    { key:'contrast', label:'High-contrast dark' }
+  ];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [], storeOrders: {} };
   normalizeStateShape();
@@ -45,6 +55,31 @@
   let shopSelectedStoreId = loadShopSelectedStoreId();
   let hiddenSuggestedIds = loadHiddenIdSet(HIDDEN_SUGGESTED_IDS_KEY);
   let hiddenLastRunIds = loadHiddenIdSet(HIDDEN_LAST_RUN_IDS_KEY);
+
+  function isValidTheme(themeKey){
+    return THEMES.some(theme => theme.key === cleanText(themeKey));
+  }
+
+  function resolveTheme(themeKey){
+    const key = cleanText(themeKey);
+    return isValidTheme(key) ? key : DEFAULT_THEME;
+  }
+
+  function applyTheme(themeKey){
+    const resolved = resolveTheme(themeKey);
+    document.documentElement.setAttribute('data-theme', resolved === DEFAULT_THEME ? 'default' : resolved);
+    return resolved;
+  }
+
+  function loadTheme(){
+    try{ return resolveTheme(localStorage.getItem(THEME_KEY) || DEFAULT_THEME); }catch(e){ return DEFAULT_THEME; }
+  }
+
+  function saveTheme(themeKey){
+    const resolved = resolveTheme(themeKey);
+    try{ localStorage.setItem(THEME_KEY, resolved); }catch(e){}
+    return resolved;
+  }
 
   function id(){ return Math.random().toString(36).slice(2,10) }
   function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
@@ -3242,6 +3277,14 @@ Skipped duplicate items: ${skippedItems}`);
           </div>
         </section>
         <section class="data-safety-section">
+          <h4>App preferences</h4>
+          <p class="muted data-safety-help">Theme preference is saved only on this device and does not change your grocery data backups.</p>
+          <div class="controls data-safety-actions">
+            <label for="themeSelect">Color theme</label>
+            <select id="themeSelect" aria-label="Color theme"></select>
+          </div>
+        </section>
+        <section class="data-safety-section">
           <h4>Export backup</h4>
           <p class="muted data-safety-help">Download a JSON backup of the grocery data saved on this device. Keep a copy somewhere safe before major changes or imports.</p>
           <div class="controls data-safety-actions"><button class="btn" id="btnExport">Download JSON Backup</button></div>
@@ -3260,6 +3303,21 @@ Skipped duplicate items: ${skippedItems}`);
         </section>
       </section>`;
     refreshDataSafetyPanel();
+    const themeSelect = document.getElementById('themeSelect');
+    if(themeSelect){
+      THEMES.forEach(theme=>{
+        const opt = document.createElement('option');
+        opt.value = theme.key;
+        opt.textContent = theme.label;
+        themeSelect.appendChild(opt);
+      });
+      themeSelect.value = loadTheme();
+      themeSelect.onchange = ()=>{
+        const selected = applyTheme(themeSelect.value);
+        saveTheme(selected);
+        themeSelect.value = selected;
+      };
+    }
     const exportStatusEl = document.getElementById('backupExportStatus');
     const importStatusEl = document.getElementById('backupImportStatus');
     const importPreviewEl = document.getElementById('backupImportPreview');
@@ -3797,6 +3855,7 @@ Skipped duplicate items: ${skippedItems}`);
   }
 
   // Initial render
+  try{ applyTheme(loadTheme()); }catch(e){}
   try{ renderTitle(); }catch(e){}
   try{
     ensurePositions();
