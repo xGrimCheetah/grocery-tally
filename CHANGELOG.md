@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.63.3 — High-contrast secondary control readability
+
+- Fixed High-contrast dark selected secondary tabs so active labels remain readable.
+- Fixed High-contrast dark Run History expand/collapse action text readability.
+- Preserved existing themes, theme picker persistence, grocery data, and app workflows.
+
 ## v1.63.2 — Theme contrast and palette refinement
 
 - Fixed High-contrast dark button text readability.
