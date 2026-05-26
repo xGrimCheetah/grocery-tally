@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.63.3"; // High-contrast secondary control readability
+  let APP_VERSION = "1.63.4"; // Version history docs cleanup
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';

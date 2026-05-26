@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.63.4 — Version history docs cleanup
+
+- Added a README version-history count.
+- Added a grouped historical changelog note for v1.0.0–v1.12.0.
+- Preserved app behavior, grocery data, theme settings, and workflows.
+
 ## v1.63.3 — High-contrast secondary control readability
 
 - Fixed High-contrast dark selected secondary tabs so active labels remain readable.
@@ -713,3 +719,8 @@
 
 - Initial GitHub Pages PWA shell created.
 - Add service worker, manifest, icons, and Pages config files.
+## v1.0.0–v1.12.0 — Historical pre-changelog releases
+
+- Early Grocery Tally versions from before detailed changelog tracking began.
+- Counted as 13 historical versions for project version-history purposes.
+- Detailed release notes were not recorded for these early builds.
