@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.62.0"; // Hide Suggested / Last run items from view
+  let APP_VERSION = "1.62.1"; // Split Reset List actions
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1771,16 +1771,34 @@
   }
 
   function nonZero(){ return state.items.filter(i=>Number(i.qty)>0) }
-  function zeroAll(){
-    const hasHiddenRows = hiddenSuggestedIds.size > 0 || hiddenLastRunIds.size > 0;
-    const resettable = state.items.filter(i=>Number(i.qty)>0 || i.checked || i.skipped);
-    if(!resettable.length && !hasHiddenRows){
-      alert('Nothing to reset.');
-      return;
-    }
-    if(!confirm('Reset list quantities to 0 and clear checked status?')){
-      return;
-    }
+  function hasHiddenBuildRows(){
+    return hiddenSuggestedIds.size > 0 || hiddenLastRunIds.size > 0;
+  }
+  function hasResettableQuantitiesOrState(){
+    return state.items.some(i=>Number(i.qty)>0 || i.checked || i.skipped);
+  }
+  function restoreHiddenBuildRowsOnly(){
+    if(!hasHiddenBuildRows()) return false;
+    clearHiddenBuildRows();
+    save();
+    try{ renderBuild(); }catch(e){}
+    return true;
+  }
+  function resetQuantitiesOnly(){
+    if(!hasResettableQuantitiesOrState()) return false;
+    state.items.forEach(i=>{
+      i.qty = 0;
+      i.checked = false;
+      i.skipped = false;
+    });
+    save();
+    try{ renderBuild(); renderShop(); }catch(e){}
+    return true;
+  }
+  function resetHiddenAndQuantities(){
+    const hadHiddenRows = hasHiddenBuildRows();
+    const hadResettable = hasResettableQuantitiesOrState();
+    if(!hadHiddenRows && !hadResettable) return false;
     state.items.forEach(i=>{
       i.qty = 0;
       i.checked = false;
@@ -1789,6 +1807,62 @@
     clearHiddenBuildRows();
     save();
     try{ renderBuild(); renderShop(); }catch(e){}
+    return true;
+  }
+  function openBuildResetOptions(){
+    const hasHiddenRows = hasHiddenBuildRows();
+    const hasResettable = hasResettableQuantitiesOrState();
+    const existing = document.getElementById('buildResetOptionsModal');
+    if(existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'buildResetOptionsModal';
+    modal.className = 'item-details-modal build-reset-modal';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'item-details-backdrop';
+    const card = document.createElement('div');
+    card.className = 'item-details-card build-reset-card';
+    const title = document.createElement('strong');
+    title.textContent = 'Reset options';
+    const subtitle = document.createElement('p');
+    subtitle.className = 'muted build-reset-subtitle';
+    subtitle.textContent = (!hasHiddenRows && !hasResettable)
+      ? 'Nothing to reset right now.'
+      : 'Choose what to reset for Build List.';
+    const actions = document.createElement('div');
+    actions.className = 'build-reset-actions';
+    function closeModal(){ modal.remove(); }
+    function addOption(label, enabled, onClick){
+      const btn = document.createElement('button');
+      btn.className = 'btn' + (enabled ? '' : ' build-reset-disabled');
+      btn.textContent = label;
+      btn.disabled = !enabled;
+      if(enabled) btn.onclick = onClick;
+      actions.appendChild(btn);
+    }
+    addOption('Show hidden items', hasHiddenRows, ()=>{ restoreHiddenBuildRowsOnly(); closeModal(); });
+    addOption('Reset quantities', hasResettable, ()=>{
+      if(!confirm('Reset all quantities to 0 and clear checked/skipped status?')) return;
+      resetQuantitiesOnly();
+      closeModal();
+    });
+    addOption('Show hidden items and reset quantities', hasHiddenRows || hasResettable, ()=>{
+      if(!confirm('Show hidden items and reset all quantities to 0?')) return;
+      resetHiddenAndQuantities();
+      closeModal();
+    });
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = closeModal;
+    actions.appendChild(cancelBtn);
+    backdrop.onclick = closeModal;
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(actions);
+    modal.appendChild(backdrop);
+    modal.appendChild(card);
+    document.body.appendChild(modal);
   }
   function resetCheckmarks(){
     const handled = state.items.filter(i=>i.checked || i.skipped);
@@ -2199,7 +2273,7 @@
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
-        <button class="btn right-controls" id="btnZeroAll">Reset List</button>
+        <button class="btn right-controls" id="btnZeroAll">Reset…</button>
       </div>
       <div class="build-view-toggle-row">
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
@@ -2557,7 +2631,7 @@
       }
       setTimeout(updateBuildBottomControlLayout, 0);
     }catch(e){}
-    document.getElementById('btnZeroAll').onclick = zeroAll;
+    document.getElementById('btnZeroAll').onclick = openBuildResetOptions;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
   }
 

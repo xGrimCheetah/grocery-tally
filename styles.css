@@ -229,6 +229,12 @@ summary{cursor:pointer;font-weight:700;color:#cbd5e1}
 .item-details-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.65)}
 .item-details-card{position:relative;max-width:760px;margin:5vh auto;background:#0b1220;border:1px solid #243042;border-radius:14px;padding:12px;max-height:90vh;overflow:auto}
 .item-details-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.build-reset-card{max-width:460px}
+.build-reset-subtitle{margin:8px 0 10px}
+.build-reset-actions{display:flex;flex-direction:column;gap:8px}
+.build-reset-actions .btn{width:100%;text-align:left;min-height:44px}
+.build-reset-actions .btn:last-child{text-align:center}
+.build-reset-disabled{opacity:.5;cursor:default;filter:none}
 .list .swipe-wrap{margin-top:0}
 /* v1.36.2: bottom control uses measured spacing, keyboard lift, and footer lift. */
 .build-search-nav{position:fixed;top:auto;left:50%;right:auto;bottom:calc(8px + env(safe-area-inset-bottom, 0px) + var(--build-keyboard-lift,0px) + var(--build-nav-lift,0px));transform:translateX(-50%);width:calc(100% - 32px);max-width:896px;margin:0;z-index:20;box-shadow:0 -10px 24px rgba(0,0,0,.32)}
