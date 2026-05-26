@@ -2,8 +2,8 @@
 
 Personal grocery list app. Installs on iPhone via Safari → Add to Home Screen, works offline via Service Worker.
 
-- Current build: v1.63.4
-- Total version history count: 110
+- Current build: v1.64.0
+- Total version history count: 111
 - Changelog: see `CHANGELOG.md`
 
 ### Deploying on GitHub Pages (project site)

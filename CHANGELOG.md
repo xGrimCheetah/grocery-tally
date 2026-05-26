@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.64.0 — Item details expansion without main-list clutter
+
+- Added an optional item notes field in the item Details popup.
+- Added compact read-only quantity/history context in item Details.
+- Kept Build List and Shopping Mode rows clean and uncluttered.
+- Preserved receipt-derived price behavior, run history, suggestions, themes, localStorage behavior, and JSON backup/import compatibility.
+
 ## v1.63.4 — Version history docs cleanup
 
 - Added a README version-history count.
