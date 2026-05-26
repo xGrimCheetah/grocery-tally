@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.63.4"; // Version history docs cleanup
+  let APP_VERSION = "1.64.0"; // Item details expansion without main-list clutter
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -3433,7 +3433,7 @@ Skipped duplicate items: ${skippedItems}`);
     const modalOptions = options || {};
     const isBuildQuickAddFlow = modalOptions.source === "buildQuickAdd";
     const isNewDraft = !itemId;
-    const item = isNewDraft ? { id:'', name: cleanText((draftItem&&draftItem.name)||''), cat:'', qty:0, prevQty:0, pos:0, checked:false, avgPrice:0, storeIds:Array.isArray(draftItem&&draftItem.storeIds)?draftItem.storeIds.slice():[] } : state.items.find(i=> cleanText(i.id) === cleanText(itemId));
+    const item = isNewDraft ? { id:'', name: cleanText((draftItem&&draftItem.name)||''), cat:'', qty:0, prevQty:0, pos:0, checked:false, avgPrice:0, notes: cleanText((draftItem&&draftItem.notes)||''), storeIds:Array.isArray(draftItem&&draftItem.storeIds)?draftItem.storeIds.slice():[] } : state.items.find(i=> cleanText(i.id) === cleanText(itemId));
     if(!item) return;
     const existing = document.getElementById('itemDetailsModal'); if(existing) existing.remove();
     const stats = getItemPurchaseStats(item);
@@ -3495,6 +3495,10 @@ Skipped duplicate items: ${skippedItems}`);
           stores.forEach(st=>{ const label=document.createElement('label'); label.className='item-edit-store-option'; const c=document.createElement('input'); c.type='checkbox'; c.value=st.id; c.checked=(item.storeIds||[]).includes(st.id); const sp=document.createElement('span'); sp.textContent=st.name; label.appendChild(c); label.appendChild(sp); storesList.appendChild(label); });
         } else { const p=document.createElement('p'); p.className='muted'; p.textContent='No stores assigned'; storesList.appendChild(p); }
         storesField.appendChild(storesList); card.appendChild(storesField);
+        const notesLabel = document.createElement('label'); notesLabel.className='item-edit-field';
+        const noteTitle = document.createElement('span'); noteTitle.className='price-label'; noteTitle.textContent='Notes';
+        const notesInput = document.createElement('textarea'); notesInput.id = 'detailsNotes'; notesInput.rows = 4; notesInput.className = 'item-details-notes-input'; notesInput.value = cleanText(item.notes || '');
+        notesLabel.appendChild(noteTitle); notesLabel.appendChild(notesInput); card.appendChild(notesLabel);
         const actions=document.createElement('div'); actions.className='item-edit-actions';
         const saveBtn=document.createElement('button'); saveBtn.className='btn-accent'; saveBtn.textContent='Save';
         const cancelBtn=document.createElement('button'); cancelBtn.className='btn'; cancelBtn.textContent='Cancel';
@@ -3518,7 +3522,8 @@ Skipped duplicate items: ${skippedItems}`);
           const selectedStoreIds = Array.from(storesList.querySelectorAll('input:checked')).map(el=>el.value);
           if(isNewDraft){
             const newCat = catSelect.value || '';
-            const created = { id:id(), name:nv, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, storeIds:selectedStoreIds };
+            const notesValue = cleanText(notesInput.value);
+            const created = { id:id(), name:nv, cat:newCat, qty:0, prevQty:0, pos: nextItemPosForCategory(newCat), checked:false, avgPrice:0, notes: notesValue, storeIds:selectedStoreIds };
             state.items.push(created);
             save(); manageItemsQuery=''; const search=document.getElementById('newItemName'); if(search) search.value='';
             renderBuild(); renderManage(); renderShop(); renderInsights();
@@ -3527,6 +3532,7 @@ Skipped duplicate items: ${skippedItems}`);
           }
           item.name = nv; item.cat = catSelect.value || '';
           item.storeIds = selectedStoreIds;
+          item.notes = cleanText(notesInput.value);
           save();
           if(isBuildQuickAddFlow){
             buildSearchQuery = cleanText(nv);
@@ -3558,23 +3564,28 @@ Skipped duplicate items: ${skippedItems}`);
         list.appendChild(statRow('Stores', storeText));
         list.appendChild(statRow('Receipt average', receiptAvg>0?formatMoney(receiptAvg):'No receipt price history yet'));
         list.appendChild(statRow('Receipt entries', String(validPriceEntries(item).length || 0)));
-        list.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
-        list.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
-        list.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
-        list.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
+        const noteText = cleanText(item.notes || '');
+        if(noteText) list.appendChild(statRow('Notes', noteText));
         card.appendChild(list);
         const spacer=document.createElement('div'); spacer.className='spacer'; card.appendChild(spacer);
-        const h=document.createElement('strong'); h.textContent='Recent history'; card.appendChild(h);
-        const recent=document.createElement('div'); recent.className='list';
+        const quantityHistoryHeading=document.createElement('strong'); quantityHistoryHeading.textContent='Quantity & history'; card.appendChild(quantityHistoryHeading);
+        const historyList=document.createElement('div'); historyList.className='list';
+        const usualQty = inferUsualQuickAddQty(item.id, state.runHistory || []);
+        const hasUsualQty = stats.purchaseCount >= 3;
+        historyList.appendChild(statRow('Usual quantity', hasUsualQty ? String(usualQty) : 'Not enough history yet'));
+        historyList.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
+        historyList.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
+        historyList.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
+        historyList.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
         if(stats.recent.length){
           stats.recent.forEach(({run,rit})=>{
             const priceText = runItemReceiptTotal(rit)>0 ? `Receipt ${formatMoney(runItemReceiptTotal(rit))}` : 'No receipt price';
-            recent.appendChild(statRow(formatDateLabel(run.committedAt), `Qty ${rit.qty} · ${priceText}`));
+            historyList.appendChild(statRow(formatDateLabel(run.committedAt), `Qty ${rit.qty} · ${priceText}`));
           });
         } else {
-          const p=document.createElement('p'); p.className='muted'; p.textContent='No recent purchases.'; recent.appendChild(p);
+          historyList.appendChild(statRow('Recent history', 'No purchase history yet'));
         }
-        card.appendChild(recent);
+        card.appendChild(historyList);
         const actions=document.createElement('div'); actions.className='item-edit-actions';
         const editBtn=document.createElement('button'); editBtn.className='btn-accent'; editBtn.textContent='Edit';
         editBtn.onclick = ()=>{ editing = true; render(); };
