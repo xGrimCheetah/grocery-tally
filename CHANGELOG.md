@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.63.0 — Color themes
+
+- Added a curated color theme picker.
+- Added Default dark, Green grocery, Blue, Purple, Bright orange buttons, and High-contrast dark themes.
+- Saved the selected theme locally and restored it on reload.
+- Applied theme colors across the main app surfaces, controls, tabs, cards, inputs, and popups.
+- Preserved grocery data, run history, receipt pricing, suggestions, reset behavior, Shopping Mode, Manage workflows, and JSON backup/import compatibility.
+
 ## v1.62.1 — Split Reset List actions
 
 - Replaced the direct Reset List action with reset options.
