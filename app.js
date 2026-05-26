@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.63.1"; // Color themes
+  let APP_VERSION = "1.63.1"; // Theme palette polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
