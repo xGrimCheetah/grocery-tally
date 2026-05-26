@@ -712,10 +712,32 @@
       return String(iso || 'Unknown date');
     }
   }
+  function normalizeDateInput(value){
+    if(value instanceof Date){
+      const ms = value.getTime();
+      return Number.isFinite(ms) ? { valid:true, date:value, display:value.toISOString() } : { valid:false, date:null, display:'' };
+    }
+    if(typeof value === 'number'){
+      if(!Number.isFinite(value)) return { valid:false, date:null, display:'' };
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:String(value) } : { valid:true, date, display:String(value) };
+    }
+    if(typeof value === 'string'){
+      const text = value.trim();
+      if(!text) return { valid:false, date:null, display:'' };
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:text } : { valid:true, date, display:text };
+    }
+    if(value == null) return { valid:false, date:null, display:'' };
+    const text = String(value || '').trim();
+    if(!text) return { valid:false, date:null, display:'' };
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:text } : { valid:true, date, display:text };
+  }
   function formatDateLabel(value){
-    const text = cleanText(value);
-    if(!text) return 'Unknown date';
-    return formatRunDate(text);
+    const normalized = normalizeDateInput(value);
+    if(!normalized.valid) return 'Unknown date';
+    return formatRunDate(normalized.date);
   }
   function createRunHistoryEntry(checked){
     const sorted = checked.slice().sort(sortItems);
@@ -3418,7 +3440,9 @@ Skipped duplicate items: ${skippedItems}`);
   }
 
   function getItemPurchaseStats(item){
-    let purchaseCount = 0, totalQty = 0, estimatedSpend = 0, lastPurchased = '';
+    let purchaseCount = 0, totalQty = 0, estimatedSpend = 0;
+    let lastPurchasedValue = null;
+    let lastPurchasedHasKnownDate = false;
     const runs = [];
     (Array.isArray(state.runHistory) ? state.runHistory : []).forEach(run=>{
       const runItems = Array.isArray(run && run.items) ? run.items : [];
@@ -3428,22 +3452,28 @@ Skipped duplicate items: ${skippedItems}`);
         if(qty <= 0) return;
         purchaseCount += 1; totalQty += qty;
         estimatedSpend += runItemEstimatedPrice(rit) || 0;
-        const committedAt = cleanText(run && run.committedAt);
-        const runDateMs = Date.parse(committedAt);
-        const lastPurchasedMs = Date.parse(lastPurchased);
-        if(committedAt && Number.isFinite(runDateMs) && (!lastPurchased || !Number.isFinite(lastPurchasedMs) || runDateMs > lastPurchasedMs)){
-          lastPurchased = committedAt;
+        const committedAtInfo = normalizeDateInput(run && run.committedAt);
+        if(committedAtInfo.valid){
+          const runDateMs = committedAtInfo.date.getTime();
+          const lastMs = lastPurchasedHasKnownDate && lastPurchasedValue instanceof Date ? lastPurchasedValue.getTime() : -Infinity;
+          if(!lastPurchasedHasKnownDate || runDateMs > lastMs){
+            lastPurchasedValue = committedAtInfo.date;
+            lastPurchasedHasKnownDate = true;
+          }
+        } else if(!lastPurchasedValue){
+          lastPurchasedValue = 'Unknown date';
         }
         runs.push({ run: run || {}, rit: rit || {} });
       });
     });
     runs.sort((a,b)=>{
-      const aTime = Date.parse(cleanText(a && a.run && a.run.committedAt));
-      const bTime = Date.parse(cleanText(b && b.run && b.run.committedAt));
-      const safeA = Number.isFinite(aTime) ? aTime : 0;
-      const safeB = Number.isFinite(bTime) ? bTime : 0;
+      const aInfo = normalizeDateInput(a && a.run && a.run.committedAt);
+      const bInfo = normalizeDateInput(b && b.run && b.run.committedAt);
+      const safeA = aInfo.valid ? aInfo.date.getTime() : 0;
+      const safeB = bInfo.valid ? bInfo.date.getTime() : 0;
       return safeB - safeA;
     });
+    const lastPurchased = lastPurchasedHasKnownDate ? formatDateLabel(lastPurchasedValue) : (purchaseCount > 0 ? 'Unknown date' : '');
     return { purchaseCount, totalQty, estimatedSpend: roundMoney(estimatedSpend), lastPurchased, recent: runs.slice(0,5) };
   }
   function safeInferUsualQty(itemId, runHistory){
@@ -3599,7 +3629,7 @@ Skipped duplicate items: ${skippedItems}`);
         const hasUsualQty = stats.purchaseCount >= 3 && usualQty > 0;
         historyList.appendChild(statRow('Usual quantity', hasUsualQty ? String(usualQty) : 'Not enough history yet'));
         historyList.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
-        historyList.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
+        historyList.appendChild(statRow('Last purchased', stats.purchaseCount > 0 ? (stats.lastPurchased || 'Unknown date') : 'Never purchased'));
         historyList.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
         historyList.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
         const recentRuns = Array.isArray(stats.recent) ? stats.recent : [];
@@ -3610,7 +3640,7 @@ Skipped duplicate items: ${skippedItems}`);
             const receiptTotal = runItemReceiptTotal(rit);
             const priceText = receiptTotal>0 ? `Receipt ${formatMoney(receiptTotal)}` : 'No receipt price';
             const qtyText = Math.max(0, Number(rit && rit.qty) || 0);
-            const dateText = cleanText(run && run.committedAt) ? formatDateLabel(run.committedAt) : 'Unknown date';
+            const dateText = formatDateLabel(run && run.committedAt);
             historyList.appendChild(statRow(dateText, `Qty ${qtyText} · ${priceText}`));
           });
         } else {
