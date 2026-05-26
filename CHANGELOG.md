@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.63.1 — Theme palette polish
+
+- Expanded curated color themes into fuller coordinated palettes.
+- Renamed Green grocery to Green and Bright orange buttons to Bright Orange.
+- Improved themed backgrounds, cards, borders, controls, tabs, inputs, popups, and sticky UI surfaces.
+- Preserved theme picker persistence and existing grocery data/workflows.
+
 ## v1.63.0 — Color themes
 
 - Added a curated color theme picker.
