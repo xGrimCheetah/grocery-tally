@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.63.2 — Theme contrast and palette refinement
+
+- Fixed High-contrast dark button text readability.
+- Refined curated themes into more complete complementary color palettes.
+- Improved themed button, active control, surface, border, input, popup, and quantity-chip contrast.
+- Preserved theme picker persistence and existing grocery data/workflows.
+
 ## v1.63.1 — Theme palette polish
 
 - Expanded curated color themes into fuller coordinated palettes.
