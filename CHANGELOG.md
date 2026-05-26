@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.64.1 — Fix Details popup for items with run history
+
+- Fixed a Details modal rendering bug so items with committed run history open reliably.
+- Hardened Quantity & history rendering with safe fallbacks for missing or partial run-history fields.
+- Preserved notes behavior, Build List/Shopping Mode row layouts, receipt history behavior, and localStorage/backup compatibility.
+
 ## v1.64.0 — Item details expansion without main-list clutter
 
 - Added an optional item notes field in the item Details popup.
