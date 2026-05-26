@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.63.0"; // Color themes
+  let APP_VERSION = "1.63.1"; // Color themes
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -19,10 +19,10 @@
   const DEFAULT_THEME = 'default';
   const THEMES = [
     { key:'default', label:'Default dark' },
-    { key:'green', label:'Green grocery' },
+    { key:'green', label:'Green' },
     { key:'blue', label:'Blue' },
     { key:'purple', label:'Purple' },
-    { key:'orange', label:'Bright orange buttons' },
+    { key:'orange', label:'Bright Orange' },
     { key:'contrast', label:'High-contrast dark' }
   ];
 
