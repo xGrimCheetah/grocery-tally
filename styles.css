@@ -1,10 +1,10 @@
-:root{--bg:#0f172a;--card:#111827;--surface:#0b1220;--surface-alt:#111827;--muted:#1f2937;--text:#e5e7eb;--subtle:#cbd5e1;--subtle-2:#94a3b8;--border:#243042;--border-strong:#334155;--accent:#22c55e;--accent2:#3b82f6;--danger:#ef4444;--link:#93c5fd;--selected-pill-text:#052e16;--control-bg:var(--surface);--control-border:var(--border);--control-text:var(--text);--qty-bg:#0a1627;--qty-border:#213045;--modal-bg:var(--card);--danger-bg:#1b1111;--danger-border:#5f1d1d;--danger-text:#fecaca;--shadow:0 8px 18px rgba(0,0,0,.18);--focus-ring:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent);--tab-active-text:var(--text);--tab-active-bg:var(--muted);--tab-active-border:var(--border-strong);--tab-idle-text:var(--subtle);--tab-pill-bg:var(--surface)}
+:root{--bg:#0f172a;--card:#111827;--surface:#0b1220;--surface-alt:#111827;--muted:#1f2937;--text:#e5e7eb;--subtle:#cbd5e1;--subtle-2:#94a3b8;--border:#243042;--border-strong:#334155;--accent:#22c55e;--accent2:#3b82f6;--danger:#ef4444;--link:#93c5fd;--selected-pill-text:#052e16;--btn-bg:var(--border-strong);--btn-text:#f8fafc;--btn-accent-text:#042f1a;--btn-accent2-text:#e0ecff;--btn-danger-text:#fff1f2;--active-control-text:var(--text);--control-bg:var(--surface);--control-border:var(--border);--control-text:var(--text);--qty-bg:#0a1627;--qty-border:#213045;--modal-bg:var(--card);--danger-bg:#1b1111;--danger-border:#5f1d1d;--danger-text:#fecaca;--shadow:0 8px 18px rgba(0,0,0,.18);--focus-ring:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent);--tab-active-text:var(--text);--tab-active-bg:var(--muted);--tab-active-border:var(--border-strong);--tab-idle-text:var(--subtle);--tab-pill-bg:var(--surface)}
 
-:root[data-theme="green"]{--bg:#06130f;--card:#0b1f17;--surface:#0f2a1e;--surface-alt:#123324;--muted:#164632;--border:#1f5a43;--border-strong:#2f7a5c;--text:#ecfdf5;--subtle:#bbf7d0;--subtle-2:#86efac;--accent:#22c55e;--accent2:#84cc16;--link:#86efac;--selected-pill-text:#052e16;--qty-bg:#0f2f22;--qty-border:#2f7a5c;--danger-bg:#2a1212;--danger-border:#7f1d1d;--danger-text:#fecaca}
-:root[data-theme="blue"]{--bg:#07111f;--card:#0d1b2e;--surface:#10243a;--surface-alt:#132f4c;--muted:#183b60;--border:#25527a;--border-strong:#3378ad;--text:#eff6ff;--subtle:#bfdbfe;--subtle-2:#93c5fd;--accent:#38bdf8;--accent2:#2563eb;--link:#7dd3fc;--selected-pill-text:#082f49;--qty-bg:#0f2f48;--qty-border:#3378ad;--danger-bg:#2a1111;--danger-border:#7f1d1d;--danger-text:#fecaca}
-:root[data-theme="purple"]{--bg:#120b1f;--card:#1b1230;--surface:#23183d;--surface-alt:#2b1f4d;--muted:#3b2a66;--border:#4c3a82;--border-strong:#6d5aa7;--text:#faf5ff;--subtle:#ddd6fe;--subtle-2:#c4b5fd;--accent:#a78bfa;--accent2:#8b5cf6;--link:#d8b4fe;--selected-pill-text:#2e1065;--qty-bg:#2a1d47;--qty-border:#6d5aa7;--danger-bg:#2b1120;--danger-border:#831843;--danger-text:#fbcfe8}
-:root[data-theme="orange"]{--bg:#120b06;--card:#1c120b;--surface:#25170e;--surface-alt:#2f1d11;--muted:#4a2a14;--border:#7c3f18;--border-strong:#c2410c;--text:#fff7ed;--subtle:#fed7aa;--subtle-2:#fdba74;--accent:#f97316;--accent2:#fb923c;--link:#fdba74;--selected-pill-text:#431407;--qty-bg:#3a2111;--qty-border:#c2410c;--danger-bg:#3a140d;--danger-border:#b45309;--danger-text:#ffedd5}
-:root[data-theme="contrast"]{--bg:#000000;--card:#050505;--surface:#0a0a0a;--surface-alt:#111111;--muted:#1e293b;--border:#94a3b8;--border-strong:#f8fafc;--text:#ffffff;--subtle:#f1f5f9;--subtle-2:#e2e8f0;--accent:#22c55e;--accent2:#38bdf8;--link:#7dd3fc;--selected-pill-text:#000000;--qty-bg:#111111;--qty-border:#f8fafc;--danger-bg:#1a1a1a;--danger-border:#f8fafc;--danger-text:#ffffff;--tab-active-bg:#1e293b;--tab-active-border:#f8fafc}
+:root[data-theme="green"]{--bg:#0a1410;--card:#13241d;--surface:#1a3026;--surface-alt:#213b2f;--muted:#294936;--border:#416751;--border-strong:#5d8770;--text:#f5f6eb;--subtle:#d7dec4;--subtle-2:#b5c7a4;--accent:#4ade80;--accent2:#fbbf24;--link:#bef264;--selected-pill-text:#0f2615;--btn-bg:#5d8770;--btn-text:#f5f6eb;--btn-accent-text:#0f2615;--btn-accent2-text:#332302;--btn-danger-text:#fff1f2;--active-control-text:#0f2615;--qty-bg:#20382c;--qty-border:#5d8770;--danger-bg:#321918;--danger-border:#8f3a36;--danger-text:#ffe4e6}
+:root[data-theme="blue"]{--bg:#081225;--card:#111c31;--surface:#19263d;--surface-alt:#20314b;--muted:#28415f;--border:#44627e;--border-strong:#5f83a5;--text:#f1f6ff;--subtle:#cad8ea;--subtle-2:#a8bed8;--accent:#38bdf8;--accent2:#2dd4bf;--link:#7dd3fc;--selected-pill-text:#06273f;--btn-bg:#5f83a5;--btn-text:#f3f8ff;--btn-accent-text:#082f49;--btn-accent2-text:#042f2e;--btn-danger-text:#fff1f2;--active-control-text:#06273f;--qty-bg:#1a3049;--qty-border:#5f83a5;--danger-bg:#31181c;--danger-border:#8b3a4a;--danger-text:#ffe4e6}
+:root[data-theme="purple"]{--bg:#140d1d;--card:#1f1829;--surface:#2a2233;--surface-alt:#322a3d;--muted:#463753;--border:#625773;--border-strong:#84779a;--text:#f8f5ff;--subtle:#d5cedf;--subtle-2:#b8aec8;--accent:#c084fc;--accent2:#f59e0b;--link:#93c5fd;--selected-pill-text:#2c114a;--btn-bg:#84779a;--btn-text:#f9f6ff;--btn-accent-text:#2c114a;--btn-accent2-text:#3b2100;--btn-danger-text:#fff1f2;--active-control-text:#2c114a;--qty-bg:#352d43;--qty-border:#84779a;--danger-bg:#321723;--danger-border:#93405f;--danger-text:#ffe4e6}
+:root[data-theme="orange"]{--bg:#16100b;--card:#221912;--surface:#2c2118;--surface-alt:#34271d;--muted:#4b3526;--border:#76604d;--border-strong:#a9876a;--text:#fff5e8;--subtle:#ead5c0;--subtle-2:#d7b89a;--accent:#f97316;--accent2:#fbbf24;--link:#fdba74;--selected-pill-text:#4a2309;--btn-bg:#a9876a;--btn-text:#fff6ee;--btn-accent-text:#4a2309;--btn-accent2-text:#422f00;--btn-danger-text:#fff7f7;--active-control-text:#4a2309;--qty-bg:#3d2c1f;--qty-border:#a9876a;--danger-bg:#3b1c16;--danger-border:#b35a4f;--danger-text:#ffe7e3}
+:root[data-theme="contrast"]{--bg:#000000;--card:#090909;--surface:#111111;--surface-alt:#171717;--muted:#222222;--border:#9ca3af;--border-strong:#ffffff;--text:#ffffff;--subtle:#f3f4f6;--subtle-2:#d1d5db;--accent:#22c55e;--accent2:#22d3ee;--link:#67e8f9;--selected-pill-text:#001109;--btn-bg:#f3f4f6;--btn-text:#000000;--btn-accent-text:#001109;--btn-accent2-text:#001219;--btn-danger-text:#ffffff;--active-control-text:#000000;--qty-bg:#151515;--qty-border:#f9fafb;--danger-bg:#7f1d1d;--danger-border:#fecaca;--danger-text:#ffffff;--tab-active-bg:#ffffff;--tab-active-text:#000000;--tab-active-border:#ffffff}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
 .wrap{max-width:920px;margin:0 auto;padding:16px}
 header{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
@@ -19,12 +19,12 @@ h1{font-size:20px;margin:0;display:flex;gap:8px;align-items:center}
 .build-actions .right-controls{margin-left:auto}
 .build-view-toggle-row{display:flex;justify-content:flex-start;margin:10px 0 0}
 .manage-view-toggle-row{display:flex;justify-content:flex-start}
-button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:white;cursor:pointer}
-.btn{background:var(--border-strong)}
+button{appearance:none;border:none;border-radius:12px;padding:10px 12px;font-weight:600;color:var(--btn-text);cursor:pointer}
+.btn{background:var(--btn-bg);color:var(--btn-text)}
 .btn:hover{filter:brightness(1.05)}
-.btn-accent{background:var(--accent)}
-.btn-accent2{background:var(--accent2)}
-.btn-danger{background:var(--danger)}
+.btn-accent{background:var(--accent);color:var(--btn-accent-text)}
+.btn-accent2{background:var(--accent2);color:var(--btn-accent2-text)}
+.btn-danger{background:var(--danger);color:var(--btn-danger-text)}
 .iconbtn{background:transparent;border:1px solid var(--border-strong);color:var(--subtle);padding:6px 8px;border-radius:8px;line-height:1}
 .iconbtn:hover{filter:brightness(1.1)}
 .titlewrap{display:flex;gap:8px;align-items:center}
@@ -56,7 +56,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 #manageList .manage-item-row{transition:opacity .18s ease,filter .18s ease}
 #manageList.build-letter-focused .manage-item-row.build-letter-dim{opacity:.32;filter:grayscale(1)}
 #manageList.build-letter-focused .manage-item-row.build-letter-match{opacity:1;filter:none}
-.alpha-buttons button.selected{background:var(--accent);color:var(--selected-pill-text)}
+.alpha-buttons button.selected{background:var(--accent);color:var(--active-control-text)}
 .build-flat-list .item{padding:6px 8px;min-height:44px}
 .build-all-results .item,.build-current-list .item{min-height:52px;padding:10px}
 .build-all-results .name,.build-current-list .name{font-size:1.08rem;font-weight:700}
