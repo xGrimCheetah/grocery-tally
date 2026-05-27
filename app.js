@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.64.0"; // Item details expansion without main-list clutter
+  let APP_VERSION = "1.64.1"; // Item details history popup fix
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -711,6 +711,33 @@
     }catch(e){
       return String(iso || 'Unknown date');
     }
+  }
+  function normalizeDateInput(value){
+    if(value instanceof Date){
+      const ms = value.getTime();
+      return Number.isFinite(ms) ? { valid:true, date:value, display:value.toISOString() } : { valid:false, date:null, display:'' };
+    }
+    if(typeof value === 'number'){
+      if(!Number.isFinite(value)) return { valid:false, date:null, display:'' };
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:String(value) } : { valid:true, date, display:String(value) };
+    }
+    if(typeof value === 'string'){
+      const text = value.trim();
+      if(!text) return { valid:false, date:null, display:'' };
+      const date = new Date(text);
+      return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:text } : { valid:true, date, display:text };
+    }
+    if(value == null) return { valid:false, date:null, display:'' };
+    const text = String(value || '').trim();
+    if(!text) return { valid:false, date:null, display:'' };
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? { valid:false, date:null, display:text } : { valid:true, date, display:text };
+  }
+  function formatDateLabel(value){
+    const normalized = normalizeDateInput(value);
+    if(!normalized.valid) return 'Unknown date';
+    return formatRunDate(normalized.date);
   }
   function createRunHistoryEntry(checked){
     const sorted = checked.slice().sort(sortItems);
@@ -3413,21 +3440,49 @@ Skipped duplicate items: ${skippedItems}`);
   }
 
   function getItemPurchaseStats(item){
-    let purchaseCount = 0, totalQty = 0, estimatedSpend = 0, lastPurchased = '';
+    let purchaseCount = 0, totalQty = 0, estimatedSpend = 0;
+    let lastPurchasedValue = null;
+    let lastPurchasedHasKnownDate = false;
     const runs = [];
-    (state.runHistory || []).forEach(run=>{
-      (run.items || []).forEach(rit=>{
+    (Array.isArray(state.runHistory) ? state.runHistory : []).forEach(run=>{
+      const runItems = Array.isArray(run && run.items) ? run.items : [];
+      runItems.forEach(rit=>{
         if(cleanText(rit.itemId) !== cleanText(item.id)) return;
         const qty = Math.max(0, Number(rit.qty) || 0);
         if(qty <= 0) return;
         purchaseCount += 1; totalQty += qty;
         estimatedSpend += runItemEstimatedPrice(rit) || 0;
-        if(!lastPurchased || new Date(run.committedAt) > new Date(lastPurchased)) lastPurchased = run.committedAt;
-        runs.push({ run, rit });
+        const committedAtInfo = normalizeDateInput(run && run.committedAt);
+        if(committedAtInfo.valid){
+          const runDateMs = committedAtInfo.date.getTime();
+          const lastMs = lastPurchasedHasKnownDate && lastPurchasedValue instanceof Date ? lastPurchasedValue.getTime() : -Infinity;
+          if(!lastPurchasedHasKnownDate || runDateMs > lastMs){
+            lastPurchasedValue = committedAtInfo.date;
+            lastPurchasedHasKnownDate = true;
+          }
+        } else if(!lastPurchasedValue){
+          lastPurchasedValue = 'Unknown date';
+        }
+        runs.push({ run: run || {}, rit: rit || {} });
       });
     });
-    runs.sort((a,b)=> new Date(b.run.committedAt) - new Date(a.run.committedAt));
+    runs.sort((a,b)=>{
+      const aInfo = normalizeDateInput(a && a.run && a.run.committedAt);
+      const bInfo = normalizeDateInput(b && b.run && b.run.committedAt);
+      const safeA = aInfo.valid ? aInfo.date.getTime() : 0;
+      const safeB = bInfo.valid ? bInfo.date.getTime() : 0;
+      return safeB - safeA;
+    });
+    const lastPurchased = lastPurchasedHasKnownDate ? formatDateLabel(lastPurchasedValue) : (purchaseCount > 0 ? 'Unknown date' : '');
     return { purchaseCount, totalQty, estimatedSpend: roundMoney(estimatedSpend), lastPurchased, recent: runs.slice(0,5) };
+  }
+  function safeInferUsualQty(itemId, runHistory){
+    try{
+      const qty = inferUsualQuickAddQty(itemId, Array.isArray(runHistory) ? runHistory : []);
+      return Math.max(0, Number(qty) || 0);
+    }catch(e){
+      return 0;
+    }
   }
   function openItemDetailsModal(itemId, startEdit, draftItem, options){
     const modalOptions = options || {};
@@ -3570,17 +3625,23 @@ Skipped duplicate items: ${skippedItems}`);
         const spacer=document.createElement('div'); spacer.className='spacer'; card.appendChild(spacer);
         const quantityHistoryHeading=document.createElement('strong'); quantityHistoryHeading.textContent='Quantity & history'; card.appendChild(quantityHistoryHeading);
         const historyList=document.createElement('div'); historyList.className='list';
-        const usualQty = inferUsualQuickAddQty(item.id, state.runHistory || []);
-        const hasUsualQty = stats.purchaseCount >= 3;
+        const usualQty = safeInferUsualQty(item.id, state.runHistory);
+        const hasUsualQty = stats.purchaseCount >= 3 && usualQty > 0;
         historyList.appendChild(statRow('Usual quantity', hasUsualQty ? String(usualQty) : 'Not enough history yet'));
         historyList.appendChild(statRow('Purchase count', String(stats.purchaseCount)));
-        historyList.appendChild(statRow('Last purchased', stats.lastPurchased ? formatDateLabel(stats.lastPurchased) : 'Never purchased'));
+        historyList.appendChild(statRow('Last purchased', stats.purchaseCount > 0 ? (stats.lastPurchased || 'Unknown date') : 'Never purchased'));
         historyList.appendChild(statRow('Total quantity purchased', String(stats.totalQty)));
         historyList.appendChild(statRow('Estimated spend', stats.estimatedSpend>0?formatMoney(stats.estimatedSpend):'No receipt price history yet'));
-        if(stats.recent.length){
-          stats.recent.forEach(({run,rit})=>{
-            const priceText = runItemReceiptTotal(rit)>0 ? `Receipt ${formatMoney(runItemReceiptTotal(rit))}` : 'No receipt price';
-            historyList.appendChild(statRow(formatDateLabel(run.committedAt), `Qty ${rit.qty} · ${priceText}`));
+        const recentRuns = Array.isArray(stats.recent) ? stats.recent : [];
+        if(recentRuns.length){
+          recentRuns.forEach(entry=>{
+            const run = entry && entry.run ? entry.run : {};
+            const rit = entry && entry.rit ? entry.rit : {};
+            const receiptTotal = runItemReceiptTotal(rit);
+            const priceText = receiptTotal>0 ? `Receipt ${formatMoney(receiptTotal)}` : 'No receipt price';
+            const qtyText = Math.max(0, Number(rit && rit.qty) || 0);
+            const dateText = formatDateLabel(run && run.committedAt);
+            historyList.appendChild(statRow(dateText, `Qty ${qtyText} · ${priceText}`));
           });
         } else {
           historyList.appendChild(statRow('Recent history', 'No purchase history yet'));
