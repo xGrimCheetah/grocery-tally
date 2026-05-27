@@ -166,6 +166,24 @@
       if(typeof it.pos !== 'number' || !Number.isFinite(it.pos)) it.pos = idx;
     });
     if(!Array.isArray(state.runHistory)) state.runHistory = [];
+    if(!Array.isArray(state.bundles)) state.bundles = [];
+    state.bundles = state.bundles.map((bundle, idx)=>{
+      const name = cleanText(bundle && bundle.name) || 'Untitled bundle';
+      const rawItems = Array.isArray(bundle && bundle.items) ? bundle.items : [];
+      const seen = new Set();
+      const items = rawItems.map(entry=>{
+        const itemId = cleanText(entry && entry.itemId);
+        const qty = Math.max(1, Math.round(Number(entry && entry.qty) || 1));
+        if(!itemId || seen.has(itemId)) return null;
+        seen.add(itemId);
+        return { itemId, qty };
+      }).filter(Boolean);
+      return {
+        id: cleanText(bundle && bundle.id) || ('bundle_' + idx + '_' + id()),
+        name,
+        items
+      };
+    });
     state.runHistory = state.runHistory.map((run, idx)=>{
       const rawItems = Array.isArray(run && run.items) ? run.items : [];
       const items = rawItems.map(rit=>{
@@ -1960,20 +1978,6 @@
     }
 
     if(!Array.isArray(state.runHistory)) state.runHistory = [];
-    if(!Array.isArray(state.bundles)) state.bundles = [];
-    state.bundles = state.bundles.map((bundle, idx)=>{
-      const name = cleanText(bundle && bundle.name);
-      const rawItems = Array.isArray(bundle && bundle.items) ? bundle.items : [];
-      const seen = new Set();
-      const items = rawItems.map(entry=>{
-        const itemId = cleanText(entry && entry.itemId);
-        const qty = Math.max(1, Math.round(Number(entry && entry.qty) || 1));
-        if(!itemId || seen.has(itemId)) return null;
-        seen.add(itemId);
-        return { itemId, qty };
-      }).filter(Boolean);
-      return { id: cleanText(bundle && bundle.id) || ('bundle_' + idx + '_' + id()), name: name || 'Untitled bundle', items };
-    }).filter(bundle=> cleanText(bundle.name));
     state.runHistory.unshift(runEntry);
 
     state.items.forEach(i=>{
@@ -3010,8 +3014,6 @@
       if(!item){ skippedMissing += 1; return; }
       const qty = Math.max(1, Math.round(Number(entry.qty) || 1));
       item.qty = Math.max(0, Number(item.qty) || 0) + qty;
-      item.checked = false;
-      item.skipped = false;
       applied.push(`${item.name} +${qty}`);
     });
     save();
