@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.64.1"; // Item details history popup fix
+  let APP_VERSION = "1.65.0"; // List templates / bundles
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -49,6 +49,7 @@
   let insightsSearchQuery = '';
   let insightsViewMode = 'items';
   let runHistoryShowAll = false;
+  let manageBundleSearchQuery = '';
   const runHistoryExpandedIds = new Set();
   let runHistoryReceiptEditId = '';
   let manageNavResizeListenersAttached = false;
@@ -1959,6 +1960,20 @@
     }
 
     if(!Array.isArray(state.runHistory)) state.runHistory = [];
+    if(!Array.isArray(state.bundles)) state.bundles = [];
+    state.bundles = state.bundles.map((bundle, idx)=>{
+      const name = cleanText(bundle && bundle.name);
+      const rawItems = Array.isArray(bundle && bundle.items) ? bundle.items : [];
+      const seen = new Set();
+      const items = rawItems.map(entry=>{
+        const itemId = cleanText(entry && entry.itemId);
+        const qty = Math.max(1, Math.round(Number(entry && entry.qty) || 1));
+        if(!itemId || seen.has(itemId)) return null;
+        seen.add(itemId);
+        return { itemId, qty };
+      }).filter(Boolean);
+      return { id: cleanText(bundle && bundle.id) || ('bundle_' + idx + '_' + id()), name: name || 'Untitled bundle', items };
+    }).filter(bundle=> cleanText(bundle.name));
     state.runHistory.unshift(runEntry);
 
     state.items.forEach(i=>{
@@ -2335,7 +2350,7 @@
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
-        <button class="btn right-controls" id="btnZeroAll">Reset…</button>
+        <button class="btn" id="btnApplyBundle">Bundles</button><button class="btn right-controls" id="btnZeroAll">Reset…</button>
       </div>
       <div class="build-view-toggle-row">
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
@@ -2695,6 +2710,14 @@
     }catch(e){}
     document.getElementById('btnZeroAll').onclick = openBuildResetOptions;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
+    document.getElementById('btnApplyBundle').onclick = ()=>{
+      const bundles = Array.isArray(state.bundles) ? state.bundles : [];
+      if(!bundles.length){ alert('No bundles yet. Create bundles in Manage → Bundles.'); return; }
+      const names = bundles.map((b, idx)=> `${idx+1}. ${b.name}`).join('\n');
+      const pick = Number(prompt(`Apply bundle:\n${names}\n\nEnter number:`));
+      if(!Number.isFinite(pick) || pick < 1 || pick > bundles.length) return;
+      applyBundle(bundles[pick-1].id);
+    };
   }
 
   // ----- Shopping Mode -----
@@ -2948,6 +2971,7 @@
       <div class="manage-view-toggle-row">
         <div class="insights-view-toggle manage-view-toggle" role="group" aria-label="Manage view">
           <button type="button" class="insights-view-btn${manageView === 'items' ? ' active' : ''}" data-manage-view="items" aria-pressed="${manageView === 'items' ? 'true' : 'false'}">Items</button>
+          <button type="button" class="insights-view-btn${manageView === 'bundles' ? ' active' : ''}" data-manage-view="bundles" aria-pressed="${manageView === 'bundles' ? 'true' : 'false'}">Bundles</button>
           <button type="button" class="insights-view-btn${manageView === 'organize' ? ' active' : ''}" data-manage-view="organize" aria-pressed="${manageView === 'organize' ? 'true' : 'false'}">Organize</button>
           <button type="button" class="insights-view-btn${manageView === 'categories' ? ' active' : ''}" data-manage-view="categories" aria-pressed="${manageView === 'categories' ? 'true' : 'false'}">Categories</button>
           <button type="button" class="insights-view-btn${manageView === 'stores' ? ' active' : ''}" data-manage-view="stores" aria-pressed="${manageView === 'stores' ? 'true' : 'false'}">Stores</button>
@@ -2958,19 +2982,129 @@
       <div id="manageSubView"></div>`;
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
-        manageView = ['items','organize','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
+        manageView = ['items','bundles','organize','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
         if(manageView !== 'categories') manageCategoryReorderMode = false;
         renderManage();
       };
     });
     const subView = document.getElementById('manageSubView');
-    if(manageView === 'organize') renderManageOrganize(subView);
+    if(manageView === 'bundles') renderManageBundles(subView);
+    else if(manageView === 'organize') renderManageOrganize(subView);
     else if(manageView === 'categories') renderManageCategories(subView);
     else if(manageView === 'stores') renderManageStores(subView);
     else if(manageView === 'backup') renderManageBackup(subView);
     else renderManageItems(subView);
     clearTouchDragArtifacts();
   }
+  function getBundleById(bundleId){
+    return (state.bundles || []).find(bundle => cleanText(bundle.id) === cleanText(bundleId)) || null;
+  }
+
+  function applyBundle(bundleId){
+    const bundle = getBundleById(bundleId);
+    if(!bundle) return;
+    const applied = [];
+    let skippedMissing = 0;
+    bundle.items.forEach(entry=>{
+      const item = state.items.find(it=> cleanText(it.id) === cleanText(entry.itemId));
+      if(!item){ skippedMissing += 1; return; }
+      const qty = Math.max(1, Math.round(Number(entry.qty) || 1));
+      item.qty = Math.max(0, Number(item.qty) || 0) + qty;
+      item.checked = false;
+      item.skipped = false;
+      applied.push(`${item.name} +${qty}`);
+    });
+    save();
+    renderBuild();
+    let message = applied.length ? `Added ${bundle.name}: ${applied.slice(0,3).join(', ')}${applied.length > 3 ? ` +${applied.length - 3} more` : ''}` : `No items were added from ${bundle.name}.`;
+    if(skippedMissing) message += `${applied.length ? '. ' : ' '}Skipped ${skippedMissing} missing item${skippedMissing === 1 ? '' : 's'}.`;
+    alert(message);
+  }
+
+  function renderManageBundles(target){
+    const root = target || viewManage;
+    const bundles = Array.isArray(state.bundles) ? state.bundles : [];
+    root.innerHTML = `<div class="controls"><button class="btn-accent" id="btnAddBundle">Add bundle</button></div><div class="spacer"></div><div id="manageBundlesList"></div>`;
+    const list = document.getElementById('manageBundlesList');
+    if(!bundles.length){ list.innerHTML = '<p class="muted">No bundles yet.</p>'; }
+    else bundles.forEach(bundle=>{
+      const row = document.createElement('div'); row.className='item';
+      const left = document.createElement('div'); left.className='left';
+      const right = document.createElement('div'); right.className='right';
+      const name = document.createElement('div'); name.className='name'; name.textContent = bundle.name;
+      const meta = document.createElement('div'); meta.className='cat'; meta.textContent = `${bundle.items.length} ${bundle.items.length === 1 ? 'item' : 'items'}`;
+      left.appendChild(name); left.appendChild(meta);
+      const edit = document.createElement('button'); edit.className='btn'; edit.textContent='Edit'; edit.onclick=()=> openBundleEditor(bundle.id);
+      const del = document.createElement('button'); del.className='btn'; del.textContent='Delete'; del.onclick=()=>{ if(!confirm(`Delete bundle "${bundle.name}"?`)) return; state.bundles = state.bundles.filter(b=>b.id!==bundle.id); save(); renderManage(); };
+      right.appendChild(edit); right.appendChild(del); row.appendChild(left); row.appendChild(right); list.appendChild(row);
+    });
+    document.getElementById('btnAddBundle').onclick = ()=> openBundleEditor('');
+  }
+
+  function openBundleEditor(bundleId){
+    const existing = document.getElementById('bundleEditorModal');
+    if(existing) existing.remove();
+    const src = getBundleById(bundleId) || { id:'bundle_' + id(), name:'', items:[] };
+    const draft = { id: src.id, name: src.name, items: (src.items || []).map(it=>({ itemId: it.itemId, qty: Math.max(1, Math.round(Number(it.qty)||1)) })) };
+    const modal = document.createElement('div');
+    modal.id = 'bundleEditorModal';
+    modal.className = 'item-details-modal';
+    const backdrop = document.createElement('div'); backdrop.className='item-details-backdrop';
+    const card = document.createElement('div'); card.className='item-details-card';
+    card.innerHTML = `<h3>${bundleId ? 'Edit bundle' : 'Add bundle'}</h3><input id="bundleNameInput" type="text" placeholder="Bundle name" /><input id="bundleItemSearch" type="search" placeholder="Search items to add" /><div id="bundleSearchResults"></div><div id="bundleItemsList"></div><div class="controls"><button class="btn-accent" id="btnSaveBundle">Save</button><button class="btn" id="btnCancelBundle">Cancel</button></div>`;
+    modal.appendChild(backdrop); modal.appendChild(card); document.body.appendChild(modal);
+    const nameInput = card.querySelector('#bundleNameInput'); nameInput.value = draft.name;
+    const searchInput = card.querySelector('#bundleItemSearch');
+    const resultWrap = card.querySelector('#bundleSearchResults');
+    const itemsWrap = card.querySelector('#bundleItemsList');
+    function renderItems(){
+      itemsWrap.innerHTML = '';
+      if(!draft.items.length){ itemsWrap.innerHTML = '<p class="muted">No bundle items yet.</p>'; return; }
+      draft.items.forEach(entry=>{
+        const row = document.createElement('div'); row.className='item';
+        const it = state.items.find(x=> cleanText(x.id)===cleanText(entry.itemId));
+        const left = document.createElement('div'); left.className='left'; left.textContent = it ? it.name : 'Missing item';
+        const right = document.createElement('div'); right.className='right';
+        const minus = document.createElement('button'); minus.className='btn'; minus.textContent='–'; minus.onclick=()=>{ entry.qty = Math.max(1, entry.qty-1); renderItems(); };
+        const qty = document.createElement('div'); qty.className='qty'; qty.textContent = entry.qty;
+        const plus = document.createElement('button'); plus.className='btn-accent'; plus.textContent='+'; plus.onclick=()=>{ entry.qty += 1; renderItems(); };
+        const rem = document.createElement('button'); rem.className='btn'; rem.textContent='Remove'; rem.onclick=()=>{ draft.items = draft.items.filter(x=>x.itemId!==entry.itemId); renderItems(); };
+        right.appendChild(minus); right.appendChild(qty); right.appendChild(plus); right.appendChild(rem);
+        row.appendChild(left); row.appendChild(right); itemsWrap.appendChild(row);
+      });
+    }
+    function renderSearch(){
+      const q = normalizeText(searchInput.value || '');
+      resultWrap.innerHTML = '';
+      if(!q) return;
+      state.items.filter(it=> normalizeText(it.name).includes(q)).slice(0,5).forEach(it=>{
+        const btn = document.createElement('button'); btn.type='button'; btn.className='build-quick-add-option'; btn.textContent = it.name;
+        btn.onclick = ()=>{
+          if(draft.items.some(x=> cleanText(x.itemId)===cleanText(it.id))) return;
+          draft.items.push({ itemId: it.id, qty: 1 });
+          searchInput.value = '';
+          renderSearch(); renderItems();
+        };
+        resultWrap.appendChild(btn);
+      });
+    }
+    renderItems();
+    searchInput.oninput = renderSearch;
+    backdrop.onclick = ()=> modal.remove();
+    card.querySelector('#btnCancelBundle').onclick = ()=> modal.remove();
+    card.querySelector('#btnSaveBundle').onclick = ()=>{
+      const name = cleanText(nameInput.value);
+      if(!name){ alert('Bundle name is required.'); return; }
+      draft.name = name;
+      draft.items = draft.items.filter(entry=> cleanText(entry.itemId)).map(entry=>({ itemId: cleanText(entry.itemId), qty: Math.max(1, Math.round(Number(entry.qty)||1)) }));
+      const idx = (state.bundles||[]).findIndex(b=> cleanText(b.id)===cleanText(draft.id));
+      if(idx >= 0) state.bundles[idx] = draft; else (state.bundles || (state.bundles=[])).push(draft);
+      save();
+      modal.remove();
+      renderManage();
+    };
+  }
+
   function renderManageOrganize(target){
     ensurePositions();
     const selectedStoreId = activeOrganizeStoreId();
@@ -3352,7 +3486,7 @@ Skipped duplicate items: ${skippedItems}`);
     let importSelectionToken = 0;
     document.getElementById('btnExport').onclick = ()=>{
       const stats = getDataSafetyStats(state); const exportedAt = new Date().toISOString();
-      const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, backupMeta: { appName: 'Grocery Tally', appVersion: APP_VERSION, exportedAt }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [], storeOrders: state.storeOrders || {} };
+      const dataOut = { appVersion: APP_VERSION, exportMetadata: { appVersion: APP_VERSION, exportedAt, itemCount: stats.itemCount, categoryCount: stats.categoryCount, storeCount: stats.storeCount, committedRunCount: stats.committedRunCount }, backupMeta: { appName: 'Grocery Tally', appVersion: APP_VERSION, exportedAt }, title: state.title, categories: state.categories, stores: state.stores || [], items: state.items, runHistory: state.runHistory || [], storeOrders: state.storeOrders || {}, bundles: state.bundles || [] };
       const blob = new Blob([JSON.stringify(dataOut,null,2)], {type:'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `grocery-tally-backup-v${APP_VERSION}-${backupDateStamp(new Date())}.json`; a.click(); setTimeout(()=> URL.revokeObjectURL(a.href), 0); setLastBackupAt(exportedAt); refreshDataSafetyPanel();
       if(exportStatusEl) exportStatusEl.textContent = 'Backup downloaded. Save a copy somewhere safe, such as iCloud Drive, Google Drive, OneDrive, or another device.';
     };
@@ -3424,7 +3558,7 @@ Skipped duplicate items: ${skippedItems}`);
             if(selectionToken !== importSelectionToken) return;
             const warning = 'Restoring this backup will replace the grocery data currently saved on this device.\n\nThis includes items, categories, stores, quantities, run history, receipt price entries, item details, and ordering data.\n\nThis cannot be undone unless you already have another backup file.\n\nRestore This Backup?';
             if(!pendingImportData || !confirm(warning)) return;
-            state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [], storeOrders: pendingImportData.storeOrders || {} };
+            state = { title: pendingImportData.title || state.title || 'Grocery Tally', categories: pendingImportData.categories, stores: Array.isArray(pendingImportData.stores) ? pendingImportData.stores : [], items: pendingImportData.items, runHistory: Array.isArray(pendingImportData.runHistory) ? pendingImportData.runHistory : [], storeOrders: pendingImportData.storeOrders || {}, bundles: Array.isArray(pendingImportData.bundles) ? pendingImportData.bundles : [] };
             clearHiddenBuildRows();
             normalizeStateShape(); ensurePositions(); save(); renderAll(); alert('Import complete!');
           };
@@ -3436,7 +3570,7 @@ Skipped duplicate items: ${skippedItems}`);
       }
       fileInput.value = '';
     };
-    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [] }; clearHiddenBuildRows(); clearLastBackupAt(); save(); renderAll(); } };
+    document.getElementById('btnWipe').onclick = ()=>{ const message = 'Wipe all grocery data stored in this browser?'; if(confirm(message)){ state = { title: state.title || 'Grocery Tally', categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [], bundles: [] }; clearHiddenBuildRows(); clearLastBackupAt(); save(); renderAll(); } };
   }
 
   function getItemPurchaseStats(item){
