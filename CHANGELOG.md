@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.65.0 — List templates / bundles
+
+- Added local list bundles for quickly adding common groups of grocery items.
+- Added a Build List bundle apply flow that increases current quantities without replacing the list.
+- Added Manage → Bundles for creating, editing, and deleting named bundles with default item quantities.
+- Preserved existing Build List rows, Shopping Mode rows, item Details, receipt pricing, run history, suggestions, themes, localStorage behavior, and JSON backup/import compatibility.
+
 ## v1.64.1 — Fix Details popup for items with run history
 
 - Fixed a Details modal rendering bug so items with committed run history open reliably.

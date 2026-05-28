@@ -1,6 +1,6 @@
 // Grocery Tally Service Worker - versioned via version.json
 // Caches are named based on the version in version.json to ensure clean upgrades.
-const CACHE_VERSION = "1.64.1";
+const CACHE_VERSION = "1.65.0";
 
 const CORE_ASSETS = [
   "./",
