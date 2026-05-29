@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.65.1"; // Bundle Build List flow polish
+  let APP_VERSION = "1.66.0"; // UI consistency and polish pass
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';

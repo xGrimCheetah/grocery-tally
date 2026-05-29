@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.66.0 — UI consistency and polish pass
+
+- Tuned row, button, input, and modal spacing for a more consistent app-wide UI.
+- Improved theme contrast and readability across the existing curated themes.
+- Preserved Shopping Mode as a distinct open checklist-style surface while polishing its readability and touch comfort.
+- Preserved grocery data behavior, localStorage keys, JSON backup/import compatibility, and existing Build List, Shopping Mode, Manage, Insights, Run History, receipt price, suggestion, and bundle workflows.
+
 ## v1.65.1 — Bundle Build List flow polish
 
 - Added a Build List **Bundles** mode after Suggested.
