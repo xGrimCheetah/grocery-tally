@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.65.1 — Bundle Build List flow polish
+
+- Added a Build List **Bundles** mode after Suggested.
+- Replaced the old bundle prompt button with an integrated bundle-list flow.
+- Added a focused bundle apply popup with staged Search-style quantity rows.
+- Preserved additive bundle behavior, saved bundle defaults, shopping flow state, localStorage behavior, and JSON backup/import compatibility.
+
 ## v1.65.0 — List templates / bundles
 
 - Added local list bundles for quickly adding common groups of grocery items.

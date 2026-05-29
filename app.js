@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.65.0"; // List templates / bundles
+  let APP_VERSION = "1.65.1"; // Bundle Build List flow polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -2351,10 +2351,11 @@
   function renderBuild(){
     ensurePositions();
     const isSearchMode = buildListMode === 'search';
+    const isBundlesMode = buildListMode === 'bundles';
     viewBuild.innerHTML = `
       <div class="build-actions">
         <button class="btn-accent" id="btnFinish">Finished →</button>
-        <button class="btn" id="btnApplyBundle">Bundles</button><button class="btn right-controls" id="btnZeroAll">Reset…</button>
+        <button class="btn right-controls" id="btnZeroAll">Reset…</button>
       </div>
       <div class="build-view-toggle-row">
         <div class="insights-view-toggle" role="group" aria-label="Build List view">
@@ -2362,6 +2363,7 @@
           <button type="button" class="insights-view-btn${buildListMode === 'allItems' ? ' active' : ''}" data-build-list-mode="allItems" aria-pressed="${buildListMode === 'allItems' ? 'true' : 'false'}">All Items</button>
           <button type="button" class="insights-view-btn${buildListMode === 'lastRun' ? ' active' : ''}" data-build-list-mode="lastRun" aria-pressed="${buildListMode === 'lastRun' ? 'true' : 'false'}">Last run</button>
           <button type="button" class="insights-view-btn${buildListMode === 'suggested' ? ' active' : ''}" data-build-list-mode="suggested" aria-pressed="${buildListMode === 'suggested' ? 'true' : 'false'}">Suggested</button>
+          <button type="button" class="insights-view-btn${buildListMode === 'bundles' ? ' active' : ''}" data-build-list-mode="bundles" aria-pressed="${buildListMode === 'bundles' ? 'true' : 'false'}">Bundles</button>
         </div>
       </div>
       ${isSearchMode ? `
@@ -2374,7 +2376,7 @@
         </div>` : ''}
       <div id="buildEstimate" class="estimate-sticky"></div>
       ${isSearchMode ? '<div id="buildAllResults" class="build-flat-list build-all-results"></div>' : ''}
-      ${isSearchMode ? '' : `
+      ${isSearchMode || isBundlesMode ? '' : `
         <div id="buildAlphaNav" class="alpha-nav build-search-nav" aria-label="Build List search and alphabet quick jump">
           <div id="buildAlphaView" class="build-alpha-view">
             <div id="buildAlphaButtons" class="alpha-buttons build-alpha-buttons" aria-label="Alphabet quick jump"></div>
@@ -2386,7 +2388,7 @@
             <button class="btn build-search-clear" id="btnBuildShowAlpha" type="button">A-Z</button>
           </div>`}
         </div>`}
-      <div id="buildList" class="build-flat-list${isSearchMode ? ' build-current-list' : ''}"></div>`;
+      <div id="buildList" class="build-flat-list${isSearchMode ? ' build-current-list' : (isBundlesMode ? ' build-bundles-list' : '')}"></div>`;
 
     const buildEstimate = document.getElementById('buildEstimate');
     const buildList = document.getElementById('buildList');
@@ -2603,13 +2605,34 @@
       applyBuildLetterFocus();
     }
 
+    function drawBundlesBuildList(){
+      if(alphaButtons) alphaButtons.innerHTML = '';
+      buildList.innerHTML = '';
+      const bundles = (Array.isArray(state.bundles) ? state.bundles : [])
+        .slice()
+        .sort((a,b)=> cleanText(a && a.name).localeCompare(cleanText(b && b.name), undefined, { sensitivity:'base' }));
+      if(!bundles.length){
+        buildList.innerHTML = '<p class="muted">No bundles yet. Create bundles in Manage → Bundles.</p>';
+        return;
+      }
+      bundles.forEach(bundle=>{
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'item build-bundle-row';
+        row.textContent = cleanText(bundle.name) || 'Untitled bundle';
+        row.onclick = ()=> openBuildBundleApplyModal(bundle.id);
+        buildList.appendChild(row);
+      });
+    }
+
     function drawBuildList(){
       if(isSearchMode) drawAllItemsBuildList();
+      else if(isBundlesMode) drawBundlesBuildList();
       else drawBrowseBuildList();
     }
 
     function setBuildControlMode(mode, focusSearch){
-      if(isSearchMode) return;
+      if(isSearchMode || isBundlesMode) return;
       if(buildListMode === 'allItems') mode = 'alpha';
       buildControlMode = mode === 'search' ? 'search' : 'alpha';
       alphaView.hidden = buildControlMode !== 'alpha';
@@ -2626,11 +2649,13 @@
           ? 'lastRun'
           : (btn.dataset.buildListMode === 'suggested'
             ? 'suggested'
-            : (btn.dataset.buildListMode === 'allItems' ? 'allItems' : 'search'));
+            : (btn.dataset.buildListMode === 'bundles'
+              ? 'bundles'
+              : (btn.dataset.buildListMode === 'allItems' ? 'allItems' : 'search')));
         if(buildListMode !== nextMode){
           const leavingSearchMode = buildListMode === 'search' && nextMode !== 'search';
           buildListMode = nextMode;
-          if(nextMode === 'allItems'){
+          if(nextMode === 'allItems' || nextMode === 'bundles'){
             buildSearchQuery = '';
             buildFocusLetter = '';
             buildControlMode = 'alpha';
@@ -2698,14 +2723,14 @@
     try{
       window.removeEventListener('scroll', updateBuildBottomControlLayout);
       window.removeEventListener('resize', updateBuildBottomControlLayout);
-      if(!isSearchMode){
+      if(!isSearchMode && !isBundlesMode){
         window.addEventListener('scroll', updateBuildBottomControlLayout, { passive:true });
         window.addEventListener('resize', updateBuildBottomControlLayout);
       }
       if(window.visualViewport){
         window.visualViewport.removeEventListener('resize', updateBuildBottomControlLayout);
         window.visualViewport.removeEventListener('scroll', updateBuildBottomControlLayout);
-        if(!isSearchMode){
+        if(!isSearchMode && !isBundlesMode){
           window.visualViewport.addEventListener('resize', updateBuildBottomControlLayout);
           window.visualViewport.addEventListener('scroll', updateBuildBottomControlLayout);
         }
@@ -2714,14 +2739,6 @@
     }catch(e){}
     document.getElementById('btnZeroAll').onclick = openBuildResetOptions;
     document.getElementById('btnFinish').onclick = ()=>{ try{ renderShop(); }catch(e){ console.error(e) } setTab('shop') };
-    document.getElementById('btnApplyBundle').onclick = ()=>{
-      const bundles = Array.isArray(state.bundles) ? state.bundles : [];
-      if(!bundles.length){ alert('No bundles yet. Create bundles in Manage → Bundles.'); return; }
-      const names = bundles.map((b, idx)=> `${idx+1}. ${b.name}`).join('\n');
-      const pick = Number(prompt(`Apply bundle:\n${names}\n\nEnter number:`));
-      if(!Number.isFinite(pick) || pick < 1 || pick > bundles.length) return;
-      applyBundle(bundles[pick-1].id);
-    };
   }
 
   // ----- Shopping Mode -----
@@ -3004,15 +3021,15 @@
     return (state.bundles || []).find(bundle => cleanText(bundle.id) === cleanText(bundleId)) || null;
   }
 
-  function applyBundle(bundleId){
-    const bundle = getBundleById(bundleId);
+  function applyStagedBundle(bundle, stagedItems){
     if(!bundle) return;
     const applied = [];
     let skippedMissing = 0;
-    bundle.items.forEach(entry=>{
+    (Array.isArray(stagedItems) ? stagedItems : []).forEach(entry=>{
       const item = state.items.find(it=> cleanText(it.id) === cleanText(entry.itemId));
       if(!item){ skippedMissing += 1; return; }
-      const qty = Math.max(1, Math.round(Number(entry.qty) || 1));
+      const qty = Math.max(0, Math.round(Number(entry.qty) || 0));
+      if(qty <= 0) return;
       item.qty = Math.max(0, Number(item.qty) || 0) + qty;
       applied.push(`${item.name} +${qty}`);
     });
@@ -3021,6 +3038,119 @@
     let message = applied.length ? `Added ${bundle.name}: ${applied.slice(0,3).join(', ')}${applied.length > 3 ? ` +${applied.length - 3} more` : ''}` : `No items were added from ${bundle.name}.`;
     if(skippedMissing) message += `${applied.length ? '. ' : ' '}Skipped ${skippedMissing} missing item${skippedMissing === 1 ? '' : 's'}.`;
     alert(message);
+  }
+
+  function openBuildBundleApplyModal(bundleId){
+    const existing = document.getElementById('bundleApplyModal');
+    if(existing) existing.remove();
+    const bundle = getBundleById(bundleId);
+    if(!bundle) return;
+    const staged = (Array.isArray(bundle.items) ? bundle.items : []).map(entry=>{
+      const savedQty = Math.round(Number(entry && entry.qty));
+      return {
+        itemId: cleanText(entry && entry.itemId),
+        qty: Number.isFinite(savedQty) ? Math.max(0, savedQty) : 1
+      };
+    });
+
+    const modal = document.createElement('div');
+    modal.id = 'bundleApplyModal';
+    modal.className = 'item-details-modal bundle-apply-modal';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'item-details-backdrop';
+    const card = document.createElement('div');
+    card.className = 'item-details-card bundle-apply-card';
+    const head = document.createElement('div');
+    head.className = 'item-details-head';
+    const title = document.createElement('h3');
+    title.textContent = cleanText(bundle.name) || 'Untitled bundle';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'iconbtn';
+    closeBtn.type = 'button';
+    closeBtn.textContent = '✕';
+    closeBtn.setAttribute('aria-label', 'Cancel bundle');
+    head.appendChild(title);
+    head.appendChild(closeBtn);
+
+    const list = document.createElement('div');
+    list.className = 'build-flat-list build-all-results bundle-apply-list';
+    function closeModal(){ modal.remove(); }
+    function renderStagedRows(){
+      list.innerHTML = '';
+      if(!staged.length){
+        list.innerHTML = '<p class="muted">This bundle has no saved items.</p>';
+        return;
+      }
+      staged.forEach(entry=>{
+        const item = state.items.find(it=> cleanText(it.id) === cleanText(entry.itemId));
+        if(!item) return;
+        const row = document.createElement('div');
+        row.className = 'item';
+        const left = document.createElement('div');
+        left.className = 'left';
+        const nameWrap = document.createElement('div');
+        nameWrap.className = 'build-item-text';
+        const name = document.createElement('div');
+        name.className = 'name';
+        name.textContent = item.name;
+        nameWrap.appendChild(name);
+        left.appendChild(nameWrap);
+        const right = document.createElement('div');
+        right.className = 'right';
+        const qty = document.createElement('div');
+        qty.className = 'qty';
+        qty.textContent = Math.max(0, Number(entry.qty) || 0);
+        const minus = document.createElement('button');
+        minus.className = 'btn';
+        minus.type = 'button';
+        minus.textContent = '–';
+        minus.setAttribute('aria-label', `Decrease ${item.name}`);
+        minus.onclick = ()=>{ entry.qty = Math.max(0, Math.round(Number(entry.qty) || 0) - 1); renderStagedRows(); };
+        const plus = document.createElement('button');
+        plus.className = 'btn-accent';
+        plus.type = 'button';
+        plus.textContent = '+';
+        plus.setAttribute('aria-label', `Increase ${item.name}`);
+        plus.onclick = ()=>{ entry.qty = Math.max(0, Math.round(Number(entry.qty) || 0)) + 1; renderStagedRows(); };
+        right.appendChild(qty);
+        right.appendChild(minus);
+        right.appendChild(plus);
+        row.appendChild(left);
+        row.appendChild(right);
+        list.appendChild(row);
+      });
+      const missing = staged.length - list.querySelectorAll('.item').length;
+      if(missing){
+        const msg = document.createElement('p');
+        msg.className = 'muted bundle-apply-missing';
+        msg.textContent = `${missing} missing item${missing === 1 ? '' : 's'} will be skipped.`;
+        list.appendChild(msg);
+      }
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'controls bundle-apply-actions';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn-accent';
+    addBtn.type = 'button';
+    addBtn.textContent = 'Add bundle';
+    addBtn.onclick = ()=>{ closeModal(); applyStagedBundle(bundle, staged); };
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn';
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.onclick = closeModal;
+    actions.appendChild(addBtn);
+    actions.appendChild(cancelBtn);
+    backdrop.onclick = closeModal;
+    closeBtn.onclick = closeModal;
+    renderStagedRows();
+    card.appendChild(head);
+    card.appendChild(list);
+    card.appendChild(actions);
+    modal.appendChild(backdrop);
+    modal.appendChild(card);
+    document.body.appendChild(modal);
   }
 
   function renderManageBundles(target){
