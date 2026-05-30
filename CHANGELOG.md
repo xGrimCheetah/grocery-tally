@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.66.1 — Mobile tab and Top button polish
+
+- Made the Build List mode pill row usable on narrow mobile screens without reducing readability.
+- Made the Manage internal tab row usable on narrow mobile screens without reducing readability.
+- Updated Manage → Items and Manage → Organize Top buttons to scroll to the true top of the page.
+- Improved the Manage → Organize Top button size and border visibility.
+- Changed Default dark green button text to white for better contrast.
+- Preserved grocery data behavior, localStorage keys, JSON backup/import compatibility, and existing Build List, Shopping Mode, Manage, Insights, Run History, receipt price, suggestion, bundle, and theme workflows.
+
 ## v1.66.0 — UI consistency and polish pass
 
 - Tuned row, button, input, and modal spacing for a more consistent app-wide UI.

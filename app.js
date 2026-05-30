@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.66.0"; // UI consistency and polish pass
+  let APP_VERSION = "1.66.1"; // Mobile tab and Top button polish
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -1693,13 +1693,28 @@
         return buildListSort(a.item, b.item);
       });
   }
-  function scrollToBuildTop(){
-    clearBuildLetterFocus();
+  function scrollToPageTop(behavior){
     try{
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: behavior || 'smooth' });
     }catch(e){
       window.scrollTo(0, 0);
     }
+  }
+  function scrollToBuildTop(){
+    clearBuildLetterFocus();
+    scrollToPageTop('smooth');
+  }
+  function scrollActivePillIntoView(root){
+    const active = root && root.querySelector ? root.querySelector('.insights-view-btn.active') : null;
+    if(!active || !active.scrollIntoView) return;
+    const runScroll = ()=>{
+      try{
+        active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      }catch(e){
+        try{ active.scrollIntoView(false); }catch(err){}
+      }
+    };
+    try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
   function buildTopScrollOffset(){
     const estimate = document.getElementById('buildEstimate');
@@ -2399,6 +2414,7 @@
     const clearBtn = document.getElementById('btnBuildSearchClear');
     const showAlphaBtn = document.getElementById('btnBuildShowAlpha');
     const buildModeButtons = viewBuild.querySelectorAll('[data-build-list-mode]');
+    scrollActivePillIntoView(viewBuild.querySelector('.build-view-toggle-row'));
     const buildAllHelper = document.getElementById('buildAllHelper');
     const buildAllResults = document.getElementById('buildAllResults');
 
@@ -3001,6 +3017,7 @@
       </div>
       <div class="spacer"></div>
       <div id="manageSubView"></div>`;
+    scrollActivePillIntoView(viewManage.querySelector('.manage-view-toggle-row'));
     viewManage.querySelectorAll('[data-manage-view]').forEach(btn=>{
       btn.onclick = ()=>{
         manageView = ['items','bundles','organize','categories','stores','backup'].includes(btn.dataset.manageView) ? btn.dataset.manageView : 'items';
@@ -3353,8 +3370,7 @@
   }
 
   function scrollToOrganizeTop(){
-    const topAnchor = document.getElementById('organizeTopAnchor');
-    if(topAnchor) topAnchor.scrollIntoView({ behavior:'smooth', block:'start' });
+    scrollToPageTop('smooth');
   }
 
   function renderManageItems(target){
@@ -3477,8 +3493,7 @@ Yogurt"></textarea>
           manageItemsFocusLetter = '';
           jumpButtons.querySelectorAll('button').forEach(btn=> btn.classList.toggle('selected', false));
           applyManageLetterFocus();
-          const target = document.getElementById('newItemName');
-          if(target) scrollElementAboveBottomControl(target, jump, 'smooth');
+          scrollToPageTop('smooth');
         };
         jumpButtons.appendChild(topBtn);
         letters.forEach(letter=>{
