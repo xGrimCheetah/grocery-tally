@@ -121,7 +121,7 @@ textarea{width:100%;min-height:160px;resize:vertical;font:inherit;line-height:1.
 .insights-view-btn{background:transparent;border:1px solid transparent;border-radius:999px;color:var(--subtle);font-size:12px;padding:6px 10px;white-space:nowrap}
 .insights-view-btn.active{background:var(--secondary-active-bg,var(--border-strong));border-color:var(--secondary-active-bg,var(--border-strong));color:var(--secondary-active-text,var(--text))}
 
-/* v1.66.1 mobile tab strip and organize Top button polish */
+/* v1.66.2 organize Top button style polish */
 .build-view-toggle-row .insights-view-toggle,.manage-view-toggle-row .insights-view-toggle{max-width:100%;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scroll-padding-inline:8px;min-width:0}
 .build-view-toggle-row .insights-view-btn,.manage-view-toggle-row .insights-view-btn{flex:0 0 auto}
 .insights-controls{display:flex;align-items:flex-end;justify-content:flex-end;gap:8px;flex-wrap:wrap}
@@ -234,7 +234,7 @@ summary{cursor:pointer;font-weight:700;color:var(--subtle)}
 .organize-bottom-actions{position:sticky;bottom:calc(env(safe-area-inset-bottom, 0px) + 8px);display:flex;justify-content:flex-end;z-index:5;pointer-events:none;margin-top:10px}
 .organize-bottom-actions .btn{pointer-events:auto}
 .organize-bottom-spacer{height:116px}
-.organize-bottom-actions #organizeTopBtn{min-height:88px;min-width:148px;padding:20px 28px;font-size:16px;border:1px solid var(--border-strong);box-shadow:0 8px 18px rgba(0,0,0,.18)}
+.organize-bottom-actions #organizeTopBtn{display:inline-flex;align-items:center;justify-content:center;min-height:56px;min-width:132px;padding:12px 30px;border:2px solid var(--border-strong);border-radius:999px;background:var(--card);color:var(--text);font-size:18px;font-weight:850;line-height:1;letter-spacing:.01em;box-shadow:0 8px 18px rgba(0,0,0,.18);white-space:nowrap}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-top:8px}
 .item-details-modal{position:fixed;inset:0;z-index:120}
 .item-details-backdrop{position:absolute;inset:0;background:rgba(2,6,23,.65)}
