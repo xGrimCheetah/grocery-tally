@@ -2,7 +2,7 @@
   'use strict';
 
   // ===== Version =====
-  let APP_VERSION = "1.66.2"; // Organize Top button style polish
+  let APP_VERSION = "1.66.3"; // Add Miami Neon Light theme
 
   // ===== Storage & State =====
   const STORE_KEY = 'grocery_tally_v2';
@@ -23,7 +23,8 @@
     { key:'blue', label:'Blue' },
     { key:'purple', label:'Purple' },
     { key:'orange', label:'Bright Orange' },
-    { key:'contrast', label:'High-contrast dark' }
+    { key:'contrast', label:'High-contrast dark' },
+    { key:'miami', label:'Miami Neon Light' }
   ];
 
   let state = load() || { title: "Grocery Tally", categories: DEFAULT_CATS.slice(), items: [], stores: [], runHistory: [], storeOrders: {} };
