@@ -1705,14 +1705,34 @@
     scrollToPageTop('smooth');
   }
   function scrollActivePillIntoView(root){
-    const active = root && root.querySelector ? root.querySelector('.insights-view-btn.active') : null;
-    if(!active || !active.scrollIntoView) return;
+    const strip = root && root.querySelector ? (root.classList && root.classList.contains('insights-view-toggle') ? root : root.querySelector('.insights-view-toggle')) : null;
+    const active = strip && strip.querySelector ? strip.querySelector('.insights-view-btn.active') : null;
+    if(!strip || !active) return;
     const runScroll = ()=>{
       try{
-        active.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-      }catch(e){
-        try{ active.scrollIntoView(false); }catch(err){}
-      }
+        const pad = 8;
+        const currentLeft = strip.scrollLeft || 0;
+        const visibleLeft = currentLeft + pad;
+        const visibleRight = currentLeft + strip.clientWidth - pad;
+        const stripRect = strip.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        const activeLeft = activeRect.left - stripRect.left + currentLeft;
+        const activeRight = activeLeft + activeRect.width;
+        let nextLeft = currentLeft;
+        if(activeLeft < visibleLeft){
+          nextLeft = activeLeft - pad;
+        }else if(activeRight > visibleRight){
+          nextLeft = activeRight - strip.clientWidth + pad;
+        }
+        const maxLeft = Math.max(0, strip.scrollWidth - strip.clientWidth);
+        nextLeft = Math.max(0, Math.min(nextLeft, maxLeft));
+        if(Math.abs(nextLeft - currentLeft) < 1) return;
+        if(strip.scrollTo){
+          strip.scrollTo({ left: nextLeft, behavior: 'smooth' });
+        }else{
+          strip.scrollLeft = nextLeft;
+        }
+      }catch(e){}
     };
     try{ requestAnimationFrame(runScroll); }catch(e){ setTimeout(runScroll, 0); }
   }
