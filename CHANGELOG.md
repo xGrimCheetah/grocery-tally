@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.66.3 — Add Miami Neon Light theme
+
+- Added the Miami Neon Light curated theme with a white/light base and neon cyan, pink, and yellow accents.
+- Added the new theme to the existing color theme picker while preserving all existing themes.
+- Updated release metadata and cache/version references for v1.66.3.
+
 ## v1.66.2 — Organize Top button style polish
 
 - Restyled the Manage → Organize Top button as a wider pill-shaped navigation control.
