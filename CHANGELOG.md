@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.66.2 — Organize Top button style polish
+
+- Restyled the Manage → Organize Top button as a wider pill-shaped navigation control.
+- Improved the Top button border, text sizing, and visual separation from row reorder controls.
+- Preserved existing Manage → Organize scrolling behavior and grocery data behavior.
+
 ## v1.66.1 — Mobile tab and Top button polish
 
 - Made the Build List mode pill row usable on narrow mobile screens without reducing readability.
